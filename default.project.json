@@ -1,0 +1,17 @@
+{
+  "name": "JayHub-Basketball",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Basketball": { "$path": "src/shared" }
+    },
+    "ServerScriptService": {
+      "Basketball": { "$path": "src/server" }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "Basketball": { "$path": "src/client" }
+      }
+    }
+  }
+}
