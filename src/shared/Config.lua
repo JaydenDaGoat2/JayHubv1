@@ -82,4 +82,17 @@ Config.Keys = {
 	Steal = { Enum.KeyCode.F, Enum.KeyCode.ButtonB },
 }
 
+---------------------------------------------------------------------------
+-- JayHub (settings hub, shot trainer, saving)
+---------------------------------------------------------------------------
+Config.JayHub = {
+	DataStoreName = "JayHub_PlayerData_v1",
+	AutosaveInterval = 120, -- seconds between background saves of changed data
+	ManualSaveCooldown = 15, -- seconds between "Save now" requests per player
+	RequestsPerWindow = 30, -- remote requests a player may make...
+	RequestWindow = 10, -- ...per this many seconds
+	AllowWalkSpeed = true, -- let players pick a walk speed inside the Schema limits
+	NameplateDistance = 70,
+}
+
 return Config
