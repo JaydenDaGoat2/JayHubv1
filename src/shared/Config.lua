@@ -22,6 +22,7 @@ Config.HoopTag = "BasketballHoop" -- CollectionService tag for custom hoops
 -- Ball
 ---------------------------------------------------------------------------
 Config.BallName = "Basketball"
+Config.BallCount = 1 -- balls spawned at center court
 Config.BallDiameter = 1.5
 Config.BallColor = Color3.fromRGB(226, 104, 32)
 Config.BallDensity = 0.6
