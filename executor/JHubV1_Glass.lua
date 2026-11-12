@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.7 shot-line"
+local VERSION = "v1.8 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -236,8 +236,8 @@ end
 if S.SettingsVer < 15 then
 S.Learn = false
 end
-if S.SettingsVer < 17 then
-local seeds = "la:15851912457+15851919155=0.3635 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.3635 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.410 71484695722621=0.410"
+if S.SettingsVer < 18 then
+local seeds = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.410 71484695722621=0.410"
 local have = {}
 for key, val in string.gmatch(S.ShotTimes or "", "(%S+)=([%d%.]+)") do
 if string.sub(key, 1, 2) ~= "r:" then have[key] = val end
@@ -248,9 +248,9 @@ for key, val in pairs(have) do parts[#parts + 1] = key .. "=" .. val end
 table.sort(parts)
 S.ShotTimes = table.concat(parts, " ")
 end
-S.SettingsVer = 17
-DEFAULTS.SettingsVer = 17
-DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.3635 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.3635 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.410 71484695722621=0.410"
+S.SettingsVer = 18
+DEFAULTS.SettingsVer = 18
+DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.410 71484695722621=0.410"
 DEFAULTS.ShotTimes = "r:15851912457+15851919155=1.327 r:15851912457+15851919155+17285155256=1.327 16205020756=0.343 16246923753=0.335 118403922040694=0.315 15997667717=0.365 16143612725=0.355 16143619816=0.355 84063020888988=0.335 138932071140330=0.322 111074210919383=0.414 71484695722621=0.414"
 S.RecOn = false
 S.RecShots = false
@@ -2717,6 +2717,18 @@ local r = Mover.body()
 if not r or not b or Feat.hopping then return false end
 Feat.hopping = true
 local orig = r.CFrame
+local lastSet = nil
+local finished = false
+local function show()
+if finished or not lastSet then return end
+pcall(function()
+local moved = r.Position - lastSet
+if moved.Magnitude < 6 then orig = orig + moved end
+r.CFrame = r.CFrame + (orig.Position - r.Position)
+lastSet = nil
+end)
+end
+local bound = pcall(function() RunService:BindToRenderStep("JHHopShow", 0, show) end)
 task.spawn(function()
 local minFrames = math.max(1, math.floor(S.MagnetFrames or 1))
 local t0 = tick()
@@ -2730,10 +2742,17 @@ local flat = Vector3.new(r.Position.X - p.X, 0, r.Position.Z - p.Z)
 if flat.Magnitude < 0.1 then flat = Vector3.new(0, 0, 1) end
 local spot = Vector3.new(p.X, r.Position.Y, p.Z) + flat.Unit * 1.2
 r.CFrame = r.CFrame + (spot - r.Position)
+lastSet = r.Position
 Mover.sync(r)
 end)
 if n >= minFrames and Feat.hasBall() then
-for _ = 1, 4 do RunService.Heartbeat:Wait() end
+for _ = 1, 4 do
+RunService.Heartbeat:Wait()
+pcall(function()
+r.CFrame = r.CFrame + (Vector3.new(b.Position.X, r.Position.Y, b.Position.Z) - r.Position)
+lastSet = r.Position
+end)
+end
 break
 end
 end
@@ -2741,10 +2760,13 @@ local done = false
 local function back()
 if done then return end
 done = true
+finished = true
 pcall(function()
-r.CFrame = orig
+r.CFrame = r.CFrame + (orig.Position - r.Position)
+r.AssemblyLinearVelocity = Vector3.new(0, r.AssemblyLinearVelocity.Y, 0)
 Mover.sync(r)
 end)
+if bound then pcall(function() RunService:UnbindFromRenderStep("JHHopShow") end) end
 Feat.hopping = false
 end
 local okb = pcall(function() RunService:BindToRenderStep("JHHop", 0, function() back() RunService:UnbindFromRenderStep("JHHop") end) end)
@@ -4462,7 +4484,7 @@ local CloseBtn = headerButton("X", -12)
 local HeadLine = new("Frame", { Position = UDim2.new(0, 10, 1, -1), Size = UDim2.new(1, -20, 0, 1), BorderSizePixel = 0,
 BackgroundColor3 = WHITE, BackgroundTransparency = 0.7, Parent = Header })
 local Body = new("Frame", { Position = UDim2.fromOffset(0, 47), Size = UDim2.new(1, 0, 1, -47), BackgroundTransparency = 1, Parent = Main })
-local Rail = new("Frame", { Size = UDim2.new(0, 116, 1, 0), BackgroundTransparency = 1, Parent = Body })
+local Rail = new("ScrollingFrame", { Size = UDim2.new(0, 116, 1, 0), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 2, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollingDirection = Enum.ScrollingDirection.Y, Parent = Body })
 new("UIListLayout", { Padding = UDim.new(0, 5), SortOrder = Enum.SortOrder.LayoutOrder, Parent = Rail })
 new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 6), PaddingTop = UDim.new(0, 8), Parent = Rail })
 local RailLine = new("Frame", { Position = UDim2.new(0, 116, 0, 6), Size = UDim2.new(0, 1, 1, -12), BorderSizePixel = 0,
@@ -5231,85 +5253,6 @@ UI.Button(rs, "Restore to default", function()
 UI.restore({ "LogoOn", "Logo", "MascotOn", "Mascot", "MaxOverall", "MaxCoins", "MaxBadges" })
 end)
 end
-function UI.restore(keys, after)
-for _, k in ipairs(keys) do S[k] = DEFAULTS[k] end
-if after then pcall(after) end
-UI.refreshAll()
-saveSoon()
-notify("Restored", "Back to default", 2)
-end
-P = UI.Page("Shooting", "S")
-do
-local g = UI.Card(P, "Auto Green")
-UI.Toggle(g, "Auto Green", "AutoGreen")
-UI.Dropdown(g, "Shot style (Hold or Tap)", "ShotStyle", { "Hold", "Tap" })
-UI.Slider(g, "Starting hold time", "HoldTime", 0.08, 1.6, 0.005, 3, "s")
-UI.Slider(g, "Release earlier / later", "Nudge", -150, 150, 5, 0, "ms")
-local cal = UI.Card(P, "Auto Calibrate")
-UI.Toggle(cal, "Auto Calibrate", "AutoCalibrate")
-UI.Slider(cal, "Learn speed", "CalSpeed", 0.1, 1, 0.05, 2)
-local at = UI.Card(P, "Auto Timing")
-UI.Toggle(at, "Auto Timing", "AutoTiming")
-UI.Slider(at, "Ping compensation", "PingComp", 0, 100, 5, 0, "%")
-local rs = UI.Card(P, "Restore")
-UI.Button(rs, "Restore to default", function()
-UI.restore({ "AutoGreen", "ShotStyle", "HoldTime", "Nudge", "AutoCalibrate", "CalSpeed", "AutoTiming", "PingComp", "ShotTimes",
-"ShotRatio", "PacketMul", "PacketOn" }, function()
-Shot.parseTimes()
-Shot.brackets = {}
-end)
-end)
-end
-P = UI.Page("Dribbling", "D")
-do
-local d = UI.Card(P, "Dribble Glide")
-UI.Toggle(d, "Dribble Glide", "DribbleGlide")
-UI.Slider(d, "Glide speed", "DribbleGlidePower", 1, 80, 1, 0)
-UI.Slider(d, "Time", "DribbleGlideTime", 0.05, 1, 0.01, 2, "s")
-local sg = UI.Card(P, "Shot Glide")
-UI.Toggle(sg, "Shot Glide", "ShotGlide")
-UI.Slider(sg, "Glide speed", "ShotGlidePower", 1, 80, 1, 0)
-UI.Slider(sg, "Time", "ShotGlideTime", 0.05, 1, 0.01, 2, "s")
-local gt = UI.Card(P, "Gather Step Glide")
-UI.Toggle(gt, "Gather Step Glide", "GatherGlide")
-UI.Slider(gt, "Glide speed", "GatherGlidePower", 1, 80, 1, 0)
-UI.Slider(gt, "Time", "GatherGlideTime", 0.05, 1, 0.01, 2, "s")
-local rs = UI.Card(P, "Restore")
-UI.Button(rs, "Restore to default", function()
-UI.restore({ "DribbleGlide", "DribbleGlidePower", "DribbleGlideTime", "ShotGlide", "ShotGlidePower", "ShotGlideTime", "GatherGlide",
-"GatherGlidePower", "GatherGlideTime" })
-end)
-end
-P = UI.Page("Players", "P")
-do
-local b = UI.Card(P, "Walk speed boost (walking, no ball)")
-UI.Toggle(b, "Walk speed boost", "SpeedOn", function(v) if v then Speed.resetAuto() end end)
-UI.Slider(b, "Level (0 = normal speed)", "SpeedAdd", 0, 15, 1, 0)
-local rb = UI.Card(P, "Run speed boost (running, no ball)")
-UI.Toggle(rb, "Run speed boost", "RunOn", function(v) if v then Speed.resetAuto() end end)
-UI.Slider(rb, "Level (0 = normal speed)", "RunAdd", 0, 15, 1, 0)
-local bb = UI.Card(P, "Ball speed boost (with the ball)")
-UI.Toggle(bb, "Ball speed boost", "BallSpeedOn", function(v) if v then Speed.resetAuto() end end)
-UI.Slider(bb, "Level (0 = normal speed)", "BallAdd", 0, 15, 1, 0)
-local rs = UI.Card(P, "Restore")
-UI.Button(rs, "Restore to default", function()
-UI.restore({ "SpeedOn", "SpeedAdd", "RunOn", "RunAdd", "BallSpeedOn", "BallAdd" }, function() Speed.resetAuto() end)
-end)
-end
-P = UI.Page("Features", "F")
-do
-local m = UI.Card(P, "Ball magnet")
-UI.Toggle(m, "Ball magnet", "BallMagnet")
-UI.Dropdown(m, "How it gets the ball", "MagnetMode", { "Go to the ball", "Pull the ball" })
-UI.Slider(m, "Range", "MagnetRange", 10, 150, 5, 0, " studs")
-UI.Button(m, "Get the ball now", function()
-if not Feat.getBall(true) then notify("Ball magnet", "No ball found.", 2) end
-end)
-local rs = UI.Card(P, "Restore")
-UI.Button(rs, "Restore to default", function()
-UI.restore({ "BallMagnet", "MagnetMode", "MagnetRange" })
-end)
-end
 P = UI.Page("UI", "U")
 do
 local gl = UI.Card(P, "Glass look")
@@ -5681,7 +5624,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.7 shot-line"
+local VERSION = "v1.8 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -5884,8 +5827,8 @@ end
 if S.SettingsVer < 15 then
 	S.Learn = false
 end
-if S.SettingsVer < 17 then
-	local seeds = "la:15851912457+15851919155=0.3635 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.3635 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.410 71484695722621=0.410"
+if S.SettingsVer < 18 then
+	local seeds = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.410 71484695722621=0.410"
 	local have = {}
 	for key, val in string.gmatch(S.ShotTimes or "", "(%S+)=([%d%.]+)") do
 		if string.sub(key, 1, 2) ~= "r:" then have[key] = val end
@@ -5896,9 +5839,9 @@ if S.SettingsVer < 17 then
 	table.sort(parts)
 	S.ShotTimes = table.concat(parts, " ")
 end
-S.SettingsVer = 17
-DEFAULTS.SettingsVer = 17
-DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.3635 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.3635 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.410 71484695722621=0.410"
+S.SettingsVer = 18
+DEFAULTS.SettingsVer = 18
+DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.410 71484695722621=0.410"
 DEFAULTS.ShotTimes = "r:15851912457+15851919155=1.327 r:15851912457+15851919155+17285155256=1.327 16205020756=0.343 16246923753=0.335 118403922040694=0.315 15997667717=0.365 16143612725=0.355 16143619816=0.355 84063020888988=0.335 138932071140330=0.322 111074210919383=0.414 71484695722621=0.414"
 S.RecOn = false
 S.RecShots = false
@@ -8520,11 +8463,22 @@ function Feat.hop(b)
 	if not r or not b or Feat.hopping then return false end
 	Feat.hopping = true
 	local orig = r.CFrame
+	local lastSet = nil
+	local finished = false
+	local function show()
+		if finished or not lastSet then return end
+		pcall(function()
+			local moved = r.Position - lastSet
+			if moved.Magnitude < 6 then orig = orig + moved end
+			r.CFrame = r.CFrame + (orig.Position - r.Position)
+			lastSet = nil
+		end)
+	end
+	local bound = pcall(function() RunService:BindToRenderStep("JHHopShow", 0, show) end)
 	task.spawn(function()
 		local minFrames = math.max(1, math.floor(S.MagnetFrames or 1))
 		local t0 = tick()
 		local n = 0
-		-- stay on the ball until the game has really given it to you (its pickup takes a moment), then go back
 		while tick() - t0 < 1.2 do
 			RunService.Heartbeat:Wait()
 			n = n + 1
@@ -8534,10 +8488,17 @@ function Feat.hop(b)
 				if flat.Magnitude < 0.1 then flat = Vector3.new(0, 0, 1) end
 				local spot = Vector3.new(p.X, r.Position.Y, p.Z) + flat.Unit * 1.2
 				r.CFrame = r.CFrame + (spot - r.Position)
+				lastSet = r.Position
 				Mover.sync(r)
 			end)
 			if n >= minFrames and Feat.hasBall() then
-				for _ = 1, 4 do RunService.Heartbeat:Wait() end
+				for _ = 1, 4 do
+					RunService.Heartbeat:Wait()
+					pcall(function()
+						r.CFrame = r.CFrame + (Vector3.new(b.Position.X, r.Position.Y, b.Position.Z) - r.Position)
+						lastSet = r.Position
+					end)
+				end
 				break
 			end
 		end
@@ -8545,10 +8506,13 @@ function Feat.hop(b)
 		local function back()
 			if done then return end
 			done = true
+			finished = true
 			pcall(function()
-				r.CFrame = orig
+				r.CFrame = r.CFrame + (orig.Position - r.Position)
+				r.AssemblyLinearVelocity = Vector3.new(0, r.AssemblyLinearVelocity.Y, 0)
 				Mover.sync(r)
 			end)
+			if bound then pcall(function() RunService:UnbindFromRenderStep("JHHopShow") end) end
 			Feat.hopping = false
 		end
 		local okb = pcall(function() RunService:BindToRenderStep("JHHop", 0, function() back() RunService:UnbindFromRenderStep("JHHop") end) end)
@@ -10345,7 +10309,7 @@ local HeadLine = new("Frame", { Position = UDim2.new(0, 10, 1, -1), Size = UDim2
 	BackgroundColor3 = WHITE, BackgroundTransparency = 0.7, Parent = Header })
 
 local Body = new("Frame", { Position = UDim2.fromOffset(0, 47), Size = UDim2.new(1, 0, 1, -47), BackgroundTransparency = 1, Parent = Main })
-local Rail = new("Frame", { Size = UDim2.new(0, 116, 1, 0), BackgroundTransparency = 1, Parent = Body })
+local Rail = new("ScrollingFrame", { Size = UDim2.new(0, 116, 1, 0), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 2, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollingDirection = Enum.ScrollingDirection.Y, Parent = Body })
 new("UIListLayout", { Padding = UDim.new(0, 5), SortOrder = Enum.SortOrder.LayoutOrder, Parent = Rail })
 new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 6), PaddingTop = UDim.new(0, 8), Parent = Rail })
 local RailLine = new("Frame", { Position = UDim2.new(0, 116, 0, 6), Size = UDim2.new(0, 1, 1, -12), BorderSizePixel = 0,
@@ -11169,103 +11133,6 @@ do
 	local rs = UI.Card(P, "Restore")
 	UI.Button(rs, "Restore to default", function()
 		UI.restore({ "LogoOn", "Logo", "MascotOn", "Mascot", "MaxOverall", "MaxCoins", "MaxBadges" })
-	end)
-end
-
--- SHOOTING -----------------------------------------------------------------
-function UI.restore(keys, after)
-	for _, k in ipairs(keys) do S[k] = DEFAULTS[k] end
-	if after then pcall(after) end
-	UI.refreshAll()
-	saveSoon()
-	notify("Restored", "Back to default", 2)
-end
-P = UI.Page("Shooting", "S")
-do
-	local g = UI.Card(P, "Auto Green")
-	UI.Toggle(g, "Auto Green", "AutoGreen")
-	UI.Dropdown(g, "Shot style (Hold or Tap)", "ShotStyle", { "Hold", "Tap" })
-	UI.Slider(g, "Starting hold time", "HoldTime", 0.08, 1.6, 0.005, 3, "s")
-	UI.Slider(g, "Release earlier / later", "Nudge", -150, 150, 5, 0, "ms")
-
-	local cal = UI.Card(P, "Auto Calibrate")
-	UI.Toggle(cal, "Auto Calibrate", "AutoCalibrate")
-	UI.Slider(cal, "Learn speed", "CalSpeed", 0.1, 1, 0.05, 2)
-
-	local at = UI.Card(P, "Auto Timing")
-	UI.Toggle(at, "Auto Timing", "AutoTiming")
-	UI.Slider(at, "Ping compensation", "PingComp", 0, 100, 5, 0, "%")
-
-	local rs = UI.Card(P, "Restore")
-	UI.Button(rs, "Restore to default", function()
-		UI.restore({ "AutoGreen", "ShotStyle", "HoldTime", "Nudge", "AutoCalibrate", "CalSpeed", "AutoTiming", "PingComp", "ShotTimes",
-			"ShotRatio", "PacketMul", "PacketOn" }, function()
-			Shot.parseTimes()
-			Shot.brackets = {}
-		end)
-	end)
-end
-
--- DRIBBLING ----------------------------------------------------------------
-P = UI.Page("Dribbling", "D")
-do
-	local d = UI.Card(P, "Dribble Glide")
-	UI.Toggle(d, "Dribble Glide", "DribbleGlide")
-	UI.Slider(d, "Glide speed", "DribbleGlidePower", 1, 80, 1, 0)
-	UI.Slider(d, "Time", "DribbleGlideTime", 0.05, 1, 0.01, 2, "s")
-
-	local sg = UI.Card(P, "Shot Glide")
-	UI.Toggle(sg, "Shot Glide", "ShotGlide")
-	UI.Slider(sg, "Glide speed", "ShotGlidePower", 1, 80, 1, 0)
-	UI.Slider(sg, "Time", "ShotGlideTime", 0.05, 1, 0.01, 2, "s")
-
-	local gt = UI.Card(P, "Gather Step Glide")
-	UI.Toggle(gt, "Gather Step Glide", "GatherGlide")
-	UI.Slider(gt, "Glide speed", "GatherGlidePower", 1, 80, 1, 0)
-	UI.Slider(gt, "Time", "GatherGlideTime", 0.05, 1, 0.01, 2, "s")
-
-	local rs = UI.Card(P, "Restore")
-	UI.Button(rs, "Restore to default", function()
-		UI.restore({ "DribbleGlide", "DribbleGlidePower", "DribbleGlideTime", "ShotGlide", "ShotGlidePower", "ShotGlideTime", "GatherGlide",
-			"GatherGlidePower", "GatherGlideTime" })
-	end)
-end
-
--- PLAYERS ------------------------------------------------------------------
-P = UI.Page("Players", "P")
-do
-	local b = UI.Card(P, "Walk speed boost (walking, no ball)")
-	UI.Toggle(b, "Walk speed boost", "SpeedOn", function(v) if v then Speed.resetAuto() end end)
-	UI.Slider(b, "Level (0 = normal speed)", "SpeedAdd", 0, 15, 1, 0)
-
-	local rb = UI.Card(P, "Run speed boost (running, no ball)")
-	UI.Toggle(rb, "Run speed boost", "RunOn", function(v) if v then Speed.resetAuto() end end)
-	UI.Slider(rb, "Level (0 = normal speed)", "RunAdd", 0, 15, 1, 0)
-
-	local bb = UI.Card(P, "Ball speed boost (with the ball)")
-	UI.Toggle(bb, "Ball speed boost", "BallSpeedOn", function(v) if v then Speed.resetAuto() end end)
-	UI.Slider(bb, "Level (0 = normal speed)", "BallAdd", 0, 15, 1, 0)
-
-	local rs = UI.Card(P, "Restore")
-	UI.Button(rs, "Restore to default", function()
-		UI.restore({ "SpeedOn", "SpeedAdd", "RunOn", "RunAdd", "BallSpeedOn", "BallAdd" }, function() Speed.resetAuto() end)
-	end)
-end
-
--- FEATURES -----------------------------------------------------------------
-P = UI.Page("Features", "F")
-do
-	local m = UI.Card(P, "Ball magnet")
-	UI.Toggle(m, "Ball magnet", "BallMagnet")
-	UI.Dropdown(m, "How it gets the ball", "MagnetMode", { "Go to the ball", "Pull the ball" })
-	UI.Slider(m, "Range", "MagnetRange", 10, 150, 5, 0, " studs")
-	UI.Button(m, "Get the ball now", function()
-		if not Feat.getBall(true) then notify("Ball magnet", "No ball found.", 2) end
-	end)
-
-	local rs = UI.Card(P, "Restore")
-	UI.Button(rs, "Restore to default", function()
-		UI.restore({ "BallMagnet", "MagnetMode", "MagnetRange" })
 	end)
 end
 
