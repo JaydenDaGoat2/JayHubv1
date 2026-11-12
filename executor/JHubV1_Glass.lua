@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.24 shot-line"
+local VERSION = "v1.25 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -1780,6 +1780,58 @@ Shot.FINAL = {
 ["77401448272074"] = 0.329,
 ["128777513307709+77401448272074"] = 0.329,
 }
+Shot.VERDICT = { "Very early", "Early", "Slightly early", "Good", "Perfect", "Slightly late", "Late", "Very late" }
+Shot.NAMES = {
+["15851912457+15851919155"] = "Jump Shot 1",
+["15851912457+15851919155+17285155256"] = "Jump Shot 1 (fake)",
+["111074210919383"] = "Post fade",
+["71484695722621"] = "Post spin fade (left)",
+["77401448272074"] = "Post spin fade (right)",
+["128777513307709+77401448272074"] = "Post spin fade (right)",
+}
+Shot.adjLog = {}
+Shot.cur, Shot.last = nil, nil
+function Shot.noteAdjust(key, from, to, why)
+table.insert(Shot.adjLog, 1, { t = tick(), key = key, from = from, to = to, why = why })
+while #Shot.adjLog > 6 do table.remove(Shot.adjLog) end
+end
+local function agoText(t)
+local d = math.max(0, tick() - t)
+if d < 60 then return string.format("%ds ago", d) end
+return string.format("%dm ago", d / 60)
+end
+function Shot.nameFor(key, anim)
+local n = Shot.NAMES[key]
+if n then return n end
+if anim and anim ~= "" then return tostring(anim) end
+return "Shot " .. string.sub(tostring(key), -6)
+end
+function Shot.statusLines()
+local cur = Shot.cur
+if not cur then return "-", "-", "Shoot to see it", "-", "No change yet" end
+local last = "-"
+if Shot.last then
+local l = Shot.last
+local v = (l.idx and Shot.VERDICT[l.idx]) or (l.res == "green" and "Perfect") or (l.res == "good" and "Good") or tostring(l.res)
+last = string.format("%s at %.3fs", v, l.held or 0)
+end
+local lines = {}
+for i = 1, math.min(4, #Shot.adjLog) do
+local a = Shot.adjLog[i]
+lines[#lines + 1] = string.format("%s: %.3f -> %.3fs (%s)", agoText(a.t), a.from, a.to, a.why)
+end
+return Shot.nameFor(cur.key, cur.anim), string.format("%.3fs", cur.hold), cur.state or "-", last,
+(#lines > 0) and table.concat(lines, "\n") or "No change yet"
+end
+function Shot.statusStep()
+local st = UI.autoStat
+if not st then return end
+local now = tick()
+if Shot.statusT and now - Shot.statusT < 0.25 then return end
+Shot.statusT = now
+local a, b, c, d, e = Shot.statusLines()
+st.shot.Text, st.timing.Text, st.state.Text, st.last.Text, st.adj.Text = a, b, c, d, e
+end
 Shot.AUTO_START = 0.34
 Shot.AUTO_SCAN = { 0.30, 0.32, 0.34, 0.36, 0.38, 0.31, 0.33, 0.35, 0.37, 0.29, 0.39, 0.40, 0.28 }
 Shot.auto = {}
@@ -1824,6 +1876,7 @@ if not idx or not held then return true end
 if info.manual and idx ~= 5 then return true end
 if not info.manual and math.abs(held - a.hold) > 0.06 and not a.scan then return true end
 a.n = (a.n or 0) + 1
+local before, wasLocked = a.hold, a.locked
 if idx == 5 then
 a.greens[#a.greens + 1] = held
 a.miss = 0
@@ -1856,6 +1909,11 @@ a.dir = -1
 a.hold = held - (idx == 6 and 0.012 or (idx == 7 and 0.024 or 0.04))
 end
 a.hold = clamp(a.hold, Shot.FLOOR, S.MaxHold)
+if a.locked and not wasLocked then
+Shot.noteAdjust(key, before, a.hold, "Perfect x2, locked")
+elseif math.abs(a.hold - before) > 0.0005 then
+Shot.noteAdjust(key, before, a.hold, a.scan and "scanning" or Shot.VERDICT[idx] or "?")
+end
 Shot.autoSave()
 if Rec.shotOn then
 Rec.shotAdd(string.format("AUTOCAL key=%s idx=%s held=%.3f next=%.3f greens=%d locked=%s", key, tostring(idx), held, a.hold, #a.greens, tostring(a.locked)))
@@ -1866,6 +1924,7 @@ function Shot.remoteHold(key, pk)
 local fin = Shot.FINAL[key]
 if fin then
 Shot.lastSweep = nil
+Shot.cur = { key = key, hold = fin, state = "Locked (built in)" }
 return clamp(fin, Shot.FLOOR, S.MaxHold), fin
 end
 if Shot.autoActive(key) then
@@ -1876,6 +1935,8 @@ a = { hold = Shot.times[key] or Shot.AUTO_START, greens = {}, locked = false, di
 Shot.auto[key] = a
 end
 Shot.lastSweep = nil
+local state = a.locked and "Locked (learned)" or (a.scan and "Scanning for green") or (#a.greens >= 1 and string.format("Learning (%d of 2 Perfects)", #a.greens)) or "Learning"
+Shot.cur = { key = key, hold = a.hold, state = state }
 return clamp(a.hold, Shot.FLOOR, S.MaxHold), a.hold
 end
 local base = Shot.times[key]
@@ -1899,11 +1960,17 @@ hold = hold + off
 Shot.lastSweep = off
 Rec.shotAdd(string.format("SWEEP key=%s step=%d offset=%+.3f", key, i, off))
 end
+Shot.cur = { key = key, hold = hold, state = (S.Sweep and Rec.shotOn) and "Sweep recording" or (S.AutoCal and "Fixed timing" or "Auto-learn off") }
 return clamp(hold, Shot.FLOOR, S.MaxHold), base
 end
 Shot.SWEEP = { -0.036, -0.030, -0.024, -0.018, -0.012, -0.006, 0, 0.006, 0.012, 0.018, 0.024, 0.030, 0.036 }
 Shot.greenKeys = {}
 function Shot.learnRemote(info, res, strength)
+if info then
+local ch = char()
+Shot.last = { t = tick(), held = info.held, idx = info.idx, res = res, key = info.key }
+if Shot.cur and Shot.cur.key == info.key and ch then Shot.cur.anim = ch:GetAttribute("BaseAnimation") end
+end
 if info and Shot.FINAL[info.key] then return end
 if info and Shot.autoLearn(info, res, strength) then return end
 if not S.Learn or (S.Sweep and Rec.shotOn) then return end
@@ -5710,6 +5777,9 @@ UI.Toggle(rc, "Record the game", "RecOn", function(v) if v then Rec.start() else
 R.rec = UI.Stat(rc, "Recorded")
 UI.Buttons(rc, { { "Copy recording", Rec.copy }, { "Clear", Rec.clear } })
 UI.Button(rc, "Copy remote spy (RSpy)", Rec.copySpy)
+local ag = UI.Card(P, "Auto Green status")
+UI.autoStat = { shot = UI.Stat(ag, "Jump shot"), timing = UI.Stat(ag, "Timing"), state = UI.Stat(ag, "State"), last = UI.Stat(ag, "Last shot"),
+adj = UI.Note(ag, "No change yet") }
 local sr = UI.Card(P, "Shot recorder")
 UI.Toggle(sr, "Record shots (turn off to copy everything)", "RecShots", function(v) if v then Rec.shotStart() else Rec.shotStop() end end)
 UI.Toggle(sr, "Sweep timings while recording", "Sweep")
@@ -6125,6 +6195,7 @@ end)
 task.spawn(function()
 while JH.Running do
 pcall(Feat.magnetStep)
+pcall(Shot.statusStep)
 pcall(Feat.V.step)
 task.wait(0.05)
 end
@@ -6212,7 +6283,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.24 shot-line"
+local VERSION = "v1.25 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -8049,6 +8120,58 @@ Shot.FINAL = {
 	["77401448272074"] = 0.329,
 	["128777513307709+77401448272074"] = 0.329,
 }
+Shot.VERDICT = { "Very early", "Early", "Slightly early", "Good", "Perfect", "Slightly late", "Late", "Very late" }
+Shot.NAMES = {
+	["15851912457+15851919155"] = "Jump Shot 1",
+	["15851912457+15851919155+17285155256"] = "Jump Shot 1 (fake)",
+	["111074210919383"] = "Post fade",
+	["71484695722621"] = "Post spin fade (left)",
+	["77401448272074"] = "Post spin fade (right)",
+	["128777513307709+77401448272074"] = "Post spin fade (right)",
+}
+Shot.adjLog = {}
+Shot.cur, Shot.last = nil, nil
+function Shot.noteAdjust(key, from, to, why)
+	table.insert(Shot.adjLog, 1, { t = tick(), key = key, from = from, to = to, why = why })
+	while #Shot.adjLog > 6 do table.remove(Shot.adjLog) end
+end
+local function agoText(t)
+	local d = math.max(0, tick() - t)
+	if d < 60 then return string.format("%ds ago", d) end
+	return string.format("%dm ago", d / 60)
+end
+function Shot.nameFor(key, anim)
+	local n = Shot.NAMES[key]
+	if n then return n end
+	if anim and anim ~= "" then return tostring(anim) end
+	return "Shot " .. string.sub(tostring(key), -6)
+end
+function Shot.statusLines()
+	local cur = Shot.cur
+	if not cur then return "-", "-", "Shoot to see it", "-", "No change yet" end
+	local last = "-"
+	if Shot.last then
+		local l = Shot.last
+		local v = (l.idx and Shot.VERDICT[l.idx]) or (l.res == "green" and "Perfect") or (l.res == "good" and "Good") or tostring(l.res)
+		last = string.format("%s at %.3fs", v, l.held or 0)
+	end
+	local lines = {}
+	for i = 1, math.min(4, #Shot.adjLog) do
+		local a = Shot.adjLog[i]
+		lines[#lines + 1] = string.format("%s: %.3f -> %.3fs (%s)", agoText(a.t), a.from, a.to, a.why)
+	end
+	return Shot.nameFor(cur.key, cur.anim), string.format("%.3fs", cur.hold), cur.state or "-", last,
+		(#lines > 0) and table.concat(lines, "\n") or "No change yet"
+end
+function Shot.statusStep()
+	local st = UI.autoStat
+	if not st then return end
+	local now = tick()
+	if Shot.statusT and now - Shot.statusT < 0.25 then return end
+	Shot.statusT = now
+	local a, b, c, d, e = Shot.statusLines()
+	st.shot.Text, st.timing.Text, st.state.Text, st.last.Text, st.adj.Text = a, b, c, d, e
+end
 Shot.AUTO_START = 0.34
 Shot.AUTO_SCAN = { 0.30, 0.32, 0.34, 0.36, 0.38, 0.31, 0.33, 0.35, 0.37, 0.29, 0.39, 0.40, 0.28 }
 Shot.auto = {}
@@ -8093,6 +8216,7 @@ function Shot.autoLearn(info, res, strength)
 	if info.manual and idx ~= 5 then return true end
 	if not info.manual and math.abs(held - a.hold) > 0.06 and not a.scan then return true end
 	a.n = (a.n or 0) + 1
+	local before, wasLocked = a.hold, a.locked
 	if idx == 5 then
 		a.greens[#a.greens + 1] = held
 		a.miss = 0
@@ -8125,6 +8249,11 @@ function Shot.autoLearn(info, res, strength)
 		a.hold = held - (idx == 6 and 0.012 or (idx == 7 and 0.024 or 0.04))
 	end
 	a.hold = clamp(a.hold, Shot.FLOOR, S.MaxHold)
+	if a.locked and not wasLocked then
+		Shot.noteAdjust(key, before, a.hold, "Perfect x2, locked")
+	elseif math.abs(a.hold - before) > 0.0005 then
+		Shot.noteAdjust(key, before, a.hold, a.scan and "scanning" or Shot.VERDICT[idx] or "?")
+	end
 	Shot.autoSave()
 	if Rec.shotOn then
 		Rec.shotAdd(string.format("AUTOCAL key=%s idx=%s held=%.3f next=%.3f greens=%d locked=%s", key, tostring(idx), held, a.hold, #a.greens, tostring(a.locked)))
@@ -8135,6 +8264,7 @@ function Shot.remoteHold(key, pk)
 	local fin = Shot.FINAL[key]
 	if fin then
 		Shot.lastSweep = nil
+		Shot.cur = { key = key, hold = fin, state = "Locked (built in)" }
 		return clamp(fin, Shot.FLOOR, S.MaxHold), fin
 	end
 	if Shot.autoActive(key) then
@@ -8145,6 +8275,8 @@ function Shot.remoteHold(key, pk)
 			Shot.auto[key] = a
 		end
 		Shot.lastSweep = nil
+		local state = a.locked and "Locked (learned)" or (a.scan and "Scanning for green") or (#a.greens >= 1 and string.format("Learning (%d of 2 Perfects)", #a.greens)) or "Learning"
+		Shot.cur = { key = key, hold = a.hold, state = state }
 		return clamp(a.hold, Shot.FLOOR, S.MaxHold), a.hold
 	end
 	local base = Shot.times[key]
@@ -8171,6 +8303,7 @@ function Shot.remoteHold(key, pk)
 		Shot.lastSweep = off
 		Rec.shotAdd(string.format("SWEEP key=%s step=%d offset=%+.3f", key, i, off))
 	end
+	Shot.cur = { key = key, hold = hold, state = (S.Sweep and Rec.shotOn) and "Sweep recording" or (S.AutoCal and "Fixed timing" or "Auto-learn off") }
 	return clamp(hold, Shot.FLOOR, S.MaxHold), base
 end
 Shot.SWEEP = { -0.036, -0.030, -0.024, -0.018, -0.012, -0.006, 0, 0.006, 0.012, 0.018, 0.024, 0.030, 0.036 }
@@ -8178,6 +8311,11 @@ Shot.SWEEP = { -0.036, -0.030, -0.024, -0.018, -0.012, -0.006, 0, 0.006, 0.012, 
 Shot.greenKeys = {}
 -- only Perfect counts: after a green the saved time is anchored to it and misses only nudge it
 function Shot.learnRemote(info, res, strength)
+	if info then
+		local ch = char()
+		Shot.last = { t = tick(), held = info.held, idx = info.idx, res = res, key = info.key }
+		if Shot.cur and Shot.cur.key == info.key and ch then Shot.cur.anim = ch:GetAttribute("BaseAnimation") end
+	end
 	if info and Shot.FINAL[info.key] then return end
 	if info and Shot.autoLearn(info, res, strength) then return end
 	if not S.Learn or (S.Sweep and Rec.shotOn) then return end
@@ -12162,6 +12300,10 @@ do
 	UI.Buttons(rc, { { "Copy recording", Rec.copy }, { "Clear", Rec.clear } })
 	UI.Button(rc, "Copy remote spy (RSpy)", Rec.copySpy)
 
+	local ag = UI.Card(P, "Auto Green status")
+	UI.autoStat = { shot = UI.Stat(ag, "Jump shot"), timing = UI.Stat(ag, "Timing"), state = UI.Stat(ag, "State"), last = UI.Stat(ag, "Last shot"),
+		adj = UI.Note(ag, "No change yet") }
+
 	local sr = UI.Card(P, "Shot recorder")
 	UI.Toggle(sr, "Record shots (turn off to copy everything)", "RecShots", function(v) if v then Rec.shotStart() else Rec.shotStop() end end)
 	UI.Toggle(sr, "Sweep timings while recording", "Sweep")
@@ -12646,6 +12788,7 @@ end)
 task.spawn(function()
 	while JH.Running do
 		pcall(Feat.magnetStep)
+		pcall(Shot.statusStep)
 		pcall(Feat.V.step)
 		task.wait(0.05)
 	end
