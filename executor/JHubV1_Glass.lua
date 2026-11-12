@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.22 shot-line"
+local VERSION = "v1.23 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -1837,10 +1837,10 @@ a.greens = {}
 a.miss = 0
 a.n = 0
 end
-elseif a.n >= 8 then
+elseif a.n >= 2 then
 a.scan = true
 local list = Shot.AUTO_SCAN
-a.hold = list[(a.n - 8) % #list + 1]
+a.hold = list[(a.n - 2) % #list + 1]
 elseif idx == 4 then
 a.hold = held + 0.007 * a.dir
 elseif idx <= 3 then
@@ -5745,7 +5745,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.22 shot-line"
+local VERSION = "v1.23 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -7639,10 +7639,10 @@ function Shot.autoLearn(info, res, strength)
 			a.miss = 0
 			a.n = 0
 		end
-	elseif a.n >= 8 then
+	elseif a.n >= 2 then
 		a.scan = true
 		local list = Shot.AUTO_SCAN
-		a.hold = list[(a.n - 8) % #list + 1]
+		a.hold = list[(a.n - 2) % #list + 1]
 	elseif idx == 4 then
 		a.hold = held + 0.007 * a.dir
 	elseif idx <= 3 then
