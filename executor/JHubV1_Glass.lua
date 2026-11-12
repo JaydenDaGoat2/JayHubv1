@@ -3750,6 +3750,75 @@ end
 FS.write(FS.root .. "/shotsettings.txt", text)
 end)
 end
+Rec.CAPTURE_WORDS = { "shoot", "shot", "meter", "build", "badge", "contest", "rating", "release", "timing", "takeover", "stamina", "attribute",
+"stat", "skill", "archetype", "hotzone", "hot", "cold", "makerng", "percent", "defen", "block", "guard", "gameplay", "layup", "dunk", "pass", "dribble", "input", "mobile" }
+function Rec.captureAll()
+notify("Capture", "Reading the game. This takes up to a minute.", 5)
+task.spawn(function()
+local out = { "== GAME CAPTURE " .. VERSION .. " | " .. tostring(JH.placeName) .. " | " .. tostring(JH.execName) .. " | decompile=" .. tostring(type(decompile) == "function") }
+local mods = {}
+pcall(function()
+for _, m in ipairs(getloadedmodules()) do
+local ok, path = pcall(Bar.pathOf, m)
+if ok then mods[#mods + 1] = { m = m, path = path } end
+end
+end)
+table.sort(mods, function(a, b) return a.path < b.path end)
+local function wanted(path)
+local low = string.lower(path)
+for _, w in ipairs(Rec.CAPTURE_WORDS) do
+if string.find(low, w, 1, true) then return true end
+end
+return false
+end
+out[#out + 1] = "== all modules (" .. #mods .. ")"
+for _, e in ipairs(mods) do out[#out + 1] = e.path end
+out[#out + 1] = "== player values"
+pcall(function()
+for k, v in pairs(LP:GetAttributes()) do out[#out + 1] = "player attr " .. k .. " = " .. tostring(v) end
+local c = char()
+if c then for k, v in pairs(c:GetAttributes()) do out[#out + 1] = "character attr " .. k .. " = " .. tostring(v) end end
+local ls = LP:FindFirstChild("leaderstats")
+if ls then for _, v in ipairs(ls:GetChildren()) do out[#out + 1] = "leaderstat " .. v.Name .. " = " .. tostring(v.Value) end end
+for k, v in pairs(workspace:GetAttributes()) do out[#out + 1] = "workspace attr " .. k .. " = " .. tostring(v) end
+for k, v in pairs(ReplicatedStorage:GetAttributes()) do out[#out + 1] = "replicated attr " .. k .. " = " .. tostring(v) end
+end)
+out[#out + 1] = "== remotes"
+pcall(function()
+for _, d in ipairs(ReplicatedStorage:GetDescendants()) do
+if d:IsA("RemoteEvent") or d:IsA("RemoteFunction") or d:IsA("UnreliableRemoteEvent") then out[#out + 1] = d.ClassName .. " " .. d:GetFullName() end
+end
+end)
+local total, cap = 0, 250000
+out[#out + 1] = "== code and settings"
+for _, e in ipairs(mods) do
+if total > cap then
+out[#out + 1] = "-- (size limit reached, more modules were skipped from here: " .. e.path .. ")"
+break
+end
+local skip = string.find(e.path, "Config/Game/Dunking", 1, true) or string.find(e.path, "Shooting/Packages", 1, true)
+or string.find(e.path, "Dunking/Animations", 1, true) or string.find(e.path, "Dunking/Landings", 1, true)
+if wanted(e.path) and not skip then
+task.wait()
+local ok, text = pcall(Rec.codeOf, e.m)
+if ok and type(text) == "string" then
+if #text > 30000 then text = string.sub(text, 1, 30000) .. "\n-- (cut)" end
+out[#out + 1] = text
+total = total + #text
+end
+end
+end
+local text = table.concat(out, "\n")
+if #text > 390000 then text = string.sub(text, 1, 390000) .. "\n-- (cut)" end
+if type(setclipboard) == "function" then
+pcall(setclipboard, text)
+notify("Capture", string.format("Copied (%.0f KB). Paste it to me.", #text / 1024), 6)
+else
+notify("Capture", "This executor cannot copy, so it was saved to the JHubGlass folder.", 6)
+end
+FS.write(FS.root .. "/capture.txt", text)
+end)
+end
 Feat.maxSeen = {}
 Feat.sprinting = false
 function Feat.refillIn(inst)
@@ -4619,6 +4688,7 @@ UI.Buttons(rc, { { "Copy recording", Rec.copy }, { "Clear", Rec.clear } })
 UI.Button(rc, "Copy remote spy (RSpy)", Rec.copySpy)
 local sr = UI.Card(P, "Shot recorder")
 UI.Toggle(sr, "Record shots (turn off to copy everything)", "RecShots", function(v) if v then Rec.shotStart() else Rec.shotStop() end end)
+UI.Button(sr, "Capture everything about shooting", Rec.captureAll)
 local gs = UI.Card(P, "Game scanner")
 UI.Buttons(gs, { { "Scan game and copy", Rec.scanGame }, { "Copy last scan", Rec.copyScan } })
 end
@@ -8981,6 +9051,81 @@ function Rec.copyShotConfig()
 	end)
 end
 
+-- everything about how shooting works, in one report: module map, the game's code, builds, meters, remotes and player values
+Rec.CAPTURE_WORDS = { "shoot", "shot", "meter", "build", "badge", "contest", "rating", "release", "timing", "takeover", "stamina", "attribute",
+	"stat", "skill", "archetype", "hotzone", "hot", "cold", "makerng", "percent", "defen", "block", "guard", "gameplay", "layup", "dunk", "pass", "dribble", "input", "mobile" }
+function Rec.captureAll()
+	notify("Capture", "Reading the game. This takes up to a minute.", 5)
+	task.spawn(function()
+		local out = { "== GAME CAPTURE " .. VERSION .. " | " .. tostring(JH.placeName) .. " | " .. tostring(JH.execName) .. " | decompile=" .. tostring(type(decompile) == "function") }
+		local mods = {}
+		pcall(function()
+			for _, m in ipairs(getloadedmodules()) do
+				local ok, path = pcall(Bar.pathOf, m)
+				if ok then mods[#mods + 1] = { m = m, path = path } end
+			end
+		end)
+		table.sort(mods, function(a, b) return a.path < b.path end)
+		local function wanted(path)
+			local low = string.lower(path)
+			for _, w in ipairs(Rec.CAPTURE_WORDS) do
+				if string.find(low, w, 1, true) then return true end
+			end
+			return false
+		end
+		-- 1: the map of every module (names only), so nothing is missed
+		out[#out + 1] = "== all modules (" .. #mods .. ")"
+		for _, e in ipairs(mods) do out[#out + 1] = e.path end
+		-- 2: values that describe this player and the place
+		out[#out + 1] = "== player values"
+		pcall(function()
+			for k, v in pairs(LP:GetAttributes()) do out[#out + 1] = "player attr " .. k .. " = " .. tostring(v) end
+			local c = char()
+			if c then for k, v in pairs(c:GetAttributes()) do out[#out + 1] = "character attr " .. k .. " = " .. tostring(v) end end
+			local ls = LP:FindFirstChild("leaderstats")
+			if ls then for _, v in ipairs(ls:GetChildren()) do out[#out + 1] = "leaderstat " .. v.Name .. " = " .. tostring(v.Value) end end
+			for k, v in pairs(workspace:GetAttributes()) do out[#out + 1] = "workspace attr " .. k .. " = " .. tostring(v) end
+			for k, v in pairs(ReplicatedStorage:GetAttributes()) do out[#out + 1] = "replicated attr " .. k .. " = " .. tostring(v) end
+		end)
+		-- 3: every remote
+		out[#out + 1] = "== remotes"
+		pcall(function()
+			for _, d in ipairs(ReplicatedStorage:GetDescendants()) do
+				if d:IsA("RemoteEvent") or d:IsA("RemoteFunction") or d:IsA("UnreliableRemoteEvent") then out[#out + 1] = d.ClassName .. " " .. d:GetFullName() end
+			end
+		end)
+		-- 4: the code and settings of everything that has to do with shooting, builds, meters and ratings
+		local total, cap = 0, 250000
+		out[#out + 1] = "== code and settings"
+		for _, e in ipairs(mods) do
+			if total > cap then
+				out[#out + 1] = "-- (size limit reached, more modules were skipped from here: " .. e.path .. ")"
+				break
+			end
+			local skip = string.find(e.path, "Config/Game/Dunking", 1, true) or string.find(e.path, "Shooting/Packages", 1, true)
+				or string.find(e.path, "Dunking/Animations", 1, true) or string.find(e.path, "Dunking/Landings", 1, true)
+			if wanted(e.path) and not skip then
+				task.wait()
+				local ok, text = pcall(Rec.codeOf, e.m)
+				if ok and type(text) == "string" then
+					if #text > 30000 then text = string.sub(text, 1, 30000) .. "\n-- (cut)" end
+					out[#out + 1] = text
+					total = total + #text
+				end
+			end
+		end
+		local text = table.concat(out, "\n")
+		if #text > 390000 then text = string.sub(text, 1, 390000) .. "\n-- (cut)" end
+		if type(setclipboard) == "function" then
+			pcall(setclipboard, text)
+			notify("Capture", string.format("Copied (%.0f KB). Paste it to me.", #text / 1024), 6)
+		else
+			notify("Capture", "This executor cannot copy, so it was saved to the JHubGlass folder.", 6)
+		end
+		FS.write(FS.root .. "/capture.txt", text)
+	end)
+end
+
 ---------------------------------------------------------------------
 -- EXTRAS: sprint and stamina
 ---------------------------------------------------------------------
@@ -9898,6 +10043,7 @@ do
 
 	local sr = UI.Card(P, "Shot recorder")
 	UI.Toggle(sr, "Record shots (turn off to copy everything)", "RecShots", function(v) if v then Rec.shotStart() else Rec.shotStop() end end)
+	UI.Button(sr, "Capture everything about shooting", Rec.captureAll)
 
 	local gs = UI.Card(P, "Game scanner")
 	UI.Buttons(gs, { { "Scan game and copy", Rec.scanGame }, { "Copy last scan", Rec.copyScan } })
