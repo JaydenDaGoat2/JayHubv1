@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.25 shot-line"
+local VERSION = "v1.26 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -130,7 +130,7 @@ Codes = "100M RELEASE 100KLIKES 500KMEMBERS SORRYFORBUGS", CodeRemotes = true,
 AutoGreen = true, AutoCalibrate = true, AutoTiming = true, ShotRelease = "Auto",
 HoldTime = 0.55, MaxHold = 1.6, CalSpeed = 0.6, CalStep = 0.02,
 ShotTimes = "", ShotRatio = 0, BarPath = "", BarProp = "", BarAt = 0, BarNudge = 0,
-ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, Lightning = true, BoltCount = 6, BoltSpeed = 1, BoltThick = 2, BoltBright = 0.9, BoltColor = "White + Yellow", BgMove = true, BgGlow = 0.5, BgOrbs = true, AccentMode = "Gold", OutlineSpeed = 1, LogoStyle = "J bolt H", LogoBg = true, Preset = "Lightning Gold", PacketOn = true, PacketMul = 1,
+ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, PerfectGreen = false, PerfectGreenPct = 100, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, Lightning = true, BoltCount = 6, BoltSpeed = 1, BoltThick = 2, BoltBright = 0.9, BoltColor = "White + Yellow", BgMove = true, BgGlow = 0.5, BgOrbs = true, AccentMode = "Gold", OutlineSpeed = 1, LogoStyle = "J bolt H", LogoBg = true, Preset = "Lightning Gold", PacketOn = true, PacketMul = 1,
 MovingOffset = 0, SprintOffset = 0, PingComp = 0, Humanize = 0, Nudge = 0, GreenSound = true,
 HookShootButton = true, ShootButtonPath = "", ReleaseMethod = "Both", FireClick = true,
 ManualAssist = true, ShootKey = "E", SprintKey = "LeftShift",
@@ -231,6 +231,8 @@ table.sort(parts)
 S.ShotTimes = table.concat(parts, " ")
 end
 if S.AutoCal == nil then S.AutoCal = true end
+if S.PerfectGreen == nil then S.PerfectGreen = false end
+if S.PerfectGreenPct == nil then S.PerfectGreenPct = 100 end
 if S.AutoTimes == nil then S.AutoTimes = "" end
 if S.SettingsVer < 14 then
 if S.MagnetMode == "Pull the ball" then S.MagnetMode = "Pull to me" end
@@ -1808,7 +1810,10 @@ return "Shot " .. string.sub(tostring(key), -6)
 end
 function Shot.statusLines()
 local cur = Shot.cur
-if not cur then return "-", "-", "Shoot to see it", "-", "No change yet" end
+if not cur then
+local c0, p0 = Shot.pingComp()
+return "-", "-", "Shoot to see it", "-", "No change yet", S.PerfectGreen and string.format("%.0f ms earlier (ping %.0f ms)", c0 * 1000, p0 * 1000) or string.format("off (ping %.0f ms)", p0 * 1000)
+end
 local last = "-"
 if Shot.last then
 local l = Shot.last
@@ -1820,8 +1825,11 @@ for i = 1, math.min(4, #Shot.adjLog) do
 local a = Shot.adjLog[i]
 lines[#lines + 1] = string.format("%s: %.3f -> %.3fs (%s)", agoText(a.t), a.from, a.to, a.why)
 end
+local comp, p = Shot.pingComp()
+local ptxt
+if S.PerfectGreen then ptxt = string.format("%.0f ms earlier (ping %.0f ms)", comp * 1000, p * 1000) else ptxt = string.format("off (ping %.0f ms)", p * 1000) end
 return Shot.nameFor(cur.key, cur.anim), string.format("%.3fs", cur.hold), cur.state or "-", last,
-(#lines > 0) and table.concat(lines, "\n") or "No change yet"
+(#lines > 0) and table.concat(lines, "\n") or "No change yet", ptxt
 end
 function Shot.statusStep()
 local st = UI.autoStat
@@ -1829,8 +1837,22 @@ if not st then return end
 local now = tick()
 if Shot.statusT and now - Shot.statusT < 0.25 then return end
 Shot.statusT = now
-local a, b, c, d, e = Shot.statusLines()
+local a, b, c, d, e, f = Shot.statusLines()
 st.shot.Text, st.timing.Text, st.state.Text, st.last.Text, st.adj.Text = a, b, c, d, e
+if st.ping then st.ping.Text = f end
+end
+Shot.PING_REF = 0.022
+function Shot.pingNow()
+local ok, p = pcall(function() return LP:GetNetworkPing() end)
+p = (ok and type(p) == "number") and p or Shot.PING_REF
+Shot.pingEma = Shot.pingEma and (Shot.pingEma * 0.7 + p * 0.3) or p
+return Shot.pingEma
+end
+function Shot.pingComp()
+local p = Shot.pingNow()
+if not S.PerfectGreen then return 0, p end
+local comp = (p - Shot.PING_REF) * ((S.PerfectGreenPct or 100) / 100)
+return clamp(comp, -0.02, 0.2), p
 end
 Shot.AUTO_START = 0.34
 Shot.AUTO_SCAN = { 0.30, 0.32, 0.34, 0.36, 0.38, 0.31, 0.33, 0.35, 0.37, 0.29, 0.39, 0.40, 0.28 }
@@ -1870,7 +1892,7 @@ Shot.autoLoad()
 local a = Shot.auto[key]
 if not a then return false end
 if a.locked then return true end
-local held = info.held
+local held = (info.held or 0) + (info.comp or 0)
 local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 if not idx or not held then return true end
 if info.manual and idx ~= 5 then return true end
@@ -1974,7 +1996,7 @@ end
 if info and Shot.FINAL[info.key] then return end
 if info and Shot.autoLearn(info, res, strength) then return end
 if not S.Learn or (S.Sweep and Rec.shotOn) then return end
-local key, held = info.key, info.held
+local key, held = info.key, info.held + (info.comp or 0)
 local new
 if info.manual then
 if res == "green" then new = held end
@@ -2076,6 +2098,9 @@ local sit = Shot.situation()
 local key = Shot.remoteKey(cap, sit)
 Shot.cap = nil
 local hold, base = Shot.remoteHold(key, pk)
+local comp = Shot.pingComp()
+if comp ~= 0 then hold = math.max(Shot.FLOOR, hold - comp) end
+if Shot.cur then Shot.cur.comp = comp end
 local manual = false
 local usedMeter, qpred = false, nil
 local ok0, ping0 = pcall(function() return LP:GetNetworkPing() end)
@@ -2126,11 +2151,11 @@ Rec.add("shot", string.format("remote shot key=%s packet=%s hold=%.3f base=%.3f 
 base, held, Shot.lastRelease, tostring(S.ShotStyle), tostring(ctx.space)))
 end
 if Rec.shotOn then
-Rec.shotAdd(string.format("RELEASE meter=%s target=%.3f predicted=%s samples=%d key=%s packet=%s hold=%.4f held=%.4f by=%s style=%s ping=%s", tostring(usedMeter), S.MeterTarget, tostring(qpred), #samples, key, tostring(pk), hold, held,
-Shot.lastRelease, tostring(S.ShotStyle), tostring(pcall(function() return LP:GetNetworkPing() end) and LP:GetNetworkPing() or "?")))
+Rec.shotAdd(string.format("RELEASE meter=%s target=%.3f predicted=%s samples=%d key=%s packet=%s hold=%.4f held=%.4f by=%s style=%s ping=%s comp=%.4f", tostring(usedMeter), S.MeterTarget, tostring(qpred), #samples, key, tostring(pk), hold, held,
+Shot.lastRelease, tostring(S.ShotStyle), tostring(pcall(function() return LP:GetNetworkPing() end) and LP:GetNetworkPing() or "?"), comp))
 end
 task.spawn(Shot.evaluate, { snap = snap, since = since, sit = sit, key = key, base = base, held = held, manual = manual,
-pk = pk, remote = true, usedBar = false, usedMeter = usedMeter, qpred = qpred })
+pk = pk, remote = true, usedBar = false, usedMeter = usedMeter, qpred = qpred, comp = manual and 0 or comp })
 end
 function Shot.core(mode, ctx)
 if mode == "remote" then return Shot.remoteCore(ctx) end
@@ -5778,7 +5803,7 @@ R.rec = UI.Stat(rc, "Recorded")
 UI.Buttons(rc, { { "Copy recording", Rec.copy }, { "Clear", Rec.clear } })
 UI.Button(rc, "Copy remote spy (RSpy)", Rec.copySpy)
 local ag = UI.Card(P, "Auto Green status")
-UI.autoStat = { shot = UI.Stat(ag, "Jump shot"), timing = UI.Stat(ag, "Timing"), state = UI.Stat(ag, "State"), last = UI.Stat(ag, "Last shot"),
+UI.autoStat = { shot = UI.Stat(ag, "Jump shot"), timing = UI.Stat(ag, "Timing"), state = UI.Stat(ag, "State"), last = UI.Stat(ag, "Last shot"), ping = UI.Stat(ag, "Ping fix"),
 adj = UI.Note(ag, "No change yet") }
 local sr = UI.Card(P, "Shot recorder")
 UI.Toggle(sr, "Record shots (turn off to copy everything)", "RecShots", function(v) if v then Rec.shotStart() else Rec.shotStop() end end)
@@ -5801,6 +5826,9 @@ UI.Toggle(g, "Auto Green", "AutoGreen")
 UI.Dropdown(g, "Shot style (Hold or Tap)", "ShotStyle", { "Hold", "Tap" })
 UI.Slider(g, "Starting hold time", "HoldTime", 0.08, 1.6, 0.005, 3, "s")
 UI.Slider(g, "Release earlier / later", "Nudge", -150, 150, 5, 0, "ms")
+UI.Toggle(g, "Perfect green", "PerfectGreen")
+UI.Note(g, "Makes up for high ping")
+UI.Slider(g, "Perfect green strength", "PerfectGreenPct", 0, 150, 5, 0, "%")
 local ln = UI.Card(P, "Learning")
 UI.Toggle(ln, "Learn timing from results", "Learn")
 UI.Toggle(ln, "Auto-learn new shot animations", "AutoCal")
@@ -5816,7 +5844,7 @@ UI.Toggle(at, "Auto Timing", "AutoTiming")
 UI.Slider(at, "Ping compensation", "PingComp", 0, 100, 5, 0, "%")
 local rs = UI.Card(P, "Restore")
 UI.Button(rs, "Restore to default", function()
-UI.restore({ "AutoGreen", "ShotStyle", "HoldTime", "Nudge", "Learn", "AutoCalibrate", "CalSpeed", "AutoTiming", "PingComp", "ShotTimes",
+UI.restore({ "AutoGreen", "ShotStyle", "HoldTime", "Nudge", "Learn", "PerfectGreen", "PerfectGreenPct", "AutoCalibrate", "CalSpeed", "AutoTiming", "PingComp", "ShotTimes",
 "ShotRatio", "PacketMul", "PacketOn" }, function()
 Shot.parseTimes()
 Shot.brackets = {}
@@ -6283,7 +6311,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.25 shot-line"
+local VERSION = "v1.26 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -6373,7 +6401,7 @@ local S = {
 	AutoGreen = true, AutoCalibrate = true, AutoTiming = true, ShotRelease = "Auto",
 	HoldTime = 0.55, MaxHold = 1.6, CalSpeed = 0.6, CalStep = 0.02,
 	ShotTimes = "", ShotRatio = 0, BarPath = "", BarProp = "", BarAt = 0, BarNudge = 0,
-	ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, Lightning = true, BoltCount = 6, BoltSpeed = 1, BoltThick = 2, BoltBright = 0.9, BoltColor = "White + Yellow", BgMove = true, BgGlow = 0.5, BgOrbs = true, AccentMode = "Gold", OutlineSpeed = 1, LogoStyle = "J bolt H", LogoBg = true, Preset = "Lightning Gold", PacketOn = true, PacketMul = 1,
+	ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, PerfectGreen = false, PerfectGreenPct = 100, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, Lightning = true, BoltCount = 6, BoltSpeed = 1, BoltThick = 2, BoltBright = 0.9, BoltColor = "White + Yellow", BgMove = true, BgGlow = 0.5, BgOrbs = true, AccentMode = "Gold", OutlineSpeed = 1, LogoStyle = "J bolt H", LogoBg = true, Preset = "Lightning Gold", PacketOn = true, PacketMul = 1,
 	MovingOffset = 0, SprintOffset = 0, PingComp = 0, Humanize = 0, Nudge = 0, GreenSound = true,
 	HookShootButton = true, ShootButtonPath = "", ReleaseMethod = "Both", FireClick = true,
 	ManualAssist = true, ShootKey = "E", SprintKey = "LeftShift",
@@ -6481,6 +6509,8 @@ if S.SettingsVer < 13 then
 	S.ShotTimes = table.concat(parts, " ")
 end
 if S.AutoCal == nil then S.AutoCal = true end
+if S.PerfectGreen == nil then S.PerfectGreen = false end
+if S.PerfectGreenPct == nil then S.PerfectGreenPct = 100 end
 if S.AutoTimes == nil then S.AutoTimes = "" end
 if S.SettingsVer < 14 then
 	if S.MagnetMode == "Pull the ball" then S.MagnetMode = "Pull to me" end
@@ -8148,7 +8178,10 @@ function Shot.nameFor(key, anim)
 end
 function Shot.statusLines()
 	local cur = Shot.cur
-	if not cur then return "-", "-", "Shoot to see it", "-", "No change yet" end
+	if not cur then
+		local c0, p0 = Shot.pingComp()
+		return "-", "-", "Shoot to see it", "-", "No change yet", S.PerfectGreen and string.format("%.0f ms earlier (ping %.0f ms)", c0 * 1000, p0 * 1000) or string.format("off (ping %.0f ms)", p0 * 1000)
+	end
 	local last = "-"
 	if Shot.last then
 		local l = Shot.last
@@ -8160,8 +8193,11 @@ function Shot.statusLines()
 		local a = Shot.adjLog[i]
 		lines[#lines + 1] = string.format("%s: %.3f -> %.3fs (%s)", agoText(a.t), a.from, a.to, a.why)
 	end
+	local comp, p = Shot.pingComp()
+	local ptxt
+	if S.PerfectGreen then ptxt = string.format("%.0f ms earlier (ping %.0f ms)", comp * 1000, p * 1000) else ptxt = string.format("off (ping %.0f ms)", p * 1000) end
 	return Shot.nameFor(cur.key, cur.anim), string.format("%.3fs", cur.hold), cur.state or "-", last,
-		(#lines > 0) and table.concat(lines, "\n") or "No change yet"
+		(#lines > 0) and table.concat(lines, "\n") or "No change yet", ptxt
 end
 function Shot.statusStep()
 	local st = UI.autoStat
@@ -8169,8 +8205,22 @@ function Shot.statusStep()
 	local now = tick()
 	if Shot.statusT and now - Shot.statusT < 0.25 then return end
 	Shot.statusT = now
-	local a, b, c, d, e = Shot.statusLines()
+	local a, b, c, d, e, f = Shot.statusLines()
 	st.shot.Text, st.timing.Text, st.state.Text, st.last.Text, st.adj.Text = a, b, c, d, e
+	if st.ping then st.ping.Text = f end
+end
+Shot.PING_REF = 0.022
+function Shot.pingNow()
+	local ok, p = pcall(function() return LP:GetNetworkPing() end)
+	p = (ok and type(p) == "number") and p or Shot.PING_REF
+	Shot.pingEma = Shot.pingEma and (Shot.pingEma * 0.7 + p * 0.3) or p
+	return Shot.pingEma
+end
+function Shot.pingComp()
+	local p = Shot.pingNow()
+	if not S.PerfectGreen then return 0, p end
+	local comp = (p - Shot.PING_REF) * ((S.PerfectGreenPct or 100) / 100)
+	return clamp(comp, -0.02, 0.2), p
 end
 Shot.AUTO_START = 0.34
 Shot.AUTO_SCAN = { 0.30, 0.32, 0.34, 0.36, 0.38, 0.31, 0.33, 0.35, 0.37, 0.29, 0.39, 0.40, 0.28 }
@@ -8210,7 +8260,7 @@ function Shot.autoLearn(info, res, strength)
 	local a = Shot.auto[key]
 	if not a then return false end
 	if a.locked then return true end
-	local held = info.held
+	local held = (info.held or 0) + (info.comp or 0)
 	local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 	if not idx or not held then return true end
 	if info.manual and idx ~= 5 then return true end
@@ -8319,7 +8369,7 @@ function Shot.learnRemote(info, res, strength)
 	if info and Shot.FINAL[info.key] then return end
 	if info and Shot.autoLearn(info, res, strength) then return end
 	if not S.Learn or (S.Sweep and Rec.shotOn) then return end
-	local key, held = info.key, info.held
+	local key, held = info.key, info.held + (info.comp or 0)
 	local new
 	if info.manual then
 		if res == "green" then new = held end
@@ -8429,6 +8479,9 @@ function Shot.remoteCore(ctx)
 	local key = Shot.remoteKey(cap, sit)
 	Shot.cap = nil
 	local hold, base = Shot.remoteHold(key, pk)
+	local comp = Shot.pingComp()
+	if comp ~= 0 then hold = math.max(Shot.FLOOR, hold - comp) end
+	if Shot.cur then Shot.cur.comp = comp end
 	local manual = false
 	local usedMeter, qpred = false, nil
 	local ok0, ping0 = pcall(function() return LP:GetNetworkPing() end)
@@ -8482,11 +8535,11 @@ function Shot.remoteCore(ctx)
 			base, held, Shot.lastRelease, tostring(S.ShotStyle), tostring(ctx.space)))
 	end
 	if Rec.shotOn then
-		Rec.shotAdd(string.format("RELEASE meter=%s target=%.3f predicted=%s samples=%d key=%s packet=%s hold=%.4f held=%.4f by=%s style=%s ping=%s", tostring(usedMeter), S.MeterTarget, tostring(qpred), #samples, key, tostring(pk), hold, held,
-			Shot.lastRelease, tostring(S.ShotStyle), tostring(pcall(function() return LP:GetNetworkPing() end) and LP:GetNetworkPing() or "?")))
+		Rec.shotAdd(string.format("RELEASE meter=%s target=%.3f predicted=%s samples=%d key=%s packet=%s hold=%.4f held=%.4f by=%s style=%s ping=%s comp=%.4f", tostring(usedMeter), S.MeterTarget, tostring(qpred), #samples, key, tostring(pk), hold, held,
+			Shot.lastRelease, tostring(S.ShotStyle), tostring(pcall(function() return LP:GetNetworkPing() end) and LP:GetNetworkPing() or "?"), comp))
 	end
 	task.spawn(Shot.evaluate, { snap = snap, since = since, sit = sit, key = key, base = base, held = held, manual = manual,
-		pk = pk, remote = true, usedBar = false, usedMeter = usedMeter, qpred = qpred })
+		pk = pk, remote = true, usedBar = false, usedMeter = usedMeter, qpred = qpred, comp = manual and 0 or comp })
 end
 function Shot.core(mode, ctx)
 	if mode == "remote" then return Shot.remoteCore(ctx) end
@@ -12301,7 +12354,7 @@ do
 	UI.Button(rc, "Copy remote spy (RSpy)", Rec.copySpy)
 
 	local ag = UI.Card(P, "Auto Green status")
-	UI.autoStat = { shot = UI.Stat(ag, "Jump shot"), timing = UI.Stat(ag, "Timing"), state = UI.Stat(ag, "State"), last = UI.Stat(ag, "Last shot"),
+	UI.autoStat = { shot = UI.Stat(ag, "Jump shot"), timing = UI.Stat(ag, "Timing"), state = UI.Stat(ag, "State"), last = UI.Stat(ag, "Last shot"), ping = UI.Stat(ag, "Ping fix"),
 		adj = UI.Note(ag, "No change yet") }
 
 	local sr = UI.Card(P, "Shot recorder")
@@ -12328,6 +12381,9 @@ do
 	UI.Dropdown(g, "Shot style (Hold or Tap)", "ShotStyle", { "Hold", "Tap" })
 	UI.Slider(g, "Starting hold time", "HoldTime", 0.08, 1.6, 0.005, 3, "s")
 	UI.Slider(g, "Release earlier / later", "Nudge", -150, 150, 5, 0, "ms")
+	UI.Toggle(g, "Perfect green", "PerfectGreen")
+	UI.Note(g, "Makes up for high ping")
+	UI.Slider(g, "Perfect green strength", "PerfectGreenPct", 0, 150, 5, 0, "%")
 
 	local ln = UI.Card(P, "Learning")
 	UI.Toggle(ln, "Learn timing from results", "Learn")
@@ -12347,7 +12403,7 @@ do
 
 	local rs = UI.Card(P, "Restore")
 	UI.Button(rs, "Restore to default", function()
-		UI.restore({ "AutoGreen", "ShotStyle", "HoldTime", "Nudge", "Learn", "AutoCalibrate", "CalSpeed", "AutoTiming", "PingComp", "ShotTimes",
+		UI.restore({ "AutoGreen", "ShotStyle", "HoldTime", "Nudge", "Learn", "PerfectGreen", "PerfectGreenPct", "AutoCalibrate", "CalSpeed", "AutoTiming", "PingComp", "ShotTimes",
 			"ShotRatio", "PacketMul", "PacketOn" }, function()
 			Shot.parseTimes()
 			Shot.brackets = {}
