@@ -2705,22 +2705,37 @@ Speed.test = nil
 Speed.testing = false
 if not ok then log("Speed test error: " .. tostring(err)) end
 end
+function Feat.hasBall()
+local ch = char()
+local af = ch and ch:FindFirstChild("Attributes")
+local bv = af and af:FindFirstChild("Basketball")
+if bv and bv.Value ~= nil then return true end
+return Ball.holding == true
+end
 function Feat.hop(b)
 local r = Mover.body()
 if not r or not b or Feat.hopping then return false end
 Feat.hopping = true
 local orig = r.CFrame
-local flat = Vector3.new(r.Position.X - b.Position.X, 0, r.Position.Z - b.Position.Z)
-if flat.Magnitude < 0.1 then flat = Vector3.new(0, 0, 1) end
-local spot = Vector3.new(b.Position.X, r.Position.Y, b.Position.Z) + flat.Unit * 1.5
 task.spawn(function()
-local frames = math.max(1, math.floor(S.MagnetFrames or 1))
-for i = 1, frames do
+local minFrames = math.max(1, math.floor(S.MagnetFrames or 1))
+local t0 = tick()
+local n = 0
+while tick() - t0 < 1.2 do
 RunService.Heartbeat:Wait()
+n = n + 1
 pcall(function()
+local p = b.Position
+local flat = Vector3.new(r.Position.X - p.X, 0, r.Position.Z - p.Z)
+if flat.Magnitude < 0.1 then flat = Vector3.new(0, 0, 1) end
+local spot = Vector3.new(p.X, r.Position.Y, p.Z) + flat.Unit * 1.2
 r.CFrame = r.CFrame + (spot - r.Position)
 Mover.sync(r)
 end)
+if n >= minFrames and Feat.hasBall() then
+for _ = 1, 4 do RunService.Heartbeat:Wait() end
+break
+end
 end
 local done = false
 local function back()
@@ -5184,13 +5199,13 @@ UI.Button(rs, "Restore to default", function()
 UI.restore({ "SpeedOn", "SpeedAdd", "RunOn", "RunAdd", "BallSpeedOn", "BallAdd" }, function() Speed.resetAuto() end)
 end)
 end
-P = UI.Page("Ball", "B")
+P = UI.Page("Ball Mags", "B")
 do
 local m = UI.Card(P, "Ball magnet")
 UI.Toggle(m, "Ball magnet", "BallMagnet")
 UI.Dropdown(m, "How it gets the ball", "MagnetMode", { "Pull to me", "Go to the ball" })
 UI.Slider(m, "Range", "MagnetRange", 10, 150, 5, 0, " studs")
-UI.Slider(m, "Pull hold (frames)", "MagnetFrames", 1, 6, 1, 0)
+UI.Slider(m, "Minimum time on the ball (frames)", "MagnetFrames", 1, 6, 1, 0)
 UI.Button(m, "Get the ball now", function()
 if not Feat.getBall(true) then notify("Ball magnet", "No ball found.", 2) end
 end)
@@ -8492,22 +8507,39 @@ end
 
 -- BALL MAGNET, PULL TO ME: the game owns the ball, so a client-side move does nothing. Instead the body is put on the ball for one tick
 -- (what the server sees) and put back before the next frame is drawn (what you see)
+-- someone has the ball when the character carries the game's Basketball value
+function Feat.hasBall()
+	local ch = char()
+	local af = ch and ch:FindFirstChild("Attributes")
+	local bv = af and af:FindFirstChild("Basketball")
+	if bv and bv.Value ~= nil then return true end
+	return Ball.holding == true
+end
 function Feat.hop(b)
 	local r = Mover.body()
 	if not r or not b or Feat.hopping then return false end
 	Feat.hopping = true
 	local orig = r.CFrame
-	local flat = Vector3.new(r.Position.X - b.Position.X, 0, r.Position.Z - b.Position.Z)
-	if flat.Magnitude < 0.1 then flat = Vector3.new(0, 0, 1) end
-	local spot = Vector3.new(b.Position.X, r.Position.Y, b.Position.Z) + flat.Unit * 1.5
 	task.spawn(function()
-		local frames = math.max(1, math.floor(S.MagnetFrames or 1))
-		for i = 1, frames do
+		local minFrames = math.max(1, math.floor(S.MagnetFrames or 1))
+		local t0 = tick()
+		local n = 0
+		-- stay on the ball until the game has really given it to you (its pickup takes a moment), then go back
+		while tick() - t0 < 1.2 do
 			RunService.Heartbeat:Wait()
+			n = n + 1
 			pcall(function()
+				local p = b.Position
+				local flat = Vector3.new(r.Position.X - p.X, 0, r.Position.Z - p.Z)
+				if flat.Magnitude < 0.1 then flat = Vector3.new(0, 0, 1) end
+				local spot = Vector3.new(p.X, r.Position.Y, p.Z) + flat.Unit * 1.2
 				r.CFrame = r.CFrame + (spot - r.Position)
 				Mover.sync(r)
 			end)
+			if n >= minFrames and Feat.hasBall() then
+				for _ = 1, 4 do RunService.Heartbeat:Wait() end
+				break
+			end
 		end
 		local done = false
 		local function back()
@@ -11101,13 +11133,13 @@ do
 end
 
 -- BALL ---------------------------------------------------------------------
-P = UI.Page("Ball", "B")
+P = UI.Page("Ball Mags", "B")
 do
 	local m = UI.Card(P, "Ball magnet")
 	UI.Toggle(m, "Ball magnet", "BallMagnet")
 	UI.Dropdown(m, "How it gets the ball", "MagnetMode", { "Pull to me", "Go to the ball" })
 	UI.Slider(m, "Range", "MagnetRange", 10, 150, 5, 0, " studs")
-	UI.Slider(m, "Pull hold (frames)", "MagnetFrames", 1, 6, 1, 0)
+	UI.Slider(m, "Minimum time on the ball (frames)", "MagnetFrames", 1, 6, 1, 0)
 	UI.Button(m, "Get the ball now", function()
 		if not Feat.getBall(true) then notify("Ball magnet", "No ball found.", 2) end
 	end)
