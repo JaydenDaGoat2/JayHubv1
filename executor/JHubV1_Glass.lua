@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.23 shot-line"
+local VERSION = "v1.24 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -130,7 +130,7 @@ Codes = "100M RELEASE 100KLIKES 500KMEMBERS SORRYFORBUGS", CodeRemotes = true,
 AutoGreen = true, AutoCalibrate = true, AutoTiming = true, ShotRelease = "Auto",
 HoldTime = 0.55, MaxHold = 1.6, CalSpeed = 0.6, CalStep = 0.02,
 ShotTimes = "", ShotRatio = 0, BarPath = "", BarProp = "", BarAt = 0, BarNudge = 0,
-ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, PacketOn = true, PacketMul = 1,
+ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, Lightning = true, BoltCount = 6, BoltSpeed = 1, BoltThick = 2, BoltBright = 0.9, BoltColor = "White + Yellow", BgMove = true, BgGlow = 0.5, BgOrbs = true, AccentMode = "Gold", OutlineSpeed = 1, LogoStyle = "J bolt H", LogoBg = true, Preset = "Lightning Gold", PacketOn = true, PacketMul = 1,
 MovingOffset = 0, SprintOffset = 0, PingComp = 0, Humanize = 0, Nudge = 0, GreenSound = true,
 HookShootButton = true, ShootButtonPath = "", ReleaseMethod = "Both", FireClick = true,
 ManualAssist = true, ShootKey = "E", SprintKey = "LeftShift",
@@ -238,7 +238,8 @@ end
 if S.SettingsVer < 15 then
 S.Learn = false
 end
-if S.SettingsVer < 27 then
+if S.SettingsVer < 28 then
+S.Hue, S.Sat, S.Val, S.WinTrans, S.CardTrans, S.OutlineColor, S.OutlineThick, S.AccentMode = 226, 0.8, 0.14, 0.08, 0.55, "Gold", 2.5, "Gold"
 local seeds = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 local have = {}
 for key, val in string.gmatch(S.ShotTimes or "", "(%S+)=([%d%.]+)") do
@@ -250,8 +251,8 @@ for key, val in pairs(have) do parts[#parts + 1] = key .. "=" .. val end
 table.sort(parts)
 S.ShotTimes = table.concat(parts, " ")
 end
-S.SettingsVer = 27
-DEFAULTS.SettingsVer = 27
+S.SettingsVer = 28
+DEFAULTS.SettingsVer = 28
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 S.ShotTimes = S.ShotTimes
 S.RecOn = false
@@ -298,6 +299,10 @@ Theme.Sub = Theme.Text:Lerp(Theme.Glass, 0.28)
 Theme.Outline = OUTLINE_COLORS[S.OutlineColor] or WHITE
 Theme.AccentA = Color3.fromHSV(h, 0.2, 1)
 Theme.AccentB = Color3.fromHSV(((S.Hue - 28) % 360) / 360, 0.75, 1)
+if S.AccentMode ~= "Match hue" then
+Theme.AccentA = Color3.fromRGB(255, 246, 180)
+Theme.AccentB = Color3.fromRGB(255, 192, 28)
+end
 end
 computeTheme()
 local gui = new("ScreenGui", { Name = "JHubGlass", ResetOnSpawn = false, IgnoreGuiInset = true,
@@ -2899,6 +2904,7 @@ do
 local V = {}
 Feat.V = V
 V.orig, V.tmpl, V.extras, V.logoImg, V.saved = {}, {}, {}, {}, {}
+V.isExtra = {}
 V.labels = { overall = {}, coins = {}, badges = {} }
 V.LOGOS = {
 Owner = { text = "OWNER", color = Color3.fromRGB(255, 196, 40), words = { "owner" } },
@@ -3012,6 +3018,7 @@ for inst, kv in pairs(V.tmpl) do pcall(function() inst[kv[1]] = kv[2] end) end
 V.tmpl = {}
 for _, e in ipairs(V.extras) do pcall(function() e:Destroy() end) end
 V.extras = {}
+V.isExtra = {}
 V.mascotKey, V.mascotChar = nil, nil
 end
 local function extra(c, parent, size, color, shape, offset)
@@ -3029,6 +3036,245 @@ w.Parent = p
 V.extras[#V.extras + 1] = p
 return p
 end
+local LIMBS = { head = { "Head" }, torso = { "UpperTorso", "Torso" }, larm = { "LeftUpperArm", "Left Arm" }, rarm = { "RightUpperArm", "Right Arm" },
+lleg = { "LeftUpperLeg", "Left Leg" }, rleg = { "RightUpperLeg", "Right Leg" } }
+local function limbOf(c, key)
+for _, n in ipairs(LIMBS[key]) do
+local p = c:FindFirstChild(n)
+if p then return p end
+end
+end
+local BALL, CYL = Enum.PartType.Ball, Enum.PartType.Cylinder
+local WHITE, BLACK = Color3.new(1, 1, 1), Color3.new(0, 0, 0)
+function V.hideOriginal(c)
+for _, d in ipairs(c:GetDescendants()) do
+if (d:IsA("BasePart") and d.Name ~= "HumanoidRootPart" and not V.isExtra[d]) or d:IsA("Decal") then
+if V.tmpl[d] == nil then V.tmpl[d] = { "Transparency", d.Transparency } end
+d.Transparency = 1
+end
+end
+end
+function V.build(c, key)
+local def = V.BUILDS[key]
+local head = limbOf(c, "head")
+if not def or not head or not limbOf(c, "torso") then return false end
+local r15 = c:FindFirstChild("UpperTorso") ~= nil
+local k = head.Size.Y / (r15 and 1.2 or 1)
+local function add(limb, shape, sx, sy, sz, ox, oy, oz, color, mat, rot)
+local lp = limbOf(c, limb)
+if not lp then return nil end
+local dy = 0
+if r15 and limb ~= "head" then dy = (limb == "torso") and -0.2 or -0.4 end
+local part = extra(c, lp, Vector3.new(sx, sy, sz) * k, color, shape, CFrame.new(ox * k, (oy + dy) * k, oz * k) * (rot or CFrame.new()))
+if mat then part.Material = mat end
+V.isExtra[part] = true
+return part
+end
+local function eye(limb, x, y, z, size, iris)
+local e = add(limb, BALL, size, size, size * 0.6, x, y, z, WHITE)
+if e then
+add(limb, BALL, size * 0.5, size * 0.5, size * 0.3, x, y, z - size * 0.28, iris or BLACK)
+add(limb, BALL, size * 0.22, size * 0.22, size * 0.2, x, y, z - size * 0.4, BLACK)
+end
+end
+local function num(text, color, limb)
+local lp = limbOf(c, limb or "torso")
+if not lp then return end
+for _, side in ipairs({ Enum.NormalId.Front, Enum.NormalId.Back }) do
+local sg = Instance.new("SurfaceGui")
+sg.Face = side
+sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+sg.PixelsPerStud = 40
+local t = Instance.new("TextLabel")
+t.BackgroundTransparency = 1
+t.Size = UDim2.new(1, 0, 1, 0)
+t.Font = Enum.Font.GothamBlack
+t.TextScaled = true
+t.TextColor3 = color
+t.Text = text
+t.Parent = sg
+sg.Parent = V.torsoPart[1]
+V.extras[#V.extras + 1] = sg
+end
+end
+V.torsoPart = {}
+local env = { add = add, eye = eye, num = num, BALL = BALL, CYL = CYL, WHITE = WHITE, BLACK = BLACK }
+local ok, err = pcall(def, env)
+if not ok then pcall(log, "Costume build: " .. tostring(err)) end
+return ok
+end
+local function body(a, o)
+local skin, shirt, pants, hand = o.skin, o.shirt, o.pants, o.hand or o.skin
+local hs = o.headSize or 1.3
+if o.headBlock then a.add("head", nil, hs * 1.7, hs * 1.2, hs, 0, 0.1, 0, skin) else a.add("head", a.BALL, hs * 1.4, hs * 1.4, hs * 1.4, 0, 0.1, 0, skin) end
+local tw, th = o.tw or 2.1, o.th or 2.1
+V.torsoPart[1] = a.add("torso", nil, tw, th, 1.1, 0, 0, 0, shirt)
+if o.pantsTop ~= false then a.add("torso", nil, tw + 0.05, th * 0.32, 1.15, 0, -th * 0.34, 0, pants) end
+local aw = o.aw or 1.05
+for _, s in ipairs({ { "larm", -1 }, { "rarm", 1 } }) do
+a.add(s[1], nil, aw, 1.2, aw, 0, 0.45, 0, o.sleeve or shirt)
+a.add(s[1], nil, aw * 0.95, 0.9, aw * 0.95, 0, -0.55, 0, skin)
+a.add(s[1], a.BALL, aw * 1.15, aw * 1.15, aw * 1.15, 0, -1.05, 0, hand)
+end
+local lw = o.lw or 1.05
+for _, s in ipairs({ "lleg", "rleg" }) do
+a.add(s, nil, lw, 1.3, lw, 0, 0.35, 0, pants)
+a.add(s, nil, lw * 0.95, 0.8, lw * 0.95, 0, -0.55, 0, o.leg or skin)
+a.add(s, nil, lw * 1.1, 0.45, lw * 1.9, 0, -0.95, -0.35, o.shoe or Color3.fromRGB(30, 30, 30))
+end
+end
+local function C(r, g, b) return Color3.fromRGB(r, g, b) end
+local function mouth(a, y, z, w, col)
+a.add("head", nil, w, 0.1, 0.1, 0, y, z, col or BLACK)
+a.add("head", nil, 0.1, 0.12, 0.1, -w / 2, y + 0.06, z, col or BLACK)
+a.add("head", nil, 0.1, 0.12, 0.1, w / 2, y + 0.06, z, col or BLACK)
+end
+V.BUILDS = {
+SpongeBob = function(a)
+local Y = C(255, 226, 60)
+body(a, { skin = Y, shirt = WHITE, pants = C(130, 85, 40), sleeve = WHITE, aw = 0.55, lw = 0.55, leg = WHITE, shoe = BLACK, headBlock = true, headSize = 1.6, tw = 2.4, th = 1.8, hand = Y })
+a.add("torso", nil, 2.5, 0.25, 1.2, 0, 0.6, 0, WHITE)
+a.add("torso", nil, 0.3, 1.0, 0.15, 0, 0.2, -0.6, C(215, 30, 30))
+a.add("head", nil, 2.7, 0.35, 1.4, 0, -0.35, 0, Y)
+a.eye("head", -0.45, 0.35, -0.7, 0.9, C(90, 170, 255))
+a.eye("head", 0.45, 0.35, -0.7, 0.9, C(90, 170, 255))
+a.add("head", nil, 0.35, 0.4, 0.1, -0.15, -0.55, -0.72, WHITE)
+a.add("head", nil, 0.35, 0.4, 0.1, 0.15, -0.55, -0.72, WHITE)
+mouth(a, -0.35, -0.72, 1.1)
+a.add("head", a.BALL, 0.4, 0.4, 0.1, -0.95, -0.25, -0.7, C(255, 160, 140))
+a.add("head", a.BALL, 0.4, 0.4, 0.1, 0.95, -0.25, -0.7, C(255, 160, 140))
+a.add("head", a.BALL, 0.25, 0.25, 0.1, -0.9, 0.9, -0.65, C(215, 175, 30))
+a.add("head", a.BALL, 0.2, 0.2, 0.1, 0.8, 0.6, -0.65, C(215, 175, 30))
+end,
+Patrick = function(a)
+local Pk = C(255, 140, 165)
+body(a, { skin = Pk, shirt = Pk, pants = C(70, 170, 90), aw = 1.1, lw = 1.1, shoe = Pk, headSize = 1.5, tw = 2.4, th = 2.2, pantsTop = true })
+a.add("head", nil, 0.9, 1.1, 0.9, 0, 0.9, 0, Pk, nil, CFrame.Angles(0, 0, math.rad(45)))
+a.eye("head", -0.4, 0.15, -0.95, 0.55)
+a.eye("head", 0.4, 0.15, -0.95, 0.55)
+mouth(a, -0.45, -0.98, 0.7)
+a.add("torso", a.BALL, 0.5, 0.5, 0.1, 0.5, 0.7, -0.6, C(180, 40, 150))
+a.add("torso", a.BALL, 0.4, 0.4, 0.1, -0.6, 0.3, -0.6, C(180, 40, 150))
+a.add("torso", a.BALL, 0.45, 0.45, 0.1, 0.6, -0.8, -0.6, C(190, 60, 160))
+end,
+Squidward = function(a)
+local T = C(120, 200, 200)
+body(a, { skin = T, shirt = C(170, 225, 225), pants = C(110, 90, 60), aw = 0.8, lw = 0.85, shoe = T, headBlock = false, headSize = 1.5, tw = 1.9 })
+a.add("head", a.BALL, 1.5, 2.2, 1.5, 0, 0.5, 0.1, T)
+a.add("head", nil, 0.7, 0.7, 1.7, 0, -0.1, -1.1, T)
+a.add("head", nil, 1.9, 0.4, 0.4, 0, 0.2, -0.85, C(80, 150, 150))
+for _, sx in ipairs({ -0.45, 0.45 }) do
+a.add("head", a.BALL, 0.6, 0.6, 0.35, sx, 0.4, -0.8, C(250, 250, 200))
+a.add("head", a.BALL, 0.25, 0.25, 0.2, sx, 0.3, -1.0, BLACK)
+a.add("head", nil, 0.7, 0.28, 0.45, sx, 0.62, -0.85, T)
+end
+a.add("head", a.BALL, 0.6, 0.4, 0.4, -0.5, 0.95, 0.05, C(80, 150, 150))
+mouth(a, -0.85, -0.7, 0.8, C(80, 110, 110))
+end,
+Jeffy = function(a)
+local S = C(255, 205, 150)
+body(a, { skin = S, shirt = C(255, 215, 40), pants = C(70, 100, 190), sleeve = C(255, 215, 40), tw = 1.9, th = 1.7, headBlock = false, headSize = 1.7, shoe = WHITE })
+a.add("head", a.BALL, 0.7, 0.35, 1.7, 0, 1.0, 0.05, C(60, 40, 25))
+a.eye("head", -0.45, 0.25, -1.0, 0.8, C(90, 70, 40))
+a.eye("head", 0.45, 0.25, -1.0, 0.8, C(90, 70, 40))
+a.add("head", nil, 0.9, 0.25, 0.15, 0, -0.45, -1.1, C(120, 40, 40))
+a.add("head", nil, 0.5, 0.25, 0.1, 0.25, -0.65, -1.1, C(230, 100, 120))
+a.add("torso", nil, 0.9, 0.25, 0.15, 0, 0.5, -0.6, C(255, 255, 255))
+end,
+IShowSpeed = function(a)
+local D = C(150, 100, 70)
+body(a, { skin = D, shirt = C(220, 30, 40), pants = C(25, 25, 25), sleeve = C(220, 30, 40), headSize = 1.35, shoe = WHITE })
+a.add("head", nil, 1.85, 0.7, 1.6, 0, 0.85, 0, C(20, 20, 20))
+a.add("head", nil, 1.7, 0.35, 0.2, 0, 0.15, -0.8, C(20, 20, 20))
+a.eye("head", -0.35, 0.05, -0.85, 0.5)
+a.eye("head", 0.35, 0.05, -0.85, 0.5)
+a.add("head", nil, 1.2, 0.4, 0.2, 0, -0.55, -0.75, C(30, 25, 20))
+mouth(a, -0.45, -0.88, 0.7, WHITE)
+a.add("torso", nil, 1.6, 0.35, 0.15, 0, 0.5, -0.6, WHITE)
+end,
+MrBeast = function(a)
+local L = C(235, 190, 150)
+body(a, { skin = L, shirt = C(50, 120, 230), pants = C(40, 45, 70), sleeve = C(50, 120, 230), tw = 2.3, aw = 1.15, headSize = 1.35, shoe = WHITE })
+a.add("head", nil, 1.9, 0.55, 1.65, 0, 0.9, 0, C(60, 40, 30))
+a.eye("head", -0.35, 0.1, -0.85, 0.5, C(80, 120, 160))
+a.eye("head", 0.35, 0.1, -0.85, 0.5, C(80, 120, 160))
+a.add("head", nil, 1.1, 0.5, 0.2, 0, -0.5, -0.78, C(110, 80, 60))
+mouth(a, -0.4, -0.92, 0.6, WHITE)
+a.add("torso", nil, 1.0, 0.3, 0.15, 0, 0.55, -0.6, C(255, 215, 40))
+end,
+Banana = function(a)
+local Y = C(255, 225, 53)
+a.add("head", a.BALL, 1.7, 1.9, 1.5, 0, 0.1, 0, Y)
+a.add("head", nil, 0.5, 0.5, 0.5, 0, 1.15, 0, C(110, 75, 30))
+a.add("torso", nil, 2.4, 2.1, 1.4, 0, 0, 0, Y)
+a.add("torso", a.BALL, 2.6, 2.6, 1.5, 0, -0.1, 0, Y)
+for _, s in ipairs({ "larm", "rarm" }) do
+a.add(s, nil, 0.7, 2.0, 0.7, 0, 0, 0, Y)
+end
+for _, s in ipairs({ "lleg", "rleg" }) do
+a.add(s, nil, 0.8, 2.0, 0.8, 0, 0, 0, Y)
+a.add(s, nil, 0.9, 0.4, 1.4, 0, -1.0, -0.25, C(140, 100, 50))
+end
+a.eye("head", -0.4, 0.45, -0.7, 0.6)
+a.eye("head", 0.4, 0.45, -0.7, 0.6)
+mouth(a, -0.2, -0.76, 0.8)
+a.add("head", a.BALL, 0.25, 0.25, 0.1, -0.7, 0.9, -0.6, C(200, 160, 40))
+end,
+Curry = function(a)
+local Sk = C(150, 100, 72)
+body(a, { skin = Sk, shirt = C(255, 199, 44), pants = C(29, 66, 138), sleeve = C(255, 199, 44), shoe = C(255, 199, 44), headSize = 1.3 })
+a.add("head", nil, 1.5, 0.45, 1.3, 0, 0.75, 0, C(20, 15, 12))
+a.eye("head", -0.35, 0.05, -0.8, 0.42)
+a.eye("head", 0.35, 0.05, -0.8, 0.42)
+mouth(a, -0.4, -0.88, 0.5, C(90, 40, 30))
+a.num("30", C(29, 66, 138))
+a.add("torso", nil, 2.15, 0.15, 1.15, 0, 0.95, 0, C(29, 66, 138))
+end,
+LeBron = function(a)
+local Sk = C(110, 70, 50)
+body(a, { skin = Sk, shirt = C(85, 37, 130), pants = C(85, 37, 130), sleeve = C(85, 37, 130), shoe = C(255, 199, 44), tw = 2.3, aw = 1.15, headSize = 1.3 })
+a.add("head", nil, 1.45, 0.3, 1.3, 0, 0.75, 0, C(20, 15, 12))
+a.add("head", nil, 1.7, 0.25, 1.5, 0, 0.6, 0, C(255, 199, 44))
+a.eye("head", -0.35, 0.05, -0.8, 0.42)
+a.eye("head", 0.35, 0.05, -0.8, 0.42)
+a.add("head", nil, 1.2, 0.5, 0.25, 0, -0.5, -0.75, C(25, 20, 18))
+mouth(a, -0.35, -0.9, 0.5, WHITE)
+a.num("23", C(255, 199, 44))
+a.add("torso", nil, 2.35, 0.15, 1.15, 0, 0.95, 0, C(255, 199, 44))
+end,
+Kyrie = function(a)
+local Sk = C(140, 95, 70)
+body(a, { skin = Sk, shirt = C(0, 83, 188), pants = C(0, 83, 188), sleeve = C(0, 83, 188), shoe = C(255, 255, 255), headSize = 1.3 })
+a.add("head", nil, 1.5, 0.4, 1.3, 0, 0.75, 0, C(20, 15, 12))
+a.eye("head", -0.35, 0.05, -0.8, 0.42)
+a.eye("head", 0.35, 0.05, -0.8, 0.42)
+a.add("head", nil, 1.0, 0.3, 0.2, 0, -0.5, -0.78, C(25, 20, 18))
+mouth(a, -0.4, -0.9, 0.5, WHITE)
+a.num("11", WHITE)
+end,
+Wemby = function(a)
+local Sk = C(170, 120, 90)
+body(a, { skin = Sk, shirt = C(20, 20, 20), pants = C(195, 202, 206), sleeve = C(20, 20, 20), shoe = WHITE, aw = 1.0, lw = 1.0, headSize = 1.3 })
+a.add("head", nil, 1.4, 0.35, 1.25, 0, 0.75, 0, C(25, 20, 18))
+a.eye("head", -0.35, 0.05, -0.8, 0.42)
+a.eye("head", 0.35, 0.05, -0.8, 0.42)
+mouth(a, -0.4, -0.9, 0.5, C(90, 40, 30))
+a.num("1", C(195, 202, 206))
+end,
+Mickey = function(a)
+local K = C(20, 20, 20)
+a.add("head", a.BALL, 1.8, 1.8, 1.8, 0, 0.1, 0, K)
+a.add("head", a.BALL, 1.5, 1.2, 0.35, 0, -0.2, -0.78, C(255, 222, 190))
+for _, sx in ipairs({ -1.0, 1.0 }) do a.add("head", CYL, 0.3, 1.1, 1.1, sx, 1.0, 0, K, nil, CFrame.Angles(0, 0, math.rad(90))) end
+a.eye("head", -0.3, 0.3, -0.92, 0.5)
+a.eye("head", 0.3, 0.3, -0.92, 0.5)
+a.add("head", a.BALL, 0.4, 0.3, 0.3, 0, -0.05, -1.0, K)
+mouth(a, -0.45, -0.95, 0.8, C(150, 30, 30))
+body(a, { skin = K, shirt = K, pants = C(215, 30, 30), sleeve = K, hand = WHITE, shoe = C(255, 200, 40), headSize = 0.1 })
+a.add("torso", a.BALL, 0.3, 0.3, 0.1, -0.4, -0.5, -0.65, WHITE)
+a.add("torso", a.BALL, 0.3, 0.3, 0.1, 0.4, -0.5, -0.65, WHITE)
+end,
+}
 function V.applyMascot(key)
 V.clearMascot()
 local def = V.MASCOTS[key]
@@ -3048,8 +3294,18 @@ elseif string.find(n, "Arm", 1, true) then recolor(d, def.skin)
 elseif string.find(n, "Leg", 1, true) or string.find(n, "Foot", 1, true) then recolor(d, def.pants) end
 end
 end
+local built = false
+if V.BUILDS[key] then
+V.hideOriginal(c)
+built = V.build(c, key)
+if not built then
+for inst, kv in pairs(V.tmpl) do
+if kv[1] == "Transparency" then pcall(function() inst.Transparency = kv[2] end) V.tmpl[inst] = nil end
+end
+end
+end
 local head = c:FindFirstChild("Head")
-if head then
+if head and not built then
 if def.eyes then
 for _, sx in ipairs({ -0.3, 0.3 }) do
 local e = extra(c, head, Vector3.new(0.55, 0.55, 0.3), Color3.new(1, 1, 1), Enum.PartType.Ball, CFrame.new(sx, 0.2, -0.5))
@@ -3061,22 +3317,6 @@ if def.ears then
 for _, sx in ipairs({ -0.75, 0.75 }) do extra(c, head, Vector3.new(0.9, 0.9, 0.3), def.ears, Enum.PartType.Ball, CFrame.new(sx, 0.85, 0)) end
 end
 if def.hat then extra(c, head, Vector3.new(0.5, 0.5, 0.5), def.hat, nil, CFrame.new(0, 0.85, 0)) end
-local g = Instance.new("BillboardGui")
-g.Size = UDim2.new(0, 120, 0, 24)
-g.StudsOffset = Vector3.new(0, 2.4, 0)
-g.AlwaysOnTop = true
-g.Adornee = head
-local t = Instance.new("TextLabel")
-t.BackgroundTransparency = 1
-t.Size = UDim2.new(1, 0, 1, 0)
-t.Font = Enum.Font.GothamBold
-t.TextScaled = true
-t.TextColor3 = Color3.new(1, 1, 1)
-t.TextStrokeTransparency = 0.3
-t.Text = def.label
-t.Parent = g
-g.Parent = head
-V.extras[#V.extras + 1] = g
 end
 V.mascotKey, V.mascotChar = key, c
 end
@@ -4580,10 +4820,204 @@ local MainStroke = new("UIStroke", { Thickness = 2, Color = WHITE, ApplyStrokeMo
 local StrokeGrad = new("UIGradient", { Parent = MainStroke })
 local Sheen = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = WHITE, BorderSizePixel = 0, Parent = Main })
 local SheenGrad = new("UIGradient", { Rotation = 120, Parent = Sheen })
+do
+local atan2 = math.atan2 or function(y, x) return math.atan(y, x) end
+local YEL, GLD = Color3.fromRGB(255, 221, 64), Color3.fromRGB(255, 196, 40)
+local Storm = new("Frame", { Name = "Storm", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ClipsDescendants = true, Parent = Main })
+local BG = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(2.2, 2.2),
+BackgroundColor3 = WHITE, BorderSizePixel = 0, Parent = Storm })
+local BGGrad = new("UIGradient", { Rotation = 35, Parent = BG })
+local orbs = {}
+for i = 1, 3 do
+local o = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(150 + i * 30, 150 + i * 30),
+BackgroundColor3 = (i % 2 == 0) and WHITE or YEL, BackgroundTransparency = 0.9, BorderSizePixel = 0, Parent = Storm })
+UI.corner(o, "pill")
+orbs[i] = o
+end
+local pool = {}
+for i = 1, 10 do
+local o = { glow = {}, core = {}, t = 0, life = 1, on = false }
+for j = 1, 9 do
+o.glow[j] = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), BorderSizePixel = 0, BackgroundTransparency = 1, BackgroundColor3 = YEL, ZIndex = 2, Parent = Storm })
+o.core[j] = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), BorderSizePixel = 0, BackgroundTransparency = 1, BackgroundColor3 = WHITE, ZIndex = 3, Parent = Storm })
+end
+pool[i] = o
+end
+local function hide(o)
+for j = 1, #o.core do
+o.core[j].BackgroundTransparency = 1
+o.glow[j].BackgroundTransparency = 1
+end
+o.on = false
+end
+local function strike(o)
+local W, H = 560, 340
+local x = math.random() * W
+local n = #o.core
+local endY = H * (0.55 + math.random() * 0.5)
+local drift = (math.random() - 0.5) * W * 0.45
+local pts = { { x, -6 } }
+for j = 1, n do
+local f = j / n
+pts[#pts + 1] = { x + drift * f + (math.random() - 0.5) * 48, endY * f }
+end
+local mode = S.BoltColor or "White + Yellow"
+local coreC, glowC
+if mode == "Yellow" then coreC, glowC = Color3.fromRGB(255, 240, 150), YEL
+elseif mode == "White" then coreC, glowC = WHITE, Color3.fromRGB(215, 228, 255)
+elseif math.random() < 0.5 then coreC, glowC = WHITE, YEL
+else coreC, glowC = YEL, WHITE end
+local th = S.BoltThick or 2
+for j = 1, n do
+local a, b = pts[j], pts[j + 1]
+local dx, dy = b[1] - a[1], b[2] - a[2]
+local len = math.sqrt(dx * dx + dy * dy) + 2
+local ang = math.deg(atan2(dy, dx))
+local pos = UDim2.fromOffset((a[1] + b[1]) / 2, (a[2] + b[2]) / 2)
+local g, c = o.glow[j], o.core[j]
+g.Size, c.Size = UDim2.fromOffset(len, th * 4), UDim2.fromOffset(len, th)
+g.Position, c.Position = pos, pos
+g.Rotation, c.Rotation = ang, ang
+g.BackgroundColor3, c.BackgroundColor3 = glowC, coreC
+end
+o.t, o.life, o.on = 0, 0.3 / math.max(S.BoltSpeed or 1, 0.2) + math.random() * 0.18, true
+end
+local function step(o, dt)
+o.t = o.t + dt
+local k = o.t / o.life
+if k >= 1 then hide(o) return end
+local fl = (math.floor(o.t * 38) % 2 == 0) and 1 or 0.55
+local a = (1 - k) * fl * (S.BoltBright or 0.9)
+local ct, gt = 1 - a, 1 - a * 0.45
+for j = 1, #o.core do
+o.core[j].BackgroundTransparency = ct
+o.glow[j].BackgroundTransparency = gt
+end
+end
+function UI.makeBolt(parent, pos, size, zi)
+local root = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = pos, Size = size, BackgroundTransparency = 1, ZIndex = zi or 4, Parent = parent })
+new("UIAspectRatioConstraint", { AspectRatio = 1, Parent = root })
+local pts = { { 0.70, 0.02 }, { 0.30, 0.54 }, { 0.62, 0.48 }, { 0.28, 0.99 } }
+local glows = {}
+for pass = 1, 2 do
+for i = 1, 3 do
+local a, b = pts[i], pts[i + 1]
+local dx, dy = b[1] - a[1], b[2] - a[2]
+local f = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale((a[1] + b[1]) / 2, (a[2] + b[2]) / 2),
+Size = UDim2.fromScale(math.sqrt(dx * dx + dy * dy) + 0.04, pass == 1 and 0.34 or 0.17), Rotation = math.deg(atan2(dy, dx)),
+BackgroundColor3 = pass == 1 and GLD or YEL, BackgroundTransparency = pass == 1 and 0.55 or 0, BorderSizePixel = 0,
+ZIndex = (zi or 4) + pass, Parent = root })
+UI.corner(f, "pill")
+if pass == 1 then glows[#glows + 1] = f end
+end
+end
+UI.bolts = UI.bolts or {}
+UI.bolts[#UI.bolts + 1] = glows
+return root
+end
+local PRESETS = {
+["Lightning Gold"] = { Hue = 226, Sat = 0.8, Val = 0.14, AccentMode = "Gold", OutlineColor = "Gold", BoltColor = "White + Yellow" },
+["Ice Blue"] = { Hue = 205, Sat = 0.55, Val = 0.5, AccentMode = "Match hue", OutlineColor = "Cyan", BoltColor = "White" },
+["Neon Pink"] = { Hue = 320, Sat = 0.8, Val = 0.2, AccentMode = "Match hue", OutlineColor = "Pink", BoltColor = "White" },
+["Emerald"] = { Hue = 150, Sat = 0.8, Val = 0.18, AccentMode = "Match hue", OutlineColor = "Lime", BoltColor = "Yellow" },
+["Midnight"] = { Hue = 250, Sat = 0.5, Val = 0.07, AccentMode = "Gold", OutlineColor = "White", BoltColor = "White" },
+}
+UI.PRESET_NAMES = { "Lightning Gold", "Ice Blue", "Neon Pink", "Emerald", "Midnight" }
+function UI.applyPreset(name)
+local p = PRESETS[name]
+if not p then return end
+for k, v in pairs(p) do S[k] = v end
+UI.refreshAll()
+saveSoon()
+end
+local lastGlow
+function UI.paintStorm()
+local h = (S.Hue % 360) / 360
+local dark = Color3.fromHSV(h, math.min(S.Sat, 0.9), 0.12)
+local mid = (S.AccentMode == "Match hue") and Color3.fromHSV(h, 0.75, 0.42) or Color3.fromRGB(78, 60, 8)
+BGGrad.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, dark), ColorSequenceKeypoint.new(0.5, mid), ColorSequenceKeypoint.new(1, dark) })
+local tr = 1 - clamp(S.BgGlow or 0.5, 0, 1) * 0.85
+BGGrad.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, tr), NumberSequenceKeypoint.new(1, tr) })
+lastGlow = S.BgGlow
+end
+function UI.applyFx()
+Storm.Visible = true
+if S.Lightning == false then
+for _, o in ipairs(pool) do hide(o) end
+end
+if UI.logoParts then
+local jbh = S.LogoStyle ~= "JHub V1"
+UI.logoParts.j.Visible, UI.logoParts.h.Visible, UI.logoParts.bolt.Visible = jbh, jbh, jbh
+UI.logoParts.word.Visible = not jbh
+end
+UI.paintStorm()
+end
+UI.paintStorm()
+UI.stormPool = pool
+local fxT, nextAt = 0, 0
+bind(RunService.Heartbeat, function(dt)
+fxT = fxT + dt
+local sp = S.OutlineSpeed or 1
+if UI.FloatBodyGrad then UI.FloatBodyGrad.Rotation = (fxT * 55 * math.max(sp, 0.2)) % 360 end
+if not Window.Visible then return end
+if S.BgMove ~= false then
+BGGrad.Offset = Vector2.new(math.sin(fxT * 0.3) * 0.35, math.cos(fxT * 0.23) * 0.35)
+BGGrad.Rotation = 35 + math.sin(fxT * 0.2) * 30
+end
+for i, o in ipairs(orbs) do
+o.Visible = S.BgOrbs ~= false and S.BgMove ~= false
+o.Position = UDim2.fromScale(0.5 + 0.45 * math.sin(fxT * 0.35 * i + i), 0.5 + 0.4 * math.cos(fxT * 0.27 * i + i * 2))
+o.BackgroundTransparency = 0.88 + 0.05 * math.sin(fxT * 1.3 + i)
+end
+if S.BgGlow ~= lastGlow then UI.paintStorm() end
+if S.Lightning ~= false then
+nextAt = nextAt - dt
+if nextAt <= 0 then
+local cnt = math.floor(S.BoltCount or 6)
+nextAt = (0.1 + math.random() * 0.55) * (8 / math.max(cnt, 1)) / math.max(S.BoltSpeed or 1, 0.2)
+for i = 1, math.min(cnt, #pool) do
+if not pool[i].on then strike(pool[i]) break end
+end
+end
+for _, o in ipairs(pool) do if o.on then step(o, dt) end end
+else
+for _, o in ipairs(pool) do if o.on then hide(o) end end
+end
+if UI.LogoOutlineGrad then UI.LogoOutlineGrad.Rotation = (fxT * 140 * sp) % 360 end
+if UI.LogoBGGrad and S.LogoBg ~= false then UI.LogoBGGrad.Offset = Vector2.new(math.sin(fxT * 0.9) * 0.6, 0) end
+if UI.bolts then
+local pulse = 0.5 + 0.2 * math.sin(fxT * 5)
+for _, list in ipairs(UI.bolts) do
+for _, f in ipairs(list) do f.BackgroundTransparency = pulse end
+end
+end
+end)
+end
 local Header = new("Frame", { Size = UDim2.new(1, 0, 0, 46), BackgroundTransparency = 1, Active = true, Parent = Main })
-local Logo = UI.label({ Text = "JHub V1", TextSize = 24, Position = UDim2.fromOffset(16, 5), Size = UDim2.new(0, 150, 0, 26),
-TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = WHITE, Parent = Header }, true, false)
-local LogoTextGrad = UI.grad(Logo)
+local LogoTextGrad
+do
+local dark, mid = Color3.fromRGB(12, 14, 32), Color3.fromRGB(95, 74, 10)
+local badge = new("Frame", { Name = "LogoBadge", Position = UDim2.fromOffset(12, 5), Size = UDim2.fromOffset(108, 26),
+BackgroundColor3 = dark, ClipsDescendants = true, Parent = Header })
+UI.corner(badge, 0.8)
+local bg = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(3, 3),
+BackgroundColor3 = WHITE, BorderSizePixel = 0, Parent = badge })
+local bgGrad = new("UIGradient", { Rotation = 20, Parent = bg })
+bgGrad.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, dark), ColorSequenceKeypoint.new(0.5, mid), ColorSequenceKeypoint.new(1, dark) })
+local ol = new("UIStroke", { Thickness = 2, Color = WHITE, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = badge })
+local olGrad = new("UIGradient", { Parent = ol })
+olGrad.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 221, 64)), ColorSequenceKeypoint.new(0.5, WHITE),
+ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 221, 64)) })
+local j = UI.label({ Text = "J", TextSize = 22, Position = UDim2.fromOffset(8, 0), Size = UDim2.fromOffset(26, 26), TextColor3 = WHITE, ZIndex = 3, Parent = badge }, true, false)
+local h = UI.label({ Text = "H", TextSize = 22, Position = UDim2.fromOffset(74, 0), Size = UDim2.fromOffset(26, 26), TextColor3 = WHITE, ZIndex = 3, Parent = badge }, true, false)
+local word = UI.label({ Text = "JHub V1", TextSize = 18, Size = UDim2.fromScale(1, 1), TextColor3 = WHITE, ZIndex = 3, Visible = false, Parent = badge }, true, false)
+local bolt = UI.makeBolt(badge, UDim2.fromOffset(54, 13), UDim2.fromOffset(22, 22), 3)
+LogoTextGrad = UI.grad(j)
+UI.grad(h)
+UI.grad(word)
+UI.LogoBGGrad, UI.LogoOutlineGrad = bgGrad, olGrad
+UI.logoParts = { j = j, h = h, bolt = bolt, word = word }
+end
 UI.label({ Text = "Glass  " .. VERSION .. "  -  Practical Basketball", TextSize = 11, Position = UDim2.fromOffset(17, 30),
 Size = UDim2.new(0, 260, 0, 13), TextXAlignment = Enum.TextXAlignment.Left, Parent = Header }, false, "Sub")
 local function headerButton(text, xoff)
@@ -4599,12 +5033,14 @@ local CollapseBtn = headerButton("-", -52)
 local CloseBtn = headerButton("X", -12)
 local HeadLine = new("Frame", { Position = UDim2.new(0, 10, 1, -1), Size = UDim2.new(1, -20, 0, 1), BorderSizePixel = 0,
 BackgroundColor3 = WHITE, BackgroundTransparency = 0.7, Parent = Header })
+UI.th(HeadLine, "BackgroundColor3", "AccentB")
 local Body = new("Frame", { Position = UDim2.fromOffset(0, 47), Size = UDim2.new(1, 0, 1, -47), BackgroundTransparency = 1, Parent = Main })
 local Rail = new("ScrollingFrame", { Size = UDim2.new(0, 116, 1, 0), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 2, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollingDirection = Enum.ScrollingDirection.Y, Parent = Body })
 new("UIListLayout", { Padding = UDim.new(0, 5), SortOrder = Enum.SortOrder.LayoutOrder, Parent = Rail })
 new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 6), PaddingTop = UDim.new(0, 8), Parent = Rail })
 local RailLine = new("Frame", { Position = UDim2.new(0, 116, 0, 6), Size = UDim2.new(0, 1, 1, -12), BorderSizePixel = 0,
 BackgroundColor3 = WHITE, BackgroundTransparency = 0.75, Parent = Body })
+UI.th(RailLine, "BackgroundColor3", "AccentB")
 local Content = new("Frame", { Position = UDim2.fromOffset(120, 0), Size = UDim2.new(1, -120, 1, 0), BackgroundTransparency = 1, Parent = Body })
 function UI.fitScale()
 local vp = cam().ViewportSize
@@ -4635,6 +5071,7 @@ UI.blur:Destroy()
 UI.blur = nil
 end
 UI.fitScale()
+if UI.paintStorm then UI.paintStorm() end
 end
 function UI.applyLogo()
 if not UI.LogoRoot then return end
@@ -4783,6 +5220,7 @@ UI.corner(bg, 0.8)
 local bar = new("Frame", { Size = UDim2.new(0, 3, 0, 20), Position = UDim2.new(0, 0, 0.5, -10), BackgroundColor3 = WHITE,
 BorderSizePixel = 0, Visible = false, Parent = b })
 UI.corner(bar, "pill")
+UI.th(bar, "BackgroundColor3", "AccentB")
 local icon = new("Frame", { Size = UDim2.fromOffset(24, 24), Position = UDim2.new(0, 8, 0.5, -12), BackgroundColor3 = WHITE, Parent = b })
 UI.corner(icon, 0.7)
 UI.grad(icon)
@@ -5181,16 +5619,25 @@ BackgroundColor3 = WHITE, BackgroundTransparency = 0.82, ZIndex = 0, Parent = Lo
 UI.corner(LogoGlow, 2)
 local LogoBody = new("TextButton", { Text = "", AutoButtonColor = false, Size = UDim2.fromScale(1, 1), BackgroundColor3 = WHITE, ZIndex = 2, Parent = LogoRoot })
 UI.corner(LogoBody, 1.6)
-UI.grad(LogoBody)
+LogoBody.BackgroundColor3 = Color3.fromRGB(12, 14, 32)
+UI.FloatBodyGrad = new("UIGradient", { Rotation = 30, Parent = LogoBody })
+UI.FloatBodyGrad.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, Color3.fromRGB(12, 14, 32)), ColorSequenceKeypoint.new(0.5, Color3.fromRGB(100, 78, 10)), ColorSequenceKeypoint.new(1, Color3.fromRGB(12, 14, 32)) })
 local LogoRing = new("UIStroke", { Thickness = 2.5, Color = WHITE, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = LogoBody })
 local LogoRingGrad = new("UIGradient", { Parent = LogoRing })
-LogoRingGrad.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.5, 0.7), NumberSequenceKeypoint.new(1, 0) })
-local LogoText = UI.label({ Text = "JH", TextSize = 22, Size = UDim2.fromScale(1, 1), TextColor3 = WHITE, ZIndex = 3, Parent = LogoBody }, true, false)
+LogoRingGrad.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.5, 0.35), NumberSequenceKeypoint.new(1, 0) })
+LogoRingGrad.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 221, 64)), ColorSequenceKeypoint.new(0.5, Color3.new(1, 1, 1)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 221, 64)) })
+local LogoText = UI.label({ Text = "", TextSize = 22, Size = UDim2.fromScale(1, 1), TextColor3 = WHITE, ZIndex = 3, Parent = LogoBody }, true, false)
 local Spark1 = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(7, 7), BackgroundColor3 = WHITE, ZIndex = 4, Parent = LogoRoot })
 UI.corner(Spark1, "pill")
 local Spark2 = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(5, 5), BackgroundColor3 = WHITE, BackgroundTransparency = 0.25, ZIndex = 4, Parent = LogoRoot })
 UI.corner(Spark2, "pill")
 UI.LogoRoot, UI.LogoBody, UI.LogoText = LogoRoot, LogoBody, LogoText
+do
+local lj = UI.label({ Text = "J", TextScaled = true, Position = UDim2.fromScale(0.1, 0.27), Size = UDim2.fromScale(0.28, 0.46), TextColor3 = WHITE, ZIndex = 3, Parent = LogoBody }, true, false)
+local lh = UI.label({ Text = "H", TextScaled = true, Position = UDim2.fromScale(0.62, 0.27), Size = UDim2.fromScale(0.28, 0.46), TextColor3 = WHITE, ZIndex = 3, Parent = LogoBody }, true, false)
+UI.makeBolt(LogoBody, UDim2.fromScale(0.5, 0.5), UDim2.fromScale(0.36, 0.62), 3)
+UI.FloatLetters = { lj, lh }
+end
 dragify(LogoBody, LogoRoot, UI.toggleMenu, function()
 S.LogoX, S.LogoY = LogoRoot.AbsolutePosition.X, LogoRoot.AbsolutePosition.Y
 saveSoon()
@@ -5379,8 +5826,8 @@ do
 local gl = UI.Card(P, "Glass look")
 UI.Slider(gl, "Menu transparency", "WinTrans", 0, 0.95, 0.01, 2, nil, function() UI.applyWindow() end)
 UI.Slider(gl, "Card transparency", "CardTrans", 0.3, 0.98, 0.01, 2, nil, function() UI.applyTheme() end)
-UI.Slider(gl, "Blue shade", "Hue", 0, 360, 1, 0, nil, function() UI.applyTheme() end)
-UI.Slider(gl, "Blue strength", "Sat", 0.1, 1, 0.01, 2, nil, function() UI.applyTheme() end)
+UI.Slider(gl, "Color shade (hue)", "Hue", 0, 360, 1, 0, nil, function() UI.applyTheme() end)
+UI.Slider(gl, "Color strength", "Sat", 0.1, 1, 0.01, 2, nil, function() UI.applyTheme() end)
 UI.Slider(gl, "Brightness", "Val", 0.2, 1, 0.01, 2, nil, function() UI.applyTheme() end)
 local ol = UI.Card(P, "Outline")
 UI.Dropdown(ol, "Outline color", "OutlineColor", OUTLINE_NAMES, function() UI.applyTheme() end)
@@ -5404,6 +5851,25 @@ S.LogoX, S.LogoY = -1, -1
 LogoRoot.Position = UDim2.new(0, 14, 0.4, 0)
 saveSoon()
 end)
+local pr = UI.Card(P, "Presets")
+UI.Note(pr, "One tap look changes. Everything below can still be tuned by hand.")
+UI.Dropdown(pr, "Theme preset", "Preset", UI.PRESET_NAMES, function(v) UI.applyPreset(v) end)
+UI.Dropdown(pr, "Accent colors", "AccentMode", { "Gold", "Match hue" }, function() UI.applyTheme() end)
+local lt = UI.Card(P, "Lightning")
+UI.Toggle(lt, "Lightning background", "Lightning", function() UI.applyFx() end)
+UI.Dropdown(lt, "Lightning colors", "BoltColor", { "White + Yellow", "Yellow", "White" })
+UI.Slider(lt, "Lightning amount", "BoltCount", 1, 10, 1, 0)
+UI.Slider(lt, "Lightning speed", "BoltSpeed", 0.3, 3, 0.1, 1, "x")
+UI.Slider(lt, "Lightning thickness", "BoltThick", 1, 5, 0.5, 1)
+UI.Slider(lt, "Lightning brightness", "BoltBright", 0.2, 1, 0.05, 2)
+local bgc = UI.Card(P, "Moving background")
+UI.Toggle(bgc, "Moving background", "BgMove")
+UI.Slider(bgc, "Background glow", "BgGlow", 0, 1, 0.05, 2, nil, function() UI.paintStorm() end)
+UI.Toggle(bgc, "Floating light orbs", "BgOrbs")
+local hl = UI.Card(P, "Header logo")
+UI.Dropdown(hl, "Logo style", "LogoStyle", { "J bolt H", "JHub V1" }, function() UI.applyFx() end)
+UI.Toggle(hl, "Moving logo background", "LogoBg")
+UI.Slider(hl, "Moving outline speed", "OutlineSpeed", 0, 4, 0.1, 1, "x")
 local al = UI.Card(P, "Alerts and keys")
 UI.Toggle(al, "Notifications", "Notifications")
 UI.Toggle(al, "Sounds", "Sounds")
@@ -5513,7 +5979,7 @@ JH.FPS = JH.FPS * 0.9 + (1 / math.max(dt, 0.001)) * 0.1
 pcall(Anim.poll)
 local t = tick()
 if Window.Visible then
-StrokeGrad.Rotation = (t * 70) % 360
+StrokeGrad.Rotation = (t * 70 * (S.OutlineSpeed or 1)) % 360
 local off = (((t * 0.4) % 2) - 1)
 LogoTextGrad.Offset = Vector2.new(off, 0)
 if S.OutlineColor == "Rainbow" then
@@ -5594,6 +6060,7 @@ end
 JH.api = { S = S, UI = UI, Net = Net, Input = Input, Ball = Ball, Shot = Shot, Backup = Backup, Glide = Glide, Anim = Anim,
 Speed = Speed, Feat = Feat, Picker = Picker, Bar = Bar, Mover = Mover, Rec = Rec }
 UI.applyTheme()
+UI.applyFx()
 for _, f in ipairs(UI.refresh) do pcall(f) end
 InfoBar.Visible = S.Watermark
 BackupBtn.Visible = S.BackupButton
@@ -5745,7 +6212,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.23 shot-line"
+local VERSION = "v1.24 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -5835,7 +6302,7 @@ local S = {
 	AutoGreen = true, AutoCalibrate = true, AutoTiming = true, ShotRelease = "Auto",
 	HoldTime = 0.55, MaxHold = 1.6, CalSpeed = 0.6, CalStep = 0.02,
 	ShotTimes = "", ShotRatio = 0, BarPath = "", BarProp = "", BarAt = 0, BarNudge = 0,
-	ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, PacketOn = true, PacketMul = 1,
+	ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, Lightning = true, BoltCount = 6, BoltSpeed = 1, BoltThick = 2, BoltBright = 0.9, BoltColor = "White + Yellow", BgMove = true, BgGlow = 0.5, BgOrbs = true, AccentMode = "Gold", OutlineSpeed = 1, LogoStyle = "J bolt H", LogoBg = true, Preset = "Lightning Gold", PacketOn = true, PacketMul = 1,
 	MovingOffset = 0, SprintOffset = 0, PingComp = 0, Humanize = 0, Nudge = 0, GreenSound = true,
 	HookShootButton = true, ShootButtonPath = "", ReleaseMethod = "Both", FireClick = true,
 	ManualAssist = true, ShootKey = "E", SprintKey = "LeftShift",
@@ -5950,7 +6417,8 @@ end
 if S.SettingsVer < 15 then
 	S.Learn = false
 end
-if S.SettingsVer < 27 then
+if S.SettingsVer < 28 then
+	S.Hue, S.Sat, S.Val, S.WinTrans, S.CardTrans, S.OutlineColor, S.OutlineThick, S.AccentMode = 226, 0.8, 0.14, 0.08, 0.55, "Gold", 2.5, "Gold"
 	local seeds = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 	local have = {}
 	for key, val in string.gmatch(S.ShotTimes or "", "(%S+)=([%d%.]+)") do
@@ -5962,8 +6430,8 @@ if S.SettingsVer < 27 then
 	table.sort(parts)
 	S.ShotTimes = table.concat(parts, " ")
 end
-S.SettingsVer = 27
-DEFAULTS.SettingsVer = 27
+S.SettingsVer = 28
+DEFAULTS.SettingsVer = 28
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 S.ShotTimes = S.ShotTimes
 S.RecOn = false
@@ -6014,6 +6482,10 @@ local function computeTheme()
 	Theme.Outline = OUTLINE_COLORS[S.OutlineColor] or WHITE
 	Theme.AccentA = Color3.fromHSV(h, 0.2, 1)
 	Theme.AccentB = Color3.fromHSV(((S.Hue - 28) % 360) / 360, 0.75, 1)
+	if S.AccentMode ~= "Match hue" then
+		Theme.AccentA = Color3.fromRGB(255, 246, 180)
+		Theme.AccentB = Color3.fromRGB(255, 192, 28)
+	end
 end
 computeTheme()
 
@@ -8768,6 +9240,7 @@ do
 	local V = {}
 	Feat.V = V
 	V.orig, V.tmpl, V.extras, V.logoImg, V.saved = {}, {}, {}, {}, {}
+	V.isExtra = {}
 	V.labels = { overall = {}, coins = {}, badges = {} }
 	V.LOGOS = {
 		Owner = { text = "OWNER", color = Color3.fromRGB(255, 196, 40), words = { "owner" } },
@@ -8885,6 +9358,7 @@ do
 		V.tmpl = {}
 		for _, e in ipairs(V.extras) do pcall(function() e:Destroy() end) end
 		V.extras = {}
+		V.isExtra = {}
 		V.mascotKey, V.mascotChar = nil, nil
 	end
 	local function extra(c, parent, size, color, shape, offset)
@@ -8902,6 +9376,247 @@ do
 		V.extras[#V.extras + 1] = p
 		return p
 	end
+	local LIMBS = { head = { "Head" }, torso = { "UpperTorso", "Torso" }, larm = { "LeftUpperArm", "Left Arm" }, rarm = { "RightUpperArm", "Right Arm" },
+		lleg = { "LeftUpperLeg", "Left Leg" }, rleg = { "RightUpperLeg", "Right Leg" } }
+	local function limbOf(c, key)
+		for _, n in ipairs(LIMBS[key]) do
+			local p = c:FindFirstChild(n)
+			if p then return p end
+		end
+	end
+	local BALL, CYL = Enum.PartType.Ball, Enum.PartType.Cylinder
+	local WHITE, BLACK = Color3.new(1, 1, 1), Color3.new(0, 0, 0)
+	function V.hideOriginal(c)
+		for _, d in ipairs(c:GetDescendants()) do
+			if (d:IsA("BasePart") and d.Name ~= "HumanoidRootPart" and not V.isExtra[d]) or d:IsA("Decal") then
+				if V.tmpl[d] == nil then V.tmpl[d] = { "Transparency", d.Transparency } end
+				d.Transparency = 1
+			end
+		end
+	end
+	-- a whole character built from parts that follow your body (your own screen only)
+	function V.build(c, key)
+		local def = V.BUILDS[key]
+		local head = limbOf(c, "head")
+		if not def or not head or not limbOf(c, "torso") then return false end
+		local r15 = c:FindFirstChild("UpperTorso") ~= nil
+		local k = head.Size.Y / (r15 and 1.2 or 1)
+		local function add(limb, shape, sx, sy, sz, ox, oy, oz, color, mat, rot)
+			local lp = limbOf(c, limb)
+			if not lp then return nil end
+			local dy = 0
+			if r15 and limb ~= "head" then dy = (limb == "torso") and -0.2 or -0.4 end
+			local part = extra(c, lp, Vector3.new(sx, sy, sz) * k, color, shape, CFrame.new(ox * k, (oy + dy) * k, oz * k) * (rot or CFrame.new()))
+			if mat then part.Material = mat end
+			V.isExtra[part] = true
+			return part
+		end
+		local function eye(limb, x, y, z, size, iris)
+			local e = add(limb, BALL, size, size, size * 0.6, x, y, z, WHITE)
+			if e then
+				add(limb, BALL, size * 0.5, size * 0.5, size * 0.3, x, y, z - size * 0.28, iris or BLACK)
+				add(limb, BALL, size * 0.22, size * 0.22, size * 0.2, x, y, z - size * 0.4, BLACK)
+			end
+		end
+		local function num(text, color, limb)
+			local lp = limbOf(c, limb or "torso")
+			if not lp then return end
+			for _, side in ipairs({ Enum.NormalId.Front, Enum.NormalId.Back }) do
+				local sg = Instance.new("SurfaceGui")
+				sg.Face = side
+				sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+				sg.PixelsPerStud = 40
+				local t = Instance.new("TextLabel")
+				t.BackgroundTransparency = 1
+				t.Size = UDim2.new(1, 0, 1, 0)
+				t.Font = Enum.Font.GothamBlack
+				t.TextScaled = true
+				t.TextColor3 = color
+				t.Text = text
+				t.Parent = sg
+				sg.Parent = V.torsoPart[1]
+				V.extras[#V.extras + 1] = sg
+			end
+		end
+		V.torsoPart = {}
+		local env = { add = add, eye = eye, num = num, BALL = BALL, CYL = CYL, WHITE = WHITE, BLACK = BLACK }
+		local ok, err = pcall(def, env)
+		if not ok then pcall(log, "Costume build: " .. tostring(err)) end
+		return ok
+	end
+	-- the common body: head, torso with shorts, arms and legs, then each character adds its own details
+	local function body(a, o)
+		local skin, shirt, pants, hand = o.skin, o.shirt, o.pants, o.hand or o.skin
+		local hs = o.headSize or 1.3
+		if o.headBlock then a.add("head", nil, hs * 1.7, hs * 1.2, hs, 0, 0.1, 0, skin) else a.add("head", a.BALL, hs * 1.4, hs * 1.4, hs * 1.4, 0, 0.1, 0, skin) end
+		local tw, th = o.tw or 2.1, o.th or 2.1
+		V.torsoPart[1] = a.add("torso", nil, tw, th, 1.1, 0, 0, 0, shirt)
+		if o.pantsTop ~= false then a.add("torso", nil, tw + 0.05, th * 0.32, 1.15, 0, -th * 0.34, 0, pants) end
+		local aw = o.aw or 1.05
+		for _, s in ipairs({ { "larm", -1 }, { "rarm", 1 } }) do
+			a.add(s[1], nil, aw, 1.2, aw, 0, 0.45, 0, o.sleeve or shirt)
+			a.add(s[1], nil, aw * 0.95, 0.9, aw * 0.95, 0, -0.55, 0, skin)
+			a.add(s[1], a.BALL, aw * 1.15, aw * 1.15, aw * 1.15, 0, -1.05, 0, hand)
+		end
+		local lw = o.lw or 1.05
+		for _, s in ipairs({ "lleg", "rleg" }) do
+			a.add(s, nil, lw, 1.3, lw, 0, 0.35, 0, pants)
+			a.add(s, nil, lw * 0.95, 0.8, lw * 0.95, 0, -0.55, 0, o.leg or skin)
+			a.add(s, nil, lw * 1.1, 0.45, lw * 1.9, 0, -0.95, -0.35, o.shoe or Color3.fromRGB(30, 30, 30))
+		end
+	end
+	local function C(r, g, b) return Color3.fromRGB(r, g, b) end
+	local function mouth(a, y, z, w, col)
+		a.add("head", nil, w, 0.1, 0.1, 0, y, z, col or BLACK)
+		a.add("head", nil, 0.1, 0.12, 0.1, -w / 2, y + 0.06, z, col or BLACK)
+		a.add("head", nil, 0.1, 0.12, 0.1, w / 2, y + 0.06, z, col or BLACK)
+	end
+	V.BUILDS = {
+		SpongeBob = function(a)
+			local Y = C(255, 226, 60)
+			body(a, { skin = Y, shirt = WHITE, pants = C(130, 85, 40), sleeve = WHITE, aw = 0.55, lw = 0.55, leg = WHITE, shoe = BLACK, headBlock = true, headSize = 1.6, tw = 2.4, th = 1.8, hand = Y })
+			a.add("torso", nil, 2.5, 0.25, 1.2, 0, 0.6, 0, WHITE)
+			a.add("torso", nil, 0.3, 1.0, 0.15, 0, 0.2, -0.6, C(215, 30, 30))
+			a.add("head", nil, 2.7, 0.35, 1.4, 0, -0.35, 0, Y)
+			a.eye("head", -0.45, 0.35, -0.7, 0.9, C(90, 170, 255))
+			a.eye("head", 0.45, 0.35, -0.7, 0.9, C(90, 170, 255))
+			a.add("head", nil, 0.35, 0.4, 0.1, -0.15, -0.55, -0.72, WHITE)
+			a.add("head", nil, 0.35, 0.4, 0.1, 0.15, -0.55, -0.72, WHITE)
+			mouth(a, -0.35, -0.72, 1.1)
+			a.add("head", a.BALL, 0.4, 0.4, 0.1, -0.95, -0.25, -0.7, C(255, 160, 140))
+			a.add("head", a.BALL, 0.4, 0.4, 0.1, 0.95, -0.25, -0.7, C(255, 160, 140))
+			a.add("head", a.BALL, 0.25, 0.25, 0.1, -0.9, 0.9, -0.65, C(215, 175, 30))
+			a.add("head", a.BALL, 0.2, 0.2, 0.1, 0.8, 0.6, -0.65, C(215, 175, 30))
+		end,
+		Patrick = function(a)
+			local Pk = C(255, 140, 165)
+			body(a, { skin = Pk, shirt = Pk, pants = C(70, 170, 90), aw = 1.1, lw = 1.1, shoe = Pk, headSize = 1.5, tw = 2.4, th = 2.2, pantsTop = true })
+			a.add("head", nil, 0.9, 1.1, 0.9, 0, 0.9, 0, Pk, nil, CFrame.Angles(0, 0, math.rad(45)))
+			a.eye("head", -0.4, 0.15, -0.95, 0.55)
+			a.eye("head", 0.4, 0.15, -0.95, 0.55)
+			mouth(a, -0.45, -0.98, 0.7)
+			a.add("torso", a.BALL, 0.5, 0.5, 0.1, 0.5, 0.7, -0.6, C(180, 40, 150))
+			a.add("torso", a.BALL, 0.4, 0.4, 0.1, -0.6, 0.3, -0.6, C(180, 40, 150))
+			a.add("torso", a.BALL, 0.45, 0.45, 0.1, 0.6, -0.8, -0.6, C(190, 60, 160))
+		end,
+		Squidward = function(a)
+			local T = C(120, 200, 200)
+			body(a, { skin = T, shirt = C(170, 225, 225), pants = C(110, 90, 60), aw = 0.8, lw = 0.85, shoe = T, headBlock = false, headSize = 1.5, tw = 1.9 })
+			a.add("head", a.BALL, 1.5, 2.2, 1.5, 0, 0.5, 0.1, T)
+			a.add("head", nil, 0.7, 0.7, 1.7, 0, -0.1, -1.1, T)
+			a.add("head", nil, 1.9, 0.4, 0.4, 0, 0.2, -0.85, C(80, 150, 150))
+			for _, sx in ipairs({ -0.45, 0.45 }) do
+				a.add("head", a.BALL, 0.6, 0.6, 0.35, sx, 0.4, -0.8, C(250, 250, 200))
+				a.add("head", a.BALL, 0.25, 0.25, 0.2, sx, 0.3, -1.0, BLACK)
+				a.add("head", nil, 0.7, 0.28, 0.45, sx, 0.62, -0.85, T)
+			end
+			a.add("head", a.BALL, 0.6, 0.4, 0.4, -0.5, 0.95, 0.05, C(80, 150, 150))
+			mouth(a, -0.85, -0.7, 0.8, C(80, 110, 110))
+		end,
+		Jeffy = function(a)
+			local S = C(255, 205, 150)
+			body(a, { skin = S, shirt = C(255, 215, 40), pants = C(70, 100, 190), sleeve = C(255, 215, 40), tw = 1.9, th = 1.7, headBlock = false, headSize = 1.7, shoe = WHITE })
+			a.add("head", a.BALL, 0.7, 0.35, 1.7, 0, 1.0, 0.05, C(60, 40, 25))
+			a.eye("head", -0.45, 0.25, -1.0, 0.8, C(90, 70, 40))
+			a.eye("head", 0.45, 0.25, -1.0, 0.8, C(90, 70, 40))
+			a.add("head", nil, 0.9, 0.25, 0.15, 0, -0.45, -1.1, C(120, 40, 40))
+			a.add("head", nil, 0.5, 0.25, 0.1, 0.25, -0.65, -1.1, C(230, 100, 120))
+			a.add("torso", nil, 0.9, 0.25, 0.15, 0, 0.5, -0.6, C(255, 255, 255))
+		end,
+		IShowSpeed = function(a)
+			local D = C(150, 100, 70)
+			body(a, { skin = D, shirt = C(220, 30, 40), pants = C(25, 25, 25), sleeve = C(220, 30, 40), headSize = 1.35, shoe = WHITE })
+			a.add("head", nil, 1.85, 0.7, 1.6, 0, 0.85, 0, C(20, 20, 20))
+			a.add("head", nil, 1.7, 0.35, 0.2, 0, 0.15, -0.8, C(20, 20, 20))
+			a.eye("head", -0.35, 0.05, -0.85, 0.5)
+			a.eye("head", 0.35, 0.05, -0.85, 0.5)
+			a.add("head", nil, 1.2, 0.4, 0.2, 0, -0.55, -0.75, C(30, 25, 20))
+			mouth(a, -0.45, -0.88, 0.7, WHITE)
+			a.add("torso", nil, 1.6, 0.35, 0.15, 0, 0.5, -0.6, WHITE)
+		end,
+		MrBeast = function(a)
+			local L = C(235, 190, 150)
+			body(a, { skin = L, shirt = C(50, 120, 230), pants = C(40, 45, 70), sleeve = C(50, 120, 230), tw = 2.3, aw = 1.15, headSize = 1.35, shoe = WHITE })
+			a.add("head", nil, 1.9, 0.55, 1.65, 0, 0.9, 0, C(60, 40, 30))
+			a.eye("head", -0.35, 0.1, -0.85, 0.5, C(80, 120, 160))
+			a.eye("head", 0.35, 0.1, -0.85, 0.5, C(80, 120, 160))
+			a.add("head", nil, 1.1, 0.5, 0.2, 0, -0.5, -0.78, C(110, 80, 60))
+			mouth(a, -0.4, -0.92, 0.6, WHITE)
+			a.add("torso", nil, 1.0, 0.3, 0.15, 0, 0.55, -0.6, C(255, 215, 40))
+		end,
+		Banana = function(a)
+			local Y = C(255, 225, 53)
+			a.add("head", a.BALL, 1.7, 1.9, 1.5, 0, 0.1, 0, Y)
+			a.add("head", nil, 0.5, 0.5, 0.5, 0, 1.15, 0, C(110, 75, 30))
+			a.add("torso", nil, 2.4, 2.1, 1.4, 0, 0, 0, Y)
+			a.add("torso", a.BALL, 2.6, 2.6, 1.5, 0, -0.1, 0, Y)
+			for _, s in ipairs({ "larm", "rarm" }) do
+				a.add(s, nil, 0.7, 2.0, 0.7, 0, 0, 0, Y)
+			end
+			for _, s in ipairs({ "lleg", "rleg" }) do
+				a.add(s, nil, 0.8, 2.0, 0.8, 0, 0, 0, Y)
+				a.add(s, nil, 0.9, 0.4, 1.4, 0, -1.0, -0.25, C(140, 100, 50))
+			end
+			a.eye("head", -0.4, 0.45, -0.7, 0.6)
+			a.eye("head", 0.4, 0.45, -0.7, 0.6)
+			mouth(a, -0.2, -0.76, 0.8)
+			a.add("head", a.BALL, 0.25, 0.25, 0.1, -0.7, 0.9, -0.6, C(200, 160, 40))
+		end,
+		Curry = function(a)
+			local Sk = C(150, 100, 72)
+			body(a, { skin = Sk, shirt = C(255, 199, 44), pants = C(29, 66, 138), sleeve = C(255, 199, 44), shoe = C(255, 199, 44), headSize = 1.3 })
+			a.add("head", nil, 1.5, 0.45, 1.3, 0, 0.75, 0, C(20, 15, 12))
+			a.eye("head", -0.35, 0.05, -0.8, 0.42)
+			a.eye("head", 0.35, 0.05, -0.8, 0.42)
+			mouth(a, -0.4, -0.88, 0.5, C(90, 40, 30))
+			a.num("30", C(29, 66, 138))
+			a.add("torso", nil, 2.15, 0.15, 1.15, 0, 0.95, 0, C(29, 66, 138))
+		end,
+		LeBron = function(a)
+			local Sk = C(110, 70, 50)
+			body(a, { skin = Sk, shirt = C(85, 37, 130), pants = C(85, 37, 130), sleeve = C(85, 37, 130), shoe = C(255, 199, 44), tw = 2.3, aw = 1.15, headSize = 1.3 })
+			a.add("head", nil, 1.45, 0.3, 1.3, 0, 0.75, 0, C(20, 15, 12))
+			a.add("head", nil, 1.7, 0.25, 1.5, 0, 0.6, 0, C(255, 199, 44))
+			a.eye("head", -0.35, 0.05, -0.8, 0.42)
+			a.eye("head", 0.35, 0.05, -0.8, 0.42)
+			a.add("head", nil, 1.2, 0.5, 0.25, 0, -0.5, -0.75, C(25, 20, 18))
+			mouth(a, -0.35, -0.9, 0.5, WHITE)
+			a.num("23", C(255, 199, 44))
+			a.add("torso", nil, 2.35, 0.15, 1.15, 0, 0.95, 0, C(255, 199, 44))
+		end,
+		Kyrie = function(a)
+			local Sk = C(140, 95, 70)
+			body(a, { skin = Sk, shirt = C(0, 83, 188), pants = C(0, 83, 188), sleeve = C(0, 83, 188), shoe = C(255, 255, 255), headSize = 1.3 })
+			a.add("head", nil, 1.5, 0.4, 1.3, 0, 0.75, 0, C(20, 15, 12))
+			a.eye("head", -0.35, 0.05, -0.8, 0.42)
+			a.eye("head", 0.35, 0.05, -0.8, 0.42)
+			a.add("head", nil, 1.0, 0.3, 0.2, 0, -0.5, -0.78, C(25, 20, 18))
+			mouth(a, -0.4, -0.9, 0.5, WHITE)
+			a.num("11", WHITE)
+		end,
+		Wemby = function(a)
+			local Sk = C(170, 120, 90)
+			body(a, { skin = Sk, shirt = C(20, 20, 20), pants = C(195, 202, 206), sleeve = C(20, 20, 20), shoe = WHITE, aw = 1.0, lw = 1.0, headSize = 1.3 })
+			a.add("head", nil, 1.4, 0.35, 1.25, 0, 0.75, 0, C(25, 20, 18))
+			a.eye("head", -0.35, 0.05, -0.8, 0.42)
+			a.eye("head", 0.35, 0.05, -0.8, 0.42)
+			mouth(a, -0.4, -0.9, 0.5, C(90, 40, 30))
+			a.num("1", C(195, 202, 206))
+		end,
+		Mickey = function(a)
+			local K = C(20, 20, 20)
+			a.add("head", a.BALL, 1.8, 1.8, 1.8, 0, 0.1, 0, K)
+			a.add("head", a.BALL, 1.5, 1.2, 0.35, 0, -0.2, -0.78, C(255, 222, 190))
+			for _, sx in ipairs({ -1.0, 1.0 }) do a.add("head", CYL, 0.3, 1.1, 1.1, sx, 1.0, 0, K, nil, CFrame.Angles(0, 0, math.rad(90))) end
+			a.eye("head", -0.3, 0.3, -0.92, 0.5)
+			a.eye("head", 0.3, 0.3, -0.92, 0.5)
+			a.add("head", a.BALL, 0.4, 0.3, 0.3, 0, -0.05, -1.0, K)
+			mouth(a, -0.45, -0.95, 0.8, C(150, 30, 30))
+			body(a, { skin = K, shirt = K, pants = C(215, 30, 30), sleeve = K, hand = WHITE, shoe = C(255, 200, 40), headSize = 0.1 })
+			a.add("torso", a.BALL, 0.3, 0.3, 0.1, -0.4, -0.5, -0.65, WHITE)
+			a.add("torso", a.BALL, 0.3, 0.3, 0.1, 0.4, -0.5, -0.65, WHITE)
+		end,
+	}
 	function V.applyMascot(key)
 		V.clearMascot()
 		local def = V.MASCOTS[key]
@@ -8921,8 +9636,18 @@ do
 				elseif string.find(n, "Leg", 1, true) or string.find(n, "Foot", 1, true) then recolor(d, def.pants) end
 			end
 		end
+		local built = false
+		if V.BUILDS[key] then
+			V.hideOriginal(c)
+			built = V.build(c, key)
+			if not built then
+				for inst, kv in pairs(V.tmpl) do
+					if kv[1] == "Transparency" then pcall(function() inst.Transparency = kv[2] end) V.tmpl[inst] = nil end
+				end
+			end
+		end
 		local head = c:FindFirstChild("Head")
-		if head then
+		if head and not built then
 			if def.eyes then
 				for _, sx in ipairs({ -0.3, 0.3 }) do
 					local e = extra(c, head, Vector3.new(0.55, 0.55, 0.3), Color3.new(1, 1, 1), Enum.PartType.Ball, CFrame.new(sx, 0.2, -0.5))
@@ -8934,22 +9659,6 @@ do
 				for _, sx in ipairs({ -0.75, 0.75 }) do extra(c, head, Vector3.new(0.9, 0.9, 0.3), def.ears, Enum.PartType.Ball, CFrame.new(sx, 0.85, 0)) end
 			end
 			if def.hat then extra(c, head, Vector3.new(0.5, 0.5, 0.5), def.hat, nil, CFrame.new(0, 0.85, 0)) end
-			local g = Instance.new("BillboardGui")
-			g.Size = UDim2.new(0, 120, 0, 24)
-			g.StudsOffset = Vector3.new(0, 2.4, 0)
-			g.AlwaysOnTop = true
-			g.Adornee = head
-			local t = Instance.new("TextLabel")
-			t.BackgroundTransparency = 1
-			t.Size = UDim2.new(1, 0, 1, 0)
-			t.Font = Enum.Font.GothamBold
-			t.TextScaled = true
-			t.TextColor3 = Color3.new(1, 1, 1)
-			t.TextStrokeTransparency = 0.3
-			t.Text = def.label
-			t.Parent = g
-			g.Parent = head
-			V.extras[#V.extras + 1] = g
 		end
 		V.mascotKey, V.mascotChar = key, c
 	end
@@ -10524,11 +11233,210 @@ local MainStroke = new("UIStroke", { Thickness = 2, Color = WHITE, ApplyStrokeMo
 local StrokeGrad = new("UIGradient", { Parent = MainStroke })
 local Sheen = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = WHITE, BorderSizePixel = 0, Parent = Main })
 local SheenGrad = new("UIGradient", { Rotation = 120, Parent = Sheen })
+do
+	local atan2 = math.atan2 or function(y, x) return math.atan(y, x) end
+	local YEL, GLD = Color3.fromRGB(255, 221, 64), Color3.fromRGB(255, 196, 40)
+	local Storm = new("Frame", { Name = "Storm", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ClipsDescendants = true, Parent = Main })
+	local BG = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(2.2, 2.2),
+		BackgroundColor3 = WHITE, BorderSizePixel = 0, Parent = Storm })
+	local BGGrad = new("UIGradient", { Rotation = 35, Parent = BG })
+	local orbs = {}
+	for i = 1, 3 do
+		local o = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(150 + i * 30, 150 + i * 30),
+			BackgroundColor3 = (i % 2 == 0) and WHITE or YEL, BackgroundTransparency = 0.9, BorderSizePixel = 0, Parent = Storm })
+		UI.corner(o, "pill")
+		orbs[i] = o
+	end
+	local pool = {}
+	for i = 1, 10 do
+		local o = { glow = {}, core = {}, t = 0, life = 1, on = false }
+		for j = 1, 9 do
+			o.glow[j] = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), BorderSizePixel = 0, BackgroundTransparency = 1, BackgroundColor3 = YEL, ZIndex = 2, Parent = Storm })
+			o.core[j] = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), BorderSizePixel = 0, BackgroundTransparency = 1, BackgroundColor3 = WHITE, ZIndex = 3, Parent = Storm })
+		end
+		pool[i] = o
+	end
+	local function hide(o)
+		for j = 1, #o.core do
+			o.core[j].BackgroundTransparency = 1
+			o.glow[j].BackgroundTransparency = 1
+		end
+		o.on = false
+	end
+	local function strike(o)
+		local W, H = 560, 340
+		local x = math.random() * W
+		local n = #o.core
+		local endY = H * (0.55 + math.random() * 0.5)
+		local drift = (math.random() - 0.5) * W * 0.45
+		local pts = { { x, -6 } }
+		for j = 1, n do
+			local f = j / n
+			pts[#pts + 1] = { x + drift * f + (math.random() - 0.5) * 48, endY * f }
+		end
+		local mode = S.BoltColor or "White + Yellow"
+		local coreC, glowC
+		if mode == "Yellow" then coreC, glowC = Color3.fromRGB(255, 240, 150), YEL
+		elseif mode == "White" then coreC, glowC = WHITE, Color3.fromRGB(215, 228, 255)
+		elseif math.random() < 0.5 then coreC, glowC = WHITE, YEL
+		else coreC, glowC = YEL, WHITE end
+		local th = S.BoltThick or 2
+		for j = 1, n do
+			local a, b = pts[j], pts[j + 1]
+			local dx, dy = b[1] - a[1], b[2] - a[2]
+			local len = math.sqrt(dx * dx + dy * dy) + 2
+			local ang = math.deg(atan2(dy, dx))
+			local pos = UDim2.fromOffset((a[1] + b[1]) / 2, (a[2] + b[2]) / 2)
+			local g, c = o.glow[j], o.core[j]
+			g.Size, c.Size = UDim2.fromOffset(len, th * 4), UDim2.fromOffset(len, th)
+			g.Position, c.Position = pos, pos
+			g.Rotation, c.Rotation = ang, ang
+			g.BackgroundColor3, c.BackgroundColor3 = glowC, coreC
+		end
+		o.t, o.life, o.on = 0, 0.3 / math.max(S.BoltSpeed or 1, 0.2) + math.random() * 0.18, true
+	end
+	local function step(o, dt)
+		o.t = o.t + dt
+		local k = o.t / o.life
+		if k >= 1 then hide(o) return end
+		local fl = (math.floor(o.t * 38) % 2 == 0) and 1 or 0.55
+		local a = (1 - k) * fl * (S.BoltBright or 0.9)
+		local ct, gt = 1 - a, 1 - a * 0.45
+		for j = 1, #o.core do
+			o.core[j].BackgroundTransparency = ct
+			o.glow[j].BackgroundTransparency = gt
+		end
+	end
+	-- lightning shape for the logo: three bars in a zig-zag, yellow with a soft glow behind
+	function UI.makeBolt(parent, pos, size, zi)
+		local root = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = pos, Size = size, BackgroundTransparency = 1, ZIndex = zi or 4, Parent = parent })
+		new("UIAspectRatioConstraint", { AspectRatio = 1, Parent = root })
+		local pts = { { 0.70, 0.02 }, { 0.30, 0.54 }, { 0.62, 0.48 }, { 0.28, 0.99 } }
+		local glows = {}
+		for pass = 1, 2 do
+			for i = 1, 3 do
+				local a, b = pts[i], pts[i + 1]
+				local dx, dy = b[1] - a[1], b[2] - a[2]
+				local f = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale((a[1] + b[1]) / 2, (a[2] + b[2]) / 2),
+					Size = UDim2.fromScale(math.sqrt(dx * dx + dy * dy) + 0.04, pass == 1 and 0.34 or 0.17), Rotation = math.deg(atan2(dy, dx)),
+					BackgroundColor3 = pass == 1 and GLD or YEL, BackgroundTransparency = pass == 1 and 0.55 or 0, BorderSizePixel = 0,
+					ZIndex = (zi or 4) + pass, Parent = root })
+				UI.corner(f, "pill")
+				if pass == 1 then glows[#glows + 1] = f end
+			end
+		end
+		UI.bolts = UI.bolts or {}
+		UI.bolts[#UI.bolts + 1] = glows
+		return root
+	end
+	local PRESETS = {
+		["Lightning Gold"] = { Hue = 226, Sat = 0.8, Val = 0.14, AccentMode = "Gold", OutlineColor = "Gold", BoltColor = "White + Yellow" },
+		["Ice Blue"] = { Hue = 205, Sat = 0.55, Val = 0.5, AccentMode = "Match hue", OutlineColor = "Cyan", BoltColor = "White" },
+		["Neon Pink"] = { Hue = 320, Sat = 0.8, Val = 0.2, AccentMode = "Match hue", OutlineColor = "Pink", BoltColor = "White" },
+		["Emerald"] = { Hue = 150, Sat = 0.8, Val = 0.18, AccentMode = "Match hue", OutlineColor = "Lime", BoltColor = "Yellow" },
+		["Midnight"] = { Hue = 250, Sat = 0.5, Val = 0.07, AccentMode = "Gold", OutlineColor = "White", BoltColor = "White" },
+	}
+	UI.PRESET_NAMES = { "Lightning Gold", "Ice Blue", "Neon Pink", "Emerald", "Midnight" }
+	function UI.applyPreset(name)
+		local p = PRESETS[name]
+		if not p then return end
+		for k, v in pairs(p) do S[k] = v end
+		UI.refreshAll()
+		saveSoon()
+	end
+	local lastGlow
+	function UI.paintStorm()
+		local h = (S.Hue % 360) / 360
+		local dark = Color3.fromHSV(h, math.min(S.Sat, 0.9), 0.12)
+		local mid = (S.AccentMode == "Match hue") and Color3.fromHSV(h, 0.75, 0.42) or Color3.fromRGB(78, 60, 8)
+		BGGrad.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, dark), ColorSequenceKeypoint.new(0.5, mid), ColorSequenceKeypoint.new(1, dark) })
+		local tr = 1 - clamp(S.BgGlow or 0.5, 0, 1) * 0.85
+		BGGrad.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, tr), NumberSequenceKeypoint.new(1, tr) })
+		lastGlow = S.BgGlow
+	end
+	function UI.applyFx()
+		Storm.Visible = true
+		if S.Lightning == false then
+			for _, o in ipairs(pool) do hide(o) end
+		end
+		if UI.logoParts then
+			local jbh = S.LogoStyle ~= "JHub V1"
+			UI.logoParts.j.Visible, UI.logoParts.h.Visible, UI.logoParts.bolt.Visible = jbh, jbh, jbh
+			UI.logoParts.word.Visible = not jbh
+		end
+		UI.paintStorm()
+	end
+	UI.paintStorm()
+	UI.stormPool = pool
+	local fxT, nextAt = 0, 0
+	bind(RunService.Heartbeat, function(dt)
+		fxT = fxT + dt
+		local sp = S.OutlineSpeed or 1
+		-- the floating logo
+		if UI.FloatBodyGrad then UI.FloatBodyGrad.Rotation = (fxT * 55 * math.max(sp, 0.2)) % 360 end
+		if not Window.Visible then return end
+		-- moving background
+		if S.BgMove ~= false then
+			BGGrad.Offset = Vector2.new(math.sin(fxT * 0.3) * 0.35, math.cos(fxT * 0.23) * 0.35)
+			BGGrad.Rotation = 35 + math.sin(fxT * 0.2) * 30
+		end
+		for i, o in ipairs(orbs) do
+			o.Visible = S.BgOrbs ~= false and S.BgMove ~= false
+			o.Position = UDim2.fromScale(0.5 + 0.45 * math.sin(fxT * 0.35 * i + i), 0.5 + 0.4 * math.cos(fxT * 0.27 * i + i * 2))
+			o.BackgroundTransparency = 0.88 + 0.05 * math.sin(fxT * 1.3 + i)
+		end
+		if S.BgGlow ~= lastGlow then UI.paintStorm() end
+		-- lightning
+		if S.Lightning ~= false then
+			nextAt = nextAt - dt
+			if nextAt <= 0 then
+				local cnt = math.floor(S.BoltCount or 6)
+				nextAt = (0.1 + math.random() * 0.55) * (8 / math.max(cnt, 1)) / math.max(S.BoltSpeed or 1, 0.2)
+				for i = 1, math.min(cnt, #pool) do
+					if not pool[i].on then strike(pool[i]) break end
+				end
+			end
+			for _, o in ipairs(pool) do if o.on then step(o, dt) end end
+		else
+			for _, o in ipairs(pool) do if o.on then hide(o) end end
+		end
+		-- header logo
+		if UI.LogoOutlineGrad then UI.LogoOutlineGrad.Rotation = (fxT * 140 * sp) % 360 end
+		if UI.LogoBGGrad and S.LogoBg ~= false then UI.LogoBGGrad.Offset = Vector2.new(math.sin(fxT * 0.9) * 0.6, 0) end
+		if UI.bolts then
+			local pulse = 0.5 + 0.2 * math.sin(fxT * 5)
+			for _, list in ipairs(UI.bolts) do
+				for _, f in ipairs(list) do f.BackgroundTransparency = pulse end
+			end
+		end
+	end)
+end
 
 local Header = new("Frame", { Size = UDim2.new(1, 0, 0, 46), BackgroundTransparency = 1, Active = true, Parent = Main })
-local Logo = UI.label({ Text = "JHub V1", TextSize = 24, Position = UDim2.fromOffset(16, 5), Size = UDim2.new(0, 150, 0, 26),
-	TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = WHITE, Parent = Header }, true, false)
-local LogoTextGrad = UI.grad(Logo)
+local LogoTextGrad
+do
+	local dark, mid = Color3.fromRGB(12, 14, 32), Color3.fromRGB(95, 74, 10)
+	local badge = new("Frame", { Name = "LogoBadge", Position = UDim2.fromOffset(12, 5), Size = UDim2.fromOffset(108, 26),
+		BackgroundColor3 = dark, ClipsDescendants = true, Parent = Header })
+	UI.corner(badge, 0.8)
+	local bg = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(3, 3),
+		BackgroundColor3 = WHITE, BorderSizePixel = 0, Parent = badge })
+	local bgGrad = new("UIGradient", { Rotation = 20, Parent = bg })
+	bgGrad.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, dark), ColorSequenceKeypoint.new(0.5, mid), ColorSequenceKeypoint.new(1, dark) })
+	local ol = new("UIStroke", { Thickness = 2, Color = WHITE, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = badge })
+	local olGrad = new("UIGradient", { Parent = ol })
+	olGrad.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 221, 64)), ColorSequenceKeypoint.new(0.5, WHITE),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 221, 64)) })
+	local j = UI.label({ Text = "J", TextSize = 22, Position = UDim2.fromOffset(8, 0), Size = UDim2.fromOffset(26, 26), TextColor3 = WHITE, ZIndex = 3, Parent = badge }, true, false)
+	local h = UI.label({ Text = "H", TextSize = 22, Position = UDim2.fromOffset(74, 0), Size = UDim2.fromOffset(26, 26), TextColor3 = WHITE, ZIndex = 3, Parent = badge }, true, false)
+	local word = UI.label({ Text = "JHub V1", TextSize = 18, Size = UDim2.fromScale(1, 1), TextColor3 = WHITE, ZIndex = 3, Visible = false, Parent = badge }, true, false)
+	local bolt = UI.makeBolt(badge, UDim2.fromOffset(54, 13), UDim2.fromOffset(22, 22), 3)
+	LogoTextGrad = UI.grad(j)
+	UI.grad(h)
+	UI.grad(word)
+	UI.LogoBGGrad, UI.LogoOutlineGrad = bgGrad, olGrad
+	UI.logoParts = { j = j, h = h, bolt = bolt, word = word }
+end
 UI.label({ Text = "Glass  " .. VERSION .. "  -  Practical Basketball", TextSize = 11, Position = UDim2.fromOffset(17, 30),
 	Size = UDim2.new(0, 260, 0, 13), TextXAlignment = Enum.TextXAlignment.Left, Parent = Header }, false, "Sub")
 local function headerButton(text, xoff)
@@ -10544,6 +11452,7 @@ local CollapseBtn = headerButton("-", -52)
 local CloseBtn = headerButton("X", -12)
 local HeadLine = new("Frame", { Position = UDim2.new(0, 10, 1, -1), Size = UDim2.new(1, -20, 0, 1), BorderSizePixel = 0,
 	BackgroundColor3 = WHITE, BackgroundTransparency = 0.7, Parent = Header })
+UI.th(HeadLine, "BackgroundColor3", "AccentB")
 
 local Body = new("Frame", { Position = UDim2.fromOffset(0, 47), Size = UDim2.new(1, 0, 1, -47), BackgroundTransparency = 1, Parent = Main })
 local Rail = new("ScrollingFrame", { Size = UDim2.new(0, 116, 1, 0), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 2, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollingDirection = Enum.ScrollingDirection.Y, Parent = Body })
@@ -10551,6 +11460,7 @@ new("UIListLayout", { Padding = UDim.new(0, 5), SortOrder = Enum.SortOrder.Layou
 new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 6), PaddingTop = UDim.new(0, 8), Parent = Rail })
 local RailLine = new("Frame", { Position = UDim2.new(0, 116, 0, 6), Size = UDim2.new(0, 1, 1, -12), BorderSizePixel = 0,
 	BackgroundColor3 = WHITE, BackgroundTransparency = 0.75, Parent = Body })
+UI.th(RailLine, "BackgroundColor3", "AccentB")
 local Content = new("Frame", { Position = UDim2.fromOffset(120, 0), Size = UDim2.new(1, -120, 1, 0), BackgroundTransparency = 1, Parent = Body })
 
 function UI.fitScale()
@@ -10583,6 +11493,7 @@ function UI.applyWindow()
 		UI.blur = nil
 	end
 	UI.fitScale()
+	if UI.paintStorm then UI.paintStorm() end
 end
 function UI.applyLogo()
 	if not UI.LogoRoot then return end
@@ -10738,6 +11649,7 @@ function UI.Page(name, glyph)
 	local bar = new("Frame", { Size = UDim2.new(0, 3, 0, 20), Position = UDim2.new(0, 0, 0.5, -10), BackgroundColor3 = WHITE,
 		BorderSizePixel = 0, Visible = false, Parent = b })
 	UI.corner(bar, "pill")
+	UI.th(bar, "BackgroundColor3", "AccentB")
 	local icon = new("Frame", { Size = UDim2.fromOffset(24, 24), Position = UDim2.new(0, 8, 0.5, -12), BackgroundColor3 = WHITE, Parent = b })
 	UI.corner(icon, 0.7)
 	UI.grad(icon)
@@ -11144,16 +12056,25 @@ local LogoGlow = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = 
 UI.corner(LogoGlow, 2)
 local LogoBody = new("TextButton", { Text = "", AutoButtonColor = false, Size = UDim2.fromScale(1, 1), BackgroundColor3 = WHITE, ZIndex = 2, Parent = LogoRoot })
 UI.corner(LogoBody, 1.6)
-UI.grad(LogoBody)
+LogoBody.BackgroundColor3 = Color3.fromRGB(12, 14, 32)
+UI.FloatBodyGrad = new("UIGradient", { Rotation = 30, Parent = LogoBody })
+UI.FloatBodyGrad.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, Color3.fromRGB(12, 14, 32)), ColorSequenceKeypoint.new(0.5, Color3.fromRGB(100, 78, 10)), ColorSequenceKeypoint.new(1, Color3.fromRGB(12, 14, 32)) })
 local LogoRing = new("UIStroke", { Thickness = 2.5, Color = WHITE, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = LogoBody })
 local LogoRingGrad = new("UIGradient", { Parent = LogoRing })
-LogoRingGrad.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.5, 0.7), NumberSequenceKeypoint.new(1, 0) })
-local LogoText = UI.label({ Text = "JH", TextSize = 22, Size = UDim2.fromScale(1, 1), TextColor3 = WHITE, ZIndex = 3, Parent = LogoBody }, true, false)
+LogoRingGrad.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.5, 0.35), NumberSequenceKeypoint.new(1, 0) })
+LogoRingGrad.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 221, 64)), ColorSequenceKeypoint.new(0.5, Color3.new(1, 1, 1)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 221, 64)) })
+local LogoText = UI.label({ Text = "", TextSize = 22, Size = UDim2.fromScale(1, 1), TextColor3 = WHITE, ZIndex = 3, Parent = LogoBody }, true, false)
 local Spark1 = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(7, 7), BackgroundColor3 = WHITE, ZIndex = 4, Parent = LogoRoot })
 UI.corner(Spark1, "pill")
 local Spark2 = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(5, 5), BackgroundColor3 = WHITE, BackgroundTransparency = 0.25, ZIndex = 4, Parent = LogoRoot })
 UI.corner(Spark2, "pill")
 UI.LogoRoot, UI.LogoBody, UI.LogoText = LogoRoot, LogoBody, LogoText
+do
+	local lj = UI.label({ Text = "J", TextScaled = true, Position = UDim2.fromScale(0.1, 0.27), Size = UDim2.fromScale(0.28, 0.46), TextColor3 = WHITE, ZIndex = 3, Parent = LogoBody }, true, false)
+	local lh = UI.label({ Text = "H", TextScaled = true, Position = UDim2.fromScale(0.62, 0.27), Size = UDim2.fromScale(0.28, 0.46), TextColor3 = WHITE, ZIndex = 3, Parent = LogoBody }, true, false)
+	UI.makeBolt(LogoBody, UDim2.fromScale(0.5, 0.5), UDim2.fromScale(0.36, 0.62), 3)
+	UI.FloatLetters = { lj, lh }
+end
 dragify(LogoBody, LogoRoot, UI.toggleMenu, function()
 	S.LogoX, S.LogoY = LogoRoot.AbsolutePosition.X, LogoRoot.AbsolutePosition.Y
 	saveSoon()
@@ -11384,8 +12305,8 @@ do
 	local gl = UI.Card(P, "Glass look")
 	UI.Slider(gl, "Menu transparency", "WinTrans", 0, 0.95, 0.01, 2, nil, function() UI.applyWindow() end)
 	UI.Slider(gl, "Card transparency", "CardTrans", 0.3, 0.98, 0.01, 2, nil, function() UI.applyTheme() end)
-	UI.Slider(gl, "Blue shade", "Hue", 0, 360, 1, 0, nil, function() UI.applyTheme() end)
-	UI.Slider(gl, "Blue strength", "Sat", 0.1, 1, 0.01, 2, nil, function() UI.applyTheme() end)
+	UI.Slider(gl, "Color shade (hue)", "Hue", 0, 360, 1, 0, nil, function() UI.applyTheme() end)
+	UI.Slider(gl, "Color strength", "Sat", 0.1, 1, 0.01, 2, nil, function() UI.applyTheme() end)
 	UI.Slider(gl, "Brightness", "Val", 0.2, 1, 0.01, 2, nil, function() UI.applyTheme() end)
 
 	local ol = UI.Card(P, "Outline")
@@ -11413,6 +12334,29 @@ do
 		LogoRoot.Position = UDim2.new(0, 14, 0.4, 0)
 		saveSoon()
 	end)
+
+	local pr = UI.Card(P, "Presets")
+	UI.Note(pr, "One tap look changes. Everything below can still be tuned by hand.")
+	UI.Dropdown(pr, "Theme preset", "Preset", UI.PRESET_NAMES, function(v) UI.applyPreset(v) end)
+	UI.Dropdown(pr, "Accent colors", "AccentMode", { "Gold", "Match hue" }, function() UI.applyTheme() end)
+
+	local lt = UI.Card(P, "Lightning")
+	UI.Toggle(lt, "Lightning background", "Lightning", function() UI.applyFx() end)
+	UI.Dropdown(lt, "Lightning colors", "BoltColor", { "White + Yellow", "Yellow", "White" })
+	UI.Slider(lt, "Lightning amount", "BoltCount", 1, 10, 1, 0)
+	UI.Slider(lt, "Lightning speed", "BoltSpeed", 0.3, 3, 0.1, 1, "x")
+	UI.Slider(lt, "Lightning thickness", "BoltThick", 1, 5, 0.5, 1)
+	UI.Slider(lt, "Lightning brightness", "BoltBright", 0.2, 1, 0.05, 2)
+
+	local bgc = UI.Card(P, "Moving background")
+	UI.Toggle(bgc, "Moving background", "BgMove")
+	UI.Slider(bgc, "Background glow", "BgGlow", 0, 1, 0.05, 2, nil, function() UI.paintStorm() end)
+	UI.Toggle(bgc, "Floating light orbs", "BgOrbs")
+
+	local hl = UI.Card(P, "Header logo")
+	UI.Dropdown(hl, "Logo style", "LogoStyle", { "J bolt H", "JHub V1" }, function() UI.applyFx() end)
+	UI.Toggle(hl, "Moving logo background", "LogoBg")
+	UI.Slider(hl, "Moving outline speed", "OutlineSpeed", 0, 4, 0.1, 1, "x")
 
 	local al = UI.Card(P, "Alerts and keys")
 	UI.Toggle(al, "Notifications", "Notifications")
@@ -11537,7 +12481,7 @@ bind(RunService.Heartbeat, function(dt)
 	pcall(Anim.poll)
 	local t = tick()
 	if Window.Visible then
-		StrokeGrad.Rotation = (t * 70) % 360
+		StrokeGrad.Rotation = (t * 70 * (S.OutlineSpeed or 1)) % 360
 		local off = (((t * 0.4) % 2) - 1)
 		LogoTextGrad.Offset = Vector2.new(off, 0)
 		if S.OutlineColor == "Rainbow" then
@@ -11630,6 +12574,7 @@ JH.api = { S = S, UI = UI, Net = Net, Input = Input, Ball = Ball, Shot = Shot, B
 -- START
 ---------------------------------------------------------------------
 UI.applyTheme()
+UI.applyFx()
 for _, f in ipairs(UI.refresh) do pcall(f) end
 InfoBar.Visible = S.Watermark
 BackupBtn.Visible = S.BackupButton
