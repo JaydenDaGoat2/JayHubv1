@@ -130,7 +130,7 @@ Codes = "100M RELEASE 100KLIKES 500KMEMBERS SORRYFORBUGS", CodeRemotes = true,
 AutoGreen = true, AutoCalibrate = true, AutoTiming = true, ShotRelease = "Auto",
 HoldTime = 0.55, MaxHold = 1.6, CalSpeed = 0.6, CalStep = 0.02,
 ShotTimes = "", ShotRatio = 0, BarPath = "", BarProp = "", BarAt = 0, BarNudge = 0,
-ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, PacketOn = true, PacketMul = 1,
+ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, PacketOn = true, PacketMul = 1,
 MovingOffset = 0, SprintOffset = 0, PingComp = 0, Humanize = 0, Nudge = 0, GreenSound = true,
 HookShootButton = true, ShootButtonPath = "", ReleaseMethod = "Both", FireClick = true,
 ManualAssist = true, ShootKey = "E", SprintKey = "LeftShift",
@@ -233,8 +233,11 @@ end
 if S.SettingsVer < 14 then
 if S.MagnetMode == "Pull the ball" then S.MagnetMode = "Pull to me" end
 end
-S.SettingsVer = 14
-DEFAULTS.SettingsVer = 14
+if S.SettingsVer < 15 then
+S.Learn = false
+end
+S.SettingsVer = 15
+DEFAULTS.SettingsVer = 15
 DEFAULTS.ShotTimes = "r:15851912457+15851919155=1.327 r:15851912457+15851919155+17285155256=1.327 16205020756=0.343 16246923753=0.335 118403922040694=0.315 15997667717=0.365 16143612725=0.355 16143619816=0.355 84063020888988=0.335 138932071140330=0.322 111074210919383=0.414 71484695722621=0.414"
 S.RecOn = false
 S.RecShots = false
@@ -1661,6 +1664,14 @@ return not sawInst
 end
 function Shot.onRemoteEvent(name, ...)
 local a = { ... }
+if Rec.shotOn then
+local parts = {}
+for i = 1, math.min(#a, 8) do
+local v = a[i]
+parts[#parts + 1] = typeof(v) == "Instance" and ("<" .. v.Name .. ">") or (type(v) == "table" and "{table}" or tostring(v))
+end
+Rec.shotAdd("EVENT " .. name .. " " .. table.concat(parts, " | "))
+end
 if name == "Meter" then
 if a[1] == true and typeof(a[2]) == "Instance" and a[2].Name == LP.Name then
 Shot.meterT, Shot.packet = tick(), nil
@@ -1671,14 +1682,15 @@ if typeof(a[1]) == "Instance" and a[1].Name == LP.Name and type(a[3]) == "number
 Shot.packet, Shot.packetT = a[3], tick()
 end
 elseif name == "ShowFeedback" then
-if typeof(a[1]) == "Instance" and a[1].Name == LP.Name and tonumber(a[3]) then Shot.fbIdx, Shot.fbIdxT = tonumber(a[3]), tick() end
+if typeof(a[1]) == "Instance" and (a[1].Name == LP.Name or a[1] == char()) and tonumber(a[3]) then Shot.fbIdx, Shot.fbIdxT = tonumber(a[3]), tick() end
 elseif name == "RunGreenEffect" or name == "GreenCelebration" then
 if isMine(a) then Shot.greenT = tick() end
 elseif name == "Output" then
 if type(a[2]) == "string" and string.find(a[2], "Shot Feedback", 1, true) then Shot.fbT, Shot.fbText = tick(), a[2] end
 end
 end
-Shot.remoteNames = { Meter = true, RegisterPacket = true, RunGreenEffect = true, GreenCelebration = true, Output = true, ShowFeedback = true }
+Shot.remoteNames = { Meter = true, RegisterPacket = true, RunGreenEffect = true, GreenCelebration = true, Output = true, ShowFeedback = true,
+UpdateGreenWindow = true, GreenToggle = true }
 Shot.fbIdx, Shot.fbIdxT = nil, 0
 function Shot.fromIdx(idx)
 if idx == 5 then return "green", 0 end
@@ -1700,6 +1712,7 @@ function Shot.onShootCall(args)
 local d = args[1]
 if type(d) ~= "table" or Shot.selfFire then return false end
 local now = tick()
+if Rec.shotOn then Rec.shotAdd("SHOOT remote Shoot=" .. tostring(d.Shoot) .. " Input=" .. tostring(d.Input) .. " UseSpace=" .. tostring(d.UseSpace)) end
 if d.Shoot == true then
 Shot.pressT = now
 if S.ShotGlide then Mover.watchShot(now) end
@@ -1741,10 +1754,23 @@ if ratio and pk and pk > 0 then base = pk * ratio end
 if not base then
 base = pk and pk * S.PacketMul or S.HoldTime
 end
-return clamp(base + S.Nudge / 1000, Shot.FLOOR, S.MaxHold), base
+local hold = base + S.Nudge / 1000
+Shot.lastSweep = nil
+if S.Sweep and Rec.shotOn then
+Shot.sweepN = Shot.sweepN or {}
+local i = (Shot.sweepN[key] or 0) + 1
+Shot.sweepN[key] = i
+local off = Shot.SWEEP[(i - 1) % #Shot.SWEEP + 1]
+hold = hold + off
+Shot.lastSweep = off
+Rec.shotAdd(string.format("SWEEP key=%s step=%d offset=%+.3f", key, i, off))
 end
+return clamp(hold, Shot.FLOOR, S.MaxHold), base
+end
+Shot.SWEEP = { -0.036, -0.030, -0.024, -0.018, -0.012, -0.006, 0, 0.006, 0.012, 0.018, 0.024, 0.030, 0.036 }
 Shot.greenKeys = {}
 function Shot.learnRemote(info, res, strength)
+if not S.Learn or (S.Sweep and Rec.shotOn) then return end
 local key, held = info.key, info.held
 local new
 if info.manual then
@@ -4009,10 +4035,10 @@ local ctx = Rec.shotCtx or {}
 local gtype = string.match(tostring(Shot.fbText or ""), "Shot Type %- (%S+)")
 local function at(n) return c and tostring(c:GetAttribute(n)) or "?" end
 local n = #Rec.shotSummary + 1
-Rec.shotSummary[n] = string.format("SHOT %d | %s | game type=%s | anim=%s | ShotSpeed=%s | speed at start=%.1f | hand=%s | gather=%s | last dribble=%s | in air=%s | held=%.4f | verdict=%s idx=%s | message=%s | contest=%s | key=%s | start hold=%s | frozen meter=%s",
+Rec.shotSummary[n] = string.format("SHOT %d | %s | game type=%s | anim=%s | ShotSpeed=%s | speed at start=%.1f | hand=%s | gather=%s | last dribble=%s | in air=%s | held=%.4f | verdict=%s idx=%s | message=%s | contest=%s | key=%s | start hold=%s | frozen meter=%s | sweep=%s",
 n, Rec.shotCategory(ctx, gtype), tostring(gtype), at("BaseAnimation"), at("ShotSpeed"), ctx.speed or 0, at("Hand"), at("GatherType"), at("LastDribblePackage"),
 tostring(ctx.air), info.held or 0, tostring(res), tostring(info.idx), tostring(text), tostring(string.match(tostring(Shot.fbText or ""), "Contest %- (%S+)")),
-tostring(info.key), tostring(info.base and string.format("%.3f", info.base)), at("meterOffset"))
+tostring(info.key), tostring(info.base and string.format("%.3f", info.base)), at("meterOffset"), tostring(Shot.lastSweep))
 end
 function Rec.shotMeterStart(packet)
 if not Rec.shotOn then return end
@@ -4113,7 +4139,8 @@ FS.write(FS.root .. "/shotsettings.txt", text)
 end)
 end
 Rec.CAPTURE_WORDS = { "shoot", "shot", "meter", "build", "badge", "contest", "rating", "release", "timing", "takeover", "stamina", "attribute",
-"stat", "skill", "archetype", "hotzone", "hot", "cold", "makerng", "percent", "defen", "block", "guard", "gameplay", "layup", "dunk", "pass", "dribble", "input", "mobile" }
+"stat", "skill", "archetype", "hotzone", "hot", "cold", "makerng", "percent", "defen", "block", "guard", "gameplay", "layup", "dunk", "pass", "dribble", "input", "mobile",
+"player", "physics", "util", "contact", "basketball", "coin", "movement", "gamemode" }
 function Rec.captureAll()
 notify("Capture", "Reading the game. This takes up to a minute.", 5)
 task.spawn(function()
@@ -4125,7 +4152,19 @@ local ok, path = pcall(Bar.pathOf, m)
 if ok then mods[#mods + 1] = { m = m, path = path } end
 end
 end)
-table.sort(mods, function(a, b) return a.path < b.path end)
+local FIRST = { "Controllers/Player", "InputService", "Components/Input", "Controllers/Meter", "Shoot", "ShotFeedback", "Shared/Util/", "Config/Game/Basketball",
+"Config/Game/Contact", "Controllers/Characters/Character", "Config/Meter", "Config/Settings", "Controllers/Attributes", "Controllers/Gui" }
+local function prio(path)
+for _, w in ipairs(FIRST) do
+if string.find(path, w, 1, true) then return 1 end
+end
+return 2
+end
+table.sort(mods, function(a, b)
+local pa, pb = prio(a.path), prio(b.path)
+if pa ~= pb then return pa < pb end
+return a.path < b.path
+end)
 local function wanted(path)
 local low = string.lower(path)
 for _, w in ipairs(Rec.CAPTURE_WORDS) do
@@ -4160,6 +4199,12 @@ break
 end
 local skip = string.find(e.path, "Config/Game/Dunking", 1, true) or string.find(e.path, "Shooting/Packages", 1, true)
 or string.find(e.path, "Dunking/Animations", 1, true) or string.find(e.path, "Dunking/Landings", 1, true)
+if not skip then
+for _, w in ipairs({ "Icon/", "ForgeVFX", "CameraModule", "AnimationViewer", "Vehicles", "TabMenu/", "SeasonPass", "Config/Game/Emotes", "Dribbling/Packages",
+"Crowd", "Hoops/Net", "Replication/Performance", "Statsheet", "BuildOffer", "PlayerModule/", "NameFinder", "Statistics/", "Scoreboards", "GymCustomize" }) do
+if string.find(e.path, w, 1, true) and not string.find(e.path, "Coins", 1, true) then skip = true end
+end
+end
 if wanted(e.path) and not skip then
 task.wait()
 local ok, text = pcall(Rec.codeOf, e.m)
@@ -5050,6 +5095,7 @@ UI.Buttons(rc, { { "Copy recording", Rec.copy }, { "Clear", Rec.clear } })
 UI.Button(rc, "Copy remote spy (RSpy)", Rec.copySpy)
 local sr = UI.Card(P, "Shot recorder")
 UI.Toggle(sr, "Record shots (turn off to copy everything)", "RecShots", function(v) if v then Rec.shotStart() else Rec.shotStop() end end)
+UI.Toggle(sr, "Sweep timings while recording", "Sweep")
 UI.Button(sr, "Capture everything about shooting", Rec.captureAll)
 local gs = UI.Card(P, "Game scanner")
 UI.Buttons(gs, { { "Scan game and copy", Rec.scanGame }, { "Copy last scan", Rec.copyScan } })
@@ -5068,6 +5114,8 @@ UI.Toggle(g, "Auto Green", "AutoGreen")
 UI.Dropdown(g, "Shot style (Hold or Tap)", "ShotStyle", { "Hold", "Tap" })
 UI.Slider(g, "Starting hold time", "HoldTime", 0.08, 1.6, 0.005, 3, "s")
 UI.Slider(g, "Release earlier / later", "Nudge", -150, 150, 5, 0, "ms")
+local ln = UI.Card(P, "Learning")
+UI.Toggle(ln, "Learn timing from results", "Learn")
 local cal = UI.Card(P, "Auto Calibrate")
 UI.Toggle(cal, "Auto Calibrate", "AutoCalibrate")
 UI.Slider(cal, "Learn speed", "CalSpeed", 0.1, 1, 0.05, 2)
@@ -5076,7 +5124,7 @@ UI.Toggle(at, "Auto Timing", "AutoTiming")
 UI.Slider(at, "Ping compensation", "PingComp", 0, 100, 5, 0, "%")
 local rs = UI.Card(P, "Restore")
 UI.Button(rs, "Restore to default", function()
-UI.restore({ "AutoGreen", "ShotStyle", "HoldTime", "Nudge", "AutoCalibrate", "CalSpeed", "AutoTiming", "PingComp", "ShotTimes",
+UI.restore({ "AutoGreen", "ShotStyle", "HoldTime", "Nudge", "Learn", "AutoCalibrate", "CalSpeed", "AutoTiming", "PingComp", "ShotTimes",
 "ShotRatio", "PacketMul", "PacketOn" }, function()
 Shot.parseTimes()
 Shot.brackets = {}
@@ -5691,7 +5739,7 @@ local S = {
 	AutoGreen = true, AutoCalibrate = true, AutoTiming = true, ShotRelease = "Auto",
 	HoldTime = 0.55, MaxHold = 1.6, CalSpeed = 0.6, CalStep = 0.02,
 	ShotTimes = "", ShotRatio = 0, BarPath = "", BarProp = "", BarAt = 0, BarNudge = 0,
-	ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, PacketOn = true, PacketMul = 1,
+	ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, PacketOn = true, PacketMul = 1,
 	MovingOffset = 0, SprintOffset = 0, PingComp = 0, Humanize = 0, Nudge = 0, GreenSound = true,
 	HookShootButton = true, ShootButtonPath = "", ReleaseMethod = "Both", FireClick = true,
 	ManualAssist = true, ShootKey = "E", SprintKey = "LeftShift",
@@ -5801,8 +5849,11 @@ end
 if S.SettingsVer < 14 then
 	if S.MagnetMode == "Pull the ball" then S.MagnetMode = "Pull to me" end
 end
-S.SettingsVer = 14
-DEFAULTS.SettingsVer = 14
+if S.SettingsVer < 15 then
+	S.Learn = false
+end
+S.SettingsVer = 15
+DEFAULTS.SettingsVer = 15
 DEFAULTS.ShotTimes = "r:15851912457+15851919155=1.327 r:15851912457+15851919155+17285155256=1.327 16205020756=0.343 16246923753=0.335 118403922040694=0.315 15997667717=0.365 16143612725=0.355 16143619816=0.355 84063020888988=0.335 138932071140330=0.322 111074210919383=0.414 71484695722621=0.414"
 S.RecOn = false
 S.RecShots = false
@@ -7315,6 +7366,14 @@ local function isMine(a)
 end
 function Shot.onRemoteEvent(name, ...)
 	local a = { ... }
+	if Rec.shotOn then
+		local parts = {}
+		for i = 1, math.min(#a, 8) do
+			local v = a[i]
+			parts[#parts + 1] = typeof(v) == "Instance" and ("<" .. v.Name .. ">") or (type(v) == "table" and "{table}" or tostring(v))
+		end
+		Rec.shotAdd("EVENT " .. name .. " " .. table.concat(parts, " | "))
+	end
 	if name == "Meter" then
 		if a[1] == true and typeof(a[2]) == "Instance" and a[2].Name == LP.Name then
 			Shot.meterT, Shot.packet = tick(), nil
@@ -7325,14 +7384,15 @@ function Shot.onRemoteEvent(name, ...)
 			Shot.packet, Shot.packetT = a[3], tick()
 		end
 	elseif name == "ShowFeedback" then
-		if typeof(a[1]) == "Instance" and a[1].Name == LP.Name and tonumber(a[3]) then Shot.fbIdx, Shot.fbIdxT = tonumber(a[3]), tick() end
+		if typeof(a[1]) == "Instance" and (a[1].Name == LP.Name or a[1] == char()) and tonumber(a[3]) then Shot.fbIdx, Shot.fbIdxT = tonumber(a[3]), tick() end
 	elseif name == "RunGreenEffect" or name == "GreenCelebration" then
 		if isMine(a) then Shot.greenT = tick() end
 	elseif name == "Output" then
 		if type(a[2]) == "string" and string.find(a[2], "Shot Feedback", 1, true) then Shot.fbT, Shot.fbText = tick(), a[2] end
 	end
 end
-Shot.remoteNames = { Meter = true, RegisterPacket = true, RunGreenEffect = true, GreenCelebration = true, Output = true, ShowFeedback = true }
+Shot.remoteNames = { Meter = true, RegisterPacket = true, RunGreenEffect = true, GreenCelebration = true, Output = true, ShowFeedback = true,
+	UpdateGreenWindow = true, GreenToggle = true }
 Shot.fbIdx, Shot.fbIdxT = nil, 0
 -- the game's own scale: 1 Very Early, 2 Early, 3 Slightly Early, 4 Good, 5 Perfect, 6 Slightly Late, 7 Late, 8 Very Late
 function Shot.fromIdx(idx)
@@ -7356,6 +7416,7 @@ function Shot.onShootCall(args)
 	local d = args[1]
 	if type(d) ~= "table" or Shot.selfFire then return false end
 	local now = tick()
+	if Rec.shotOn then Rec.shotAdd("SHOOT remote Shoot=" .. tostring(d.Shoot) .. " Input=" .. tostring(d.Input) .. " UseSpace=" .. tostring(d.UseSpace)) end
 	if d.Shoot == true then
 		Shot.pressT = now
 		if S.ShotGlide then Mover.watchShot(now) end
@@ -7400,12 +7461,26 @@ function Shot.remoteHold(key, pk)
 	if not base then
 		base = pk and pk * S.PacketMul or S.HoldTime
 	end
-	return clamp(base + S.Nudge / 1000, Shot.FLOOR, S.MaxHold), base
+	local hold = base + S.Nudge / 1000
+	Shot.lastSweep = nil
+	if S.Sweep and Rec.shotOn then
+		-- sweep: every shot of a type goes out a little earlier or later than the last, so the recording shows exactly where Perfect is
+		Shot.sweepN = Shot.sweepN or {}
+		local i = (Shot.sweepN[key] or 0) + 1
+		Shot.sweepN[key] = i
+		local off = Shot.SWEEP[(i - 1) % #Shot.SWEEP + 1]
+		hold = hold + off
+		Shot.lastSweep = off
+		Rec.shotAdd(string.format("SWEEP key=%s step=%d offset=%+.3f", key, i, off))
+	end
+	return clamp(hold, Shot.FLOOR, S.MaxHold), base
 end
+Shot.SWEEP = { -0.036, -0.030, -0.024, -0.018, -0.012, -0.006, 0, 0.006, 0.012, 0.018, 0.024, 0.030, 0.036 }
 -- closed loop on the game's own Early / Late messages: every miss narrows where the green point is
 Shot.greenKeys = {}
 -- only Perfect counts: after a green the saved time is anchored to it and misses only nudge it
 function Shot.learnRemote(info, res, strength)
+	if not S.Learn or (S.Sweep and Rec.shotOn) then return end
 	local key, held = info.key, info.held
 	local new
 	if info.manual then
@@ -9782,10 +9857,10 @@ function Rec.shotNote(info, res, text)
 	local gtype = string.match(tostring(Shot.fbText or ""), "Shot Type %- (%S+)")
 	local function at(n) return c and tostring(c:GetAttribute(n)) or "?" end
 	local n = #Rec.shotSummary + 1
-	Rec.shotSummary[n] = string.format("SHOT %d | %s | game type=%s | anim=%s | ShotSpeed=%s | speed at start=%.1f | hand=%s | gather=%s | last dribble=%s | in air=%s | held=%.4f | verdict=%s idx=%s | message=%s | contest=%s | key=%s | start hold=%s | frozen meter=%s",
+	Rec.shotSummary[n] = string.format("SHOT %d | %s | game type=%s | anim=%s | ShotSpeed=%s | speed at start=%.1f | hand=%s | gather=%s | last dribble=%s | in air=%s | held=%.4f | verdict=%s idx=%s | message=%s | contest=%s | key=%s | start hold=%s | frozen meter=%s | sweep=%s",
 		n, Rec.shotCategory(ctx, gtype), tostring(gtype), at("BaseAnimation"), at("ShotSpeed"), ctx.speed or 0, at("Hand"), at("GatherType"), at("LastDribblePackage"),
 		tostring(ctx.air), info.held or 0, tostring(res), tostring(info.idx), tostring(text), tostring(string.match(tostring(Shot.fbText or ""), "Contest %- (%S+)")),
-		tostring(info.key), tostring(info.base and string.format("%.3f", info.base)), at("meterOffset"))
+		tostring(info.key), tostring(info.base and string.format("%.3f", info.base)), at("meterOffset"), tostring(Shot.lastSweep))
 end
 function Rec.shotMeterStart(packet)
 	if not Rec.shotOn then return end
@@ -9891,7 +9966,8 @@ end
 
 -- everything about how shooting works, in one report: module map, the game's code, builds, meters, remotes and player values
 Rec.CAPTURE_WORDS = { "shoot", "shot", "meter", "build", "badge", "contest", "rating", "release", "timing", "takeover", "stamina", "attribute",
-	"stat", "skill", "archetype", "hotzone", "hot", "cold", "makerng", "percent", "defen", "block", "guard", "gameplay", "layup", "dunk", "pass", "dribble", "input", "mobile" }
+	"stat", "skill", "archetype", "hotzone", "hot", "cold", "makerng", "percent", "defen", "block", "guard", "gameplay", "layup", "dunk", "pass", "dribble", "input", "mobile",
+	"player", "physics", "util", "contact", "basketball", "coin", "movement", "gamemode" }
 function Rec.captureAll()
 	notify("Capture", "Reading the game. This takes up to a minute.", 5)
 	task.spawn(function()
@@ -9903,7 +9979,19 @@ function Rec.captureAll()
 				if ok then mods[#mods + 1] = { m = m, path = path } end
 			end
 		end)
-		table.sort(mods, function(a, b) return a.path < b.path end)
+		local FIRST = { "Controllers/Player", "InputService", "Components/Input", "Controllers/Meter", "Shoot", "ShotFeedback", "Shared/Util/", "Config/Game/Basketball",
+			"Config/Game/Contact", "Controllers/Characters/Character", "Config/Meter", "Config/Settings", "Controllers/Attributes", "Controllers/Gui" }
+		local function prio(path)
+			for _, w in ipairs(FIRST) do
+				if string.find(path, w, 1, true) then return 1 end
+			end
+			return 2
+		end
+		table.sort(mods, function(a, b)
+			local pa, pb = prio(a.path), prio(b.path)
+			if pa ~= pb then return pa < pb end
+			return a.path < b.path
+		end)
 		local function wanted(path)
 			local low = string.lower(path)
 			for _, w in ipairs(Rec.CAPTURE_WORDS) do
@@ -9942,6 +10030,12 @@ function Rec.captureAll()
 			end
 			local skip = string.find(e.path, "Config/Game/Dunking", 1, true) or string.find(e.path, "Shooting/Packages", 1, true)
 				or string.find(e.path, "Dunking/Animations", 1, true) or string.find(e.path, "Dunking/Landings", 1, true)
+			if not skip then
+				for _, w in ipairs({ "Icon/", "ForgeVFX", "CameraModule", "AnimationViewer", "Vehicles", "TabMenu/", "SeasonPass", "Config/Game/Emotes", "Dribbling/Packages",
+					"Crowd", "Hoops/Net", "Replication/Performance", "Statsheet", "BuildOffer", "PlayerModule/", "NameFinder", "Statistics/", "Scoreboards", "GymCustomize" }) do
+					if string.find(e.path, w, 1, true) and not string.find(e.path, "Coins", 1, true) then skip = true end
+				end
+			end
 			if wanted(e.path) and not skip then
 				task.wait()
 				local ok, text = pcall(Rec.codeOf, e.m)
@@ -10881,6 +10975,7 @@ do
 
 	local sr = UI.Card(P, "Shot recorder")
 	UI.Toggle(sr, "Record shots (turn off to copy everything)", "RecShots", function(v) if v then Rec.shotStart() else Rec.shotStop() end end)
+	UI.Toggle(sr, "Sweep timings while recording", "Sweep")
 	UI.Button(sr, "Capture everything about shooting", Rec.captureAll)
 
 	local gs = UI.Card(P, "Game scanner")
@@ -10903,6 +10998,9 @@ do
 	UI.Slider(g, "Starting hold time", "HoldTime", 0.08, 1.6, 0.005, 3, "s")
 	UI.Slider(g, "Release earlier / later", "Nudge", -150, 150, 5, 0, "ms")
 
+	local ln = UI.Card(P, "Learning")
+	UI.Toggle(ln, "Learn timing from results", "Learn")
+
 	local cal = UI.Card(P, "Auto Calibrate")
 	UI.Toggle(cal, "Auto Calibrate", "AutoCalibrate")
 	UI.Slider(cal, "Learn speed", "CalSpeed", 0.1, 1, 0.05, 2)
@@ -10913,7 +11011,7 @@ do
 
 	local rs = UI.Card(P, "Restore")
 	UI.Button(rs, "Restore to default", function()
-		UI.restore({ "AutoGreen", "ShotStyle", "HoldTime", "Nudge", "AutoCalibrate", "CalSpeed", "AutoTiming", "PingComp", "ShotTimes",
+		UI.restore({ "AutoGreen", "ShotStyle", "HoldTime", "Nudge", "Learn", "AutoCalibrate", "CalSpeed", "AutoTiming", "PingComp", "ShotTimes",
 			"ShotRatio", "PacketMul", "PacketOn" }, function()
 			Shot.parseTimes()
 			Shot.brackets = {}
