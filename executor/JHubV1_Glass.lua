@@ -1744,6 +1744,7 @@ base = pk and pk * S.PacketMul or S.HoldTime
 end
 return clamp(base + S.Nudge / 1000, Shot.FLOOR, S.MaxHold), base
 end
+Shot.greenKeys = {}
 function Shot.learnRemote(info, res, strength)
 local key, held = info.key, info.held
 local new
@@ -1755,7 +1756,9 @@ elseif info.pk and info.pk > 0 and Shot.times["r:" .. key] and res ~= "early" th
 local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "late" and 5 + (strength or 2))
 local est = (held - (idx - 5) * 0.006) / info.pk
 local old = Shot.times["r:" .. key]
-Shot.times["r:" .. key] = clamp(old + 0.35 * (est - old), 0.5, 3)
+local rate = res == "green" and 0.7 or (Shot.greenKeys[key] and 0.1 or 0.35)
+if res == "green" then Shot.greenKeys[key] = true end
+Shot.times["r:" .. key] = clamp(old + rate * (est - old), 0.5, 3)
 Shot.saveTimes()
 return
 else
@@ -1763,7 +1766,9 @@ local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res 
 if idx then
 local est = held - (idx - 5) * 0.014
 local old = Shot.times[key] or held
-new = old + 0.45 * (est - old)
+local rate = res == "green" and 0.7 or (Shot.greenKeys[key] and 0.12 or 0.45)
+if res == "green" then Shot.greenKeys[key] = true end
+new = old + rate * (est - old)
 end
 if res == "green" and info.pk and info.pk > 0 then S.PacketMul = clamp(S.PacketMul * 0.5 + (held / info.pk) * 0.5, 0.4, 3) end
 end
@@ -6868,6 +6873,8 @@ function Shot.remoteHold(key, pk)
 	return clamp(base + S.Nudge / 1000, Shot.FLOOR, S.MaxHold), base
 end
 -- closed loop on the game's own Early / Late messages: every miss narrows where the green point is
+Shot.greenKeys = {}
+-- only Perfect counts: after a green the saved time is anchored to it and misses only nudge it
 function Shot.learnRemote(info, res, strength)
 	local key, held = info.key, info.held
 	local new
@@ -6880,7 +6887,9 @@ function Shot.learnRemote(info, res, strength)
 		local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "late" and 5 + (strength or 2))
 		local est = (held - (idx - 5) * 0.006) / info.pk
 		local old = Shot.times["r:" .. key]
-		Shot.times["r:" .. key] = clamp(old + 0.35 * (est - old), 0.5, 3)
+		local rate = res == "green" and 0.7 or (Shot.greenKeys[key] and 0.1 or 0.35)
+		if res == "green" then Shot.greenKeys[key] = true end
+		Shot.times["r:" .. key] = clamp(old + rate * (est - old), 0.5, 3)
 		Shot.saveTimes()
 		return
 	else
@@ -6890,7 +6899,9 @@ function Shot.learnRemote(info, res, strength)
 		if idx then
 			local est = held - (idx - 5) * 0.014
 			local old = Shot.times[key] or held
-			new = old + 0.45 * (est - old)
+			local rate = res == "green" and 0.7 or (Shot.greenKeys[key] and 0.12 or 0.45)
+			if res == "green" then Shot.greenKeys[key] = true end
+			new = old + rate * (est - old)
 		end
 		if res == "green" and info.pk and info.pk > 0 then S.PacketMul = clamp(S.PacketMul * 0.5 + (held / info.pk) * 0.5, 0.4, 3) end
 	end
