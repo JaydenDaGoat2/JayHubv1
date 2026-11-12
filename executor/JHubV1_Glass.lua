@@ -130,7 +130,7 @@ Codes = "100M RELEASE 100KLIKES 500KMEMBERS SORRYFORBUGS", CodeRemotes = true,
 AutoGreen = true, AutoCalibrate = true, AutoTiming = true, ShotRelease = "Auto",
 HoldTime = 0.55, MaxHold = 1.6, CalSpeed = 0.6, CalStep = 0.02,
 ShotTimes = "", ShotRatio = 0, BarPath = "", BarProp = "", BarAt = 0, BarNudge = 0,
-ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Go to the ball", MagnetRange = 60, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, PacketOn = true, PacketMul = 1,
+ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, PacketOn = true, PacketMul = 1,
 MovingOffset = 0, SprintOffset = 0, PingComp = 0, Humanize = 0, Nudge = 0, GreenSound = true,
 HookShootButton = true, ShootButtonPath = "", ReleaseMethod = "Both", FireClick = true,
 ManualAssist = true, ShootKey = "E", SprintKey = "LeftShift",
@@ -230,8 +230,11 @@ for key, val in pairs(have) do parts[#parts + 1] = key .. "=" .. val end
 table.sort(parts)
 S.ShotTimes = table.concat(parts, " ")
 end
-S.SettingsVer = 13
-DEFAULTS.SettingsVer = 13
+if S.SettingsVer < 14 then
+if S.MagnetMode == "Pull the ball" then S.MagnetMode = "Pull to me" end
+end
+S.SettingsVer = 14
+DEFAULTS.SettingsVer = 14
 DEFAULTS.ShotTimes = "r:15851912457+15851919155=1.327 r:15851912457+15851919155+17285155256=1.327 16205020756=0.343 16246923753=0.335 118403922040694=0.315 15997667717=0.365 16143612725=0.355 16143619816=0.355 84063020888988=0.335 138932071140330=0.322 111074210919383=0.414 71484695722621=0.414"
 S.RecOn = false
 S.RecShots = false
@@ -784,12 +787,8 @@ local r = Mover.body()
 local b, dist = Feat.findBall()
 if not r or not b then return false end
 local flatd = Vector3.new(r.Position.X - b.Position.X, 0, r.Position.Z - b.Position.Z)
-if S.MagnetMode == "Pull the ball" then
-local look = Vector3.new(r.CFrame.LookVector.X, 0, r.CFrame.LookVector.Z)
-if look.Magnitude < 0.1 then look = Vector3.new(0, 0, 1) end
-local want = r.Position + look.Unit * 3
-b.CFrame = b.CFrame + (want - b.Position)
-pcall(function() b.AssemblyLinearVelocity = Vector3.new(0, 0, 0) end)
+if S.MagnetMode ~= "Go to the ball" then
+if not Feat.hop(b) then return false end
 else
 if flatd.Magnitude < 0.1 then flatd = Vector3.new(0, 0, 1) end
 local target = Vector3.new(b.Position.X, r.Position.Y, b.Position.Z) + flatd.Unit * 2.5
@@ -2662,6 +2661,369 @@ end)
 Speed.test = nil
 Speed.testing = false
 if not ok then log("Speed test error: " .. tostring(err)) end
+end
+function Feat.hop(b)
+local r = Mover.body()
+if not r or not b or Feat.hopping then return false end
+Feat.hopping = true
+local orig = r.CFrame
+local flat = Vector3.new(r.Position.X - b.Position.X, 0, r.Position.Z - b.Position.Z)
+if flat.Magnitude < 0.1 then flat = Vector3.new(0, 0, 1) end
+local spot = Vector3.new(b.Position.X, r.Position.Y, b.Position.Z) + flat.Unit * 1.5
+task.spawn(function()
+local frames = math.max(1, math.floor(S.MagnetFrames or 1))
+for i = 1, frames do
+RunService.Heartbeat:Wait()
+pcall(function()
+r.CFrame = r.CFrame + (spot - r.Position)
+Mover.sync(r)
+end)
+end
+local done = false
+local function back()
+if done then return end
+done = true
+pcall(function()
+r.CFrame = orig
+Mover.sync(r)
+end)
+Feat.hopping = false
+end
+local okb = pcall(function() RunService:BindToRenderStep("JHHop", 0, function() back() RunService:UnbindFromRenderStep("JHHop") end) end)
+if not okb then
+RunService.RenderStepped:Wait()
+back()
+else
+task.delay(0.2, back)
+end
+end)
+return true
+end
+do
+local V = {}
+Feat.V = V
+V.orig, V.tmpl, V.extras, V.logoImg, V.saved = {}, {}, {}, {}, {}
+V.labels = { overall = {}, coins = {}, badges = {} }
+V.LOGOS = {
+Owner = { text = "OWNER", color = Color3.fromRGB(255, 196, 40), words = { "owner" } },
+YouTube = { text = "YOUTUBE", color = Color3.fromRGB(255, 0, 0), words = { "youtube", "yt" } },
+Twitch = { text = "TWITCH", color = Color3.fromRGB(145, 70, 255), words = { "twitch" } },
+TikTok = { text = "TIKTOK", color = Color3.fromRGB(30, 30, 30), words = { "tiktok" } },
+Dev = { text = "DEV", color = Color3.fromRGB(60, 140, 255), words = { "dev", "developer" } },
+}
+V.LOGO_NAMES = { "Owner", "YouTube", "Twitch", "TikTok", "Dev" }
+local function C(r, g, b) return Color3.fromRGB(r, g, b) end
+V.MASCOTS = {
+SpongeBob = { skin = C(255, 226, 60), shirt = C(255, 255, 255), pants = C(130, 85, 40), eyes = true, label = "SpongeBob" },
+Patrick = { skin = C(255, 140, 165), shirt = C(255, 140, 165), pants = C(70, 170, 90), eyes = true, label = "Patrick" },
+Squidward = { skin = C(120, 200, 200), shirt = C(120, 200, 200), pants = C(110, 90, 60), nose = C(120, 200, 200), label = "Squidward" },
+Jeffy = { skin = C(255, 205, 150), shirt = C(255, 215, 40), pants = C(70, 100, 190), label = "Jeffy" },
+IShowSpeed = { skin = C(150, 100, 70), shirt = C(220, 30, 40), pants = C(25, 25, 25), label = "IShowSpeed" },
+MrBeast = { skin = C(235, 190, 150), shirt = C(50, 120, 230), pants = C(40, 45, 70), label = "MrBeast" },
+Banana = { skin = C(255, 225, 53), shirt = C(255, 225, 53), pants = C(255, 225, 53), hat = C(110, 75, 30), label = "Banana" },
+Curry = { skin = C(150, 100, 72), shirt = C(255, 199, 44), pants = C(29, 66, 138), label = "Curry 30" },
+LeBron = { skin = C(110, 70, 50), shirt = C(85, 37, 130), pants = C(85, 37, 130), label = "LeBron" },
+Kyrie = { skin = C(140, 95, 70), shirt = C(0, 83, 188), pants = C(0, 83, 188), label = "Kyrie 11" },
+Wemby = { skin = C(170, 120, 90), shirt = C(20, 20, 20), pants = C(195, 202, 206), label = "Wemby 1" },
+Mickey = { skin = C(20, 20, 20), shirt = C(20, 20, 20), pants = C(215, 30, 30), hands = C(255, 255, 255), ears = C(20, 20, 20), label = "Mickey" },
+}
+V.MASCOT_NAMES = { "SpongeBob", "Patrick", "Squidward", "Jeffy", "IShowSpeed", "MrBeast", "Banana", "Curry", "LeBron", "Kyrie", "Wemby", "Mickey" }
+local function hasWord(name, w)
+return string.find(string.lower(name), "%f[%a]" .. w .. "%f[%A]") ~= nil
+end
+function V.findLogo(key)
+if V.logoImg[key] ~= nil then return V.logoImg[key] or nil end
+local def = V.LOGOS[key]
+local found
+local roots = { ReplicatedStorage, LP:FindFirstChild("PlayerGui"), game:GetService("StarterGui"), workspace }
+local n = 0
+for _, root in ipairs(roots) do
+if root and not found then
+for _, d in ipairs(root:GetDescendants()) do
+n = n + 1
+if n % 1500 == 0 then task.wait() end
+if d:IsA("ImageLabel") or d:IsA("ImageButton") or d:IsA("Decal") or d:IsA("Texture") then
+local img = d:IsA("Decal") and d.Texture or (d:IsA("Texture") and d.Texture or d.Image)
+if type(img) == "string" and img ~= "" then
+for _, w in ipairs(def.words) do
+if hasWord(d.Name, w) or (d.Parent and hasWord(d.Parent.Name, w)) then
+found = img
+break
+end
+end
+end
+if found then break end
+end
+end
+end
+end
+V.logoImg[key] = found or false
+return found
+end
+function V.clearLogo()
+if V.logoGui then pcall(function() V.logoGui:Destroy() end) end
+V.logoGui, V.logoKey, V.logoChar = nil, nil, nil
+end
+function V.applyLogo(key)
+V.clearLogo()
+local c = char()
+local head = c and (c:FindFirstChild("Head") or c:FindFirstChild("HumanoidRootPart"))
+local def = V.LOGOS[key]
+if not head or not def then return end
+local g = Instance.new("BillboardGui")
+g.Name = "JHLogo"
+g.Size = UDim2.new(0, 110, 0, 40)
+g.StudsOffset = Vector3.new(0, 3.6, 0)
+g.AlwaysOnTop = true
+g.Adornee = head
+local img = V.logoImg[key]
+if img then
+local il = Instance.new("ImageLabel")
+il.BackgroundTransparency = 1
+il.Size = UDim2.new(1, 0, 1, 0)
+il.ScaleType = Enum.ScaleType.Fit
+il.Image = img
+il.Parent = g
+else
+local f = Instance.new("Frame")
+f.Size = UDim2.new(1, 0, 1, 0)
+f.BackgroundColor3 = def.color
+f.BackgroundTransparency = 0.1
+f.Parent = g
+local cr = Instance.new("UICorner")
+cr.CornerRadius = UDim.new(0, 10)
+cr.Parent = f
+local t = Instance.new("TextLabel")
+t.BackgroundTransparency = 1
+t.Size = UDim2.new(1, 0, 1, 0)
+t.Font = Enum.Font.GothamBlack
+t.TextScaled = true
+t.TextColor3 = Color3.new(1, 1, 1)
+t.Text = def.text
+t.Parent = f
+end
+g.Parent = head
+V.logoGui, V.logoKey, V.logoChar = g, key, c
+end
+local function recolor(part, color)
+if V.orig[part] == nil then V.orig[part] = part.Color end
+part.Color = color
+end
+function V.clearMascot()
+for part, col in pairs(V.orig) do pcall(function() if part.Parent then part.Color = col end end) end
+V.orig = {}
+for inst, kv in pairs(V.tmpl) do pcall(function() inst[kv[1]] = kv[2] end) end
+V.tmpl = {}
+for _, e in ipairs(V.extras) do pcall(function() e:Destroy() end) end
+V.extras = {}
+V.mascotKey, V.mascotChar = nil, nil
+end
+local function extra(c, parent, size, color, shape, offset)
+local p = Instance.new("Part")
+p.Size = size
+p.Color = color
+p.Material = Enum.Material.SmoothPlastic
+p.CanCollide, p.CanQuery, p.CanTouch, p.Massless = false, false, false, true
+if shape then pcall(function() p.Shape = shape end) end
+p.CFrame = parent.CFrame * offset
+p.Parent = c
+local w = Instance.new("WeldConstraint")
+w.Part0, w.Part1 = p, parent
+w.Parent = p
+V.extras[#V.extras + 1] = p
+return p
+end
+function V.applyMascot(key)
+V.clearMascot()
+local def = V.MASCOTS[key]
+local c = char()
+if not def or not c then return end
+for _, d in ipairs(c:GetDescendants()) do
+if d:IsA("Shirt") then V.tmpl[d] = { "ShirtTemplate", d.ShirtTemplate }; d.ShirtTemplate = "" end
+if d:IsA("Pants") then V.tmpl[d] = { "PantsTemplate", d.PantsTemplate }; d.PantsTemplate = "" end
+if d:IsA("ShirtGraphic") then V.tmpl[d] = { "Graphic", d.Graphic }; d.Graphic = "" end
+if d:IsA("BasePart") and d.Name ~= "HumanoidRootPart" and not d:FindFirstAncestorOfClass("Accessory") then
+local n = d.Name
+if n == "Head" then recolor(d, def.skin)
+elseif n == "LowerTorso" then recolor(d, def.pants)
+elseif string.find(n, "Torso", 1, true) then recolor(d, def.shirt)
+elseif string.find(n, "Hand", 1, true) then recolor(d, def.hands or def.skin)
+elseif string.find(n, "Arm", 1, true) then recolor(d, def.skin)
+elseif string.find(n, "Leg", 1, true) or string.find(n, "Foot", 1, true) then recolor(d, def.pants) end
+end
+end
+local head = c:FindFirstChild("Head")
+if head then
+if def.eyes then
+for _, sx in ipairs({ -0.3, 0.3 }) do
+local e = extra(c, head, Vector3.new(0.55, 0.55, 0.3), Color3.new(1, 1, 1), Enum.PartType.Ball, CFrame.new(sx, 0.2, -0.5))
+extra(c, e, Vector3.new(0.2, 0.2, 0.2), Color3.new(0, 0, 0), Enum.PartType.Ball, CFrame.new(0, 0, -0.1))
+end
+end
+if def.nose then extra(c, head, Vector3.new(0.45, 0.45, 1.2), def.nose, Enum.PartType.Cylinder, CFrame.new(0, -0.1, -0.9) * CFrame.Angles(0, math.rad(90), 0)) end
+if def.ears then
+for _, sx in ipairs({ -0.75, 0.75 }) do extra(c, head, Vector3.new(0.9, 0.9, 0.3), def.ears, Enum.PartType.Ball, CFrame.new(sx, 0.85, 0)) end
+end
+if def.hat then extra(c, head, Vector3.new(0.5, 0.5, 0.5), def.hat, nil, CFrame.new(0, 0.85, 0)) end
+local g = Instance.new("BillboardGui")
+g.Size = UDim2.new(0, 120, 0, 24)
+g.StudsOffset = Vector3.new(0, 2.4, 0)
+g.AlwaysOnTop = true
+g.Adornee = head
+local t = Instance.new("TextLabel")
+t.BackgroundTransparency = 1
+t.Size = UDim2.new(1, 0, 1, 0)
+t.Font = Enum.Font.GothamBold
+t.TextScaled = true
+t.TextColor3 = Color3.new(1, 1, 1)
+t.TextStrokeTransparency = 0.3
+t.Text = def.label
+t.Parent = g
+g.Parent = head
+V.extras[#V.extras + 1] = g
+end
+V.mascotKey, V.mascotChar = key, c
+end
+local KEYS = {
+overall = { "overall", "ovr" },
+coins = { "coins", "coin", "cash", "money", "currency" },
+badges = { "badge", "badges" },
+}
+function V.scanLabels()
+if V.scanning then return end
+V.scanning = true
+task.spawn(function()
+local gui = LP:FindFirstChild("PlayerGui")
+if gui then
+local n = 0
+local found = { overall = {}, coins = {}, badges = {} }
+for _, d in ipairs(gui:GetDescendants()) do
+n = n + 1
+if n % 1500 == 0 then task.wait() end
+if d:IsA("TextLabel") or d:IsA("TextButton") then
+local names = { d.Name, d.Parent and d.Parent.Name or "", d.Parent and d.Parent.Parent and d.Parent.Parent.Name or "" }
+for kind, words in pairs(KEYS) do
+for _, nm in ipairs(names) do
+local low = string.lower(nm)
+for _, w in ipairs(words) do
+if string.find(low, w, 1, true) then found[kind][d] = true end
+end
+end
+end
+end
+end
+V.labels = found
+end
+V.scanning = false
+V.scanT = tick()
+end)
+end
+local function setLabels(kind, fn)
+for d in pairs(V.labels[kind]) do
+if d.Parent then
+pcall(function()
+local nt = fn(d.Text)
+if nt and nt ~= d.Text then d.Text = nt end
+end)
+end
+end
+end
+local function remember(inst, name)
+local key = inst
+V.saved[key] = V.saved[key] or {}
+if V.saved[key][name] == nil then V.saved[key][name] = inst:GetAttribute(name) or false end
+end
+function V.maxStep()
+local any = S.MaxOverall or S.MaxCoins or S.MaxBadges
+if not any then return end
+if (not V.scanT or tick() - V.scanT > 8) and not V.scanning then V.scanStarted = tick(); V.scanLabels() end
+local c = char()
+if S.MaxOverall then
+for _, o in ipairs({ LP, c }) do
+if o and o:GetAttribute("Overall") ~= nil and o:GetAttribute("Overall") ~= 99 then remember(o, "Overall"); o:SetAttribute("Overall", 99) end
+end
+setLabels("overall", function(t) if string.find(t, "%d") then return (string.gsub(t, "%d+", "99", 1)) end end)
+end
+if S.MaxCoins then
+local big = 999999999
+local ls = LP:FindFirstChild("leaderstats")
+if ls then
+for _, v in ipairs(ls:GetChildren()) do
+local low = string.lower(v.Name)
+if (v:IsA("IntValue") or v:IsA("NumberValue")) and (string.find(low, "coin", 1, true) or string.find(low, "cash", 1, true) or string.find(low, "money", 1, true)) then
+V.saved[v] = V.saved[v] or { Value = v.Value }
+v.Value = big
+end
+end
+end
+for k, val in pairs(LP:GetAttributes()) do
+local low = string.lower(k)
+if type(val) == "number" and (string.find(low, "coin", 1, true) or string.find(low, "cash", 1, true) or string.find(low, "money", 1, true)) and val ~= big then
+remember(LP, k)
+LP:SetAttribute(k, big)
+end
+end
+setLabels("coins", function(t) if string.find(t, "%d") then return (string.gsub(t, "[%d,%.]+", "999,999,999", 1)) end end)
+end
+if S.MaxBadges then
+local maxp = (c and c:GetAttribute("MaxBadgePoints")) or 109
+if c and c:GetAttribute("BadgePoints") ~= nil and c:GetAttribute("BadgePoints") ~= maxp then
+remember(c, "BadgePoints")
+c:SetAttribute("BadgePoints", maxp)
+end
+setLabels("badges", function(t)
+if string.find(t, "%d+%s*/%s*%d+") then return (string.gsub(t, "%d+(%s*/%s*)%d+", tostring(maxp) .. "%1" .. tostring(maxp), 1)) end
+if string.find(t, "^%s*%d+%s*$") then return tostring(maxp) end
+end)
+end
+end
+function V.restoreStats()
+for inst, kv in pairs(V.saved) do
+pcall(function()
+for name, val in pairs(kv) do
+if name == "Value" then inst.Value = val else inst:SetAttribute(name, val ~= false and val or nil) end
+end
+end)
+end
+V.saved = {}
+end
+function V.step()
+local now = tick()
+if V.t and now - V.t < 0.5 then return end
+V.t = now
+local c = char()
+pcall(V.stepVisuals, c)
+pcall(V.maxStep)
+if not (S.MaxOverall or S.MaxCoins or S.MaxBadges) and next(V.saved) then pcall(V.restoreStats) end
+end
+function V.stepVisuals(c)
+if S.LogoOn then
+local key = S.Logo
+if V.LOGOS[key] and (V.logoKey ~= key or V.logoChar ~= c or not (V.logoGui and V.logoGui.Parent)) then
+if V.logoImg[key] == nil then
+if not V.finding then
+V.finding = true
+task.spawn(function() pcall(V.findLogo, key) V.finding = false end)
+end
+else
+V.applyLogo(key)
+end
+end
+elseif V.logoGui then
+V.clearLogo()
+end
+if S.MascotOn then
+local key = S.Mascot
+if V.MASCOTS[key] and (V.mascotKey ~= key or V.mascotChar ~= c) then V.applyMascot(key) end
+elseif V.mascotKey then
+V.clearMascot()
+end
+end
+function V.cleanup()
+pcall(V.clearLogo)
+pcall(V.clearMascot)
+pcall(V.restoreStats)
+end
 end
 Rec.on = false
 Rec.lines = {}
@@ -4757,6 +5119,103 @@ UI.Button(rs, "Restore to default", function()
 UI.restore({ "SpeedOn", "SpeedAdd", "RunOn", "RunAdd", "BallSpeedOn", "BallAdd" }, function() Speed.resetAuto() end)
 end)
 end
+P = UI.Page("Ball", "B")
+do
+local m = UI.Card(P, "Ball magnet")
+UI.Toggle(m, "Ball magnet", "BallMagnet")
+UI.Dropdown(m, "How it gets the ball", "MagnetMode", { "Pull to me", "Go to the ball" })
+UI.Slider(m, "Range", "MagnetRange", 10, 150, 5, 0, " studs")
+UI.Slider(m, "Pull hold (frames)", "MagnetFrames", 1, 6, 1, 0)
+UI.Button(m, "Get the ball now", function()
+if not Feat.getBall(true) then notify("Ball magnet", "No ball found.", 2) end
+end)
+local rs = UI.Card(P, "Restore")
+UI.Button(rs, "Restore to default", function()
+UI.restore({ "BallMagnet", "MagnetMode", "MagnetRange", "MagnetFrames" })
+end)
+end
+P = UI.Page("Features", "F")
+do
+local lg = UI.Card(P, "Practical Basketball logo")
+UI.Toggle(lg, "Show logo", "LogoOn")
+UI.Dropdown(lg, "Logo", "Logo", Feat.V.LOGO_NAMES)
+local mc = UI.Card(P, "Mascot")
+UI.Toggle(mc, "Mascot", "MascotOn")
+UI.Dropdown(mc, "Pick a mascot", "Mascot", Feat.V.MASCOT_NAMES)
+local mx = UI.Card(P, "Maxed stats (only you see this)")
+UI.Toggle(mx, "Max overall", "MaxOverall")
+UI.Toggle(mx, "Max coins", "MaxCoins")
+UI.Toggle(mx, "Max badges", "MaxBadges")
+local rs = UI.Card(P, "Restore")
+UI.Button(rs, "Restore to default", function()
+UI.restore({ "LogoOn", "Logo", "MascotOn", "Mascot", "MaxOverall", "MaxCoins", "MaxBadges" })
+end)
+end
+function UI.restore(keys, after)
+for _, k in ipairs(keys) do S[k] = DEFAULTS[k] end
+if after then pcall(after) end
+UI.refreshAll()
+saveSoon()
+notify("Restored", "Back to default", 2)
+end
+P = UI.Page("Shooting", "S")
+do
+local g = UI.Card(P, "Auto Green")
+UI.Toggle(g, "Auto Green", "AutoGreen")
+UI.Dropdown(g, "Shot style (Hold or Tap)", "ShotStyle", { "Hold", "Tap" })
+UI.Slider(g, "Starting hold time", "HoldTime", 0.08, 1.6, 0.005, 3, "s")
+UI.Slider(g, "Release earlier / later", "Nudge", -150, 150, 5, 0, "ms")
+local cal = UI.Card(P, "Auto Calibrate")
+UI.Toggle(cal, "Auto Calibrate", "AutoCalibrate")
+UI.Slider(cal, "Learn speed", "CalSpeed", 0.1, 1, 0.05, 2)
+local at = UI.Card(P, "Auto Timing")
+UI.Toggle(at, "Auto Timing", "AutoTiming")
+UI.Slider(at, "Ping compensation", "PingComp", 0, 100, 5, 0, "%")
+local rs = UI.Card(P, "Restore")
+UI.Button(rs, "Restore to default", function()
+UI.restore({ "AutoGreen", "ShotStyle", "HoldTime", "Nudge", "AutoCalibrate", "CalSpeed", "AutoTiming", "PingComp", "ShotTimes",
+"ShotRatio", "PacketMul", "PacketOn" }, function()
+Shot.parseTimes()
+Shot.brackets = {}
+end)
+end)
+end
+P = UI.Page("Dribbling", "D")
+do
+local d = UI.Card(P, "Dribble Glide")
+UI.Toggle(d, "Dribble Glide", "DribbleGlide")
+UI.Slider(d, "Glide speed", "DribbleGlidePower", 1, 80, 1, 0)
+UI.Slider(d, "Time", "DribbleGlideTime", 0.05, 1, 0.01, 2, "s")
+local sg = UI.Card(P, "Shot Glide")
+UI.Toggle(sg, "Shot Glide", "ShotGlide")
+UI.Slider(sg, "Glide speed", "ShotGlidePower", 1, 80, 1, 0)
+UI.Slider(sg, "Time", "ShotGlideTime", 0.05, 1, 0.01, 2, "s")
+local gt = UI.Card(P, "Gather Step Glide")
+UI.Toggle(gt, "Gather Step Glide", "GatherGlide")
+UI.Slider(gt, "Glide speed", "GatherGlidePower", 1, 80, 1, 0)
+UI.Slider(gt, "Time", "GatherGlideTime", 0.05, 1, 0.01, 2, "s")
+local rs = UI.Card(P, "Restore")
+UI.Button(rs, "Restore to default", function()
+UI.restore({ "DribbleGlide", "DribbleGlidePower", "DribbleGlideTime", "ShotGlide", "ShotGlidePower", "ShotGlideTime", "GatherGlide",
+"GatherGlidePower", "GatherGlideTime" })
+end)
+end
+P = UI.Page("Players", "P")
+do
+local b = UI.Card(P, "Walk speed boost (walking, no ball)")
+UI.Toggle(b, "Walk speed boost", "SpeedOn", function(v) if v then Speed.resetAuto() end end)
+UI.Slider(b, "Level (0 = normal speed)", "SpeedAdd", 0, 15, 1, 0)
+local rb = UI.Card(P, "Run speed boost (running, no ball)")
+UI.Toggle(rb, "Run speed boost", "RunOn", function(v) if v then Speed.resetAuto() end end)
+UI.Slider(rb, "Level (0 = normal speed)", "RunAdd", 0, 15, 1, 0)
+local bb = UI.Card(P, "Ball speed boost (with the ball)")
+UI.Toggle(bb, "Ball speed boost", "BallSpeedOn", function(v) if v then Speed.resetAuto() end end)
+UI.Slider(bb, "Level (0 = normal speed)", "BallAdd", 0, 15, 1, 0)
+local rs = UI.Card(P, "Restore")
+UI.Button(rs, "Restore to default", function()
+UI.restore({ "SpeedOn", "SpeedAdd", "RunOn", "RunAdd", "BallSpeedOn", "BallAdd" }, function() Speed.resetAuto() end)
+end)
+end
 P = UI.Page("Features", "F")
 do
 local m = UI.Card(P, "Ball magnet")
@@ -4982,6 +5441,7 @@ local h = hum()
 if h and Speed.lastSet then pcall(function() h.WalkSpeed = Speed.gameWS end) end
 if UI.blur then pcall(function() UI.blur:Destroy() end) end
 pcall(Speed.gvRestore)
+pcall(Feat.V.cleanup)
 pcall(Rec.stop)
 save()
 pcall(function() gui:Destroy() end)
@@ -5054,6 +5514,7 @@ end)
 task.spawn(function()
 while JH.Running do
 pcall(Feat.magnetStep)
+pcall(Feat.V.step)
 task.wait(0.05)
 end
 end)
@@ -5230,7 +5691,7 @@ local S = {
 	AutoGreen = true, AutoCalibrate = true, AutoTiming = true, ShotRelease = "Auto",
 	HoldTime = 0.55, MaxHold = 1.6, CalSpeed = 0.6, CalStep = 0.02,
 	ShotTimes = "", ShotRatio = 0, BarPath = "", BarProp = "", BarAt = 0, BarNudge = 0,
-	ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Go to the ball", MagnetRange = 60, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, PacketOn = true, PacketMul = 1,
+	ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, PacketOn = true, PacketMul = 1,
 	MovingOffset = 0, SprintOffset = 0, PingComp = 0, Humanize = 0, Nudge = 0, GreenSound = true,
 	HookShootButton = true, ShootButtonPath = "", ReleaseMethod = "Both", FireClick = true,
 	ManualAssist = true, ShootKey = "E", SprintKey = "LeftShift",
@@ -5337,8 +5798,11 @@ if S.SettingsVer < 13 then
 	table.sort(parts)
 	S.ShotTimes = table.concat(parts, " ")
 end
-S.SettingsVer = 13
-DEFAULTS.SettingsVer = 13
+if S.SettingsVer < 14 then
+	if S.MagnetMode == "Pull the ball" then S.MagnetMode = "Pull to me" end
+end
+S.SettingsVer = 14
+DEFAULTS.SettingsVer = 14
 DEFAULTS.ShotTimes = "r:15851912457+15851919155=1.327 r:15851912457+15851919155+17285155256=1.327 16205020756=0.343 16246923753=0.335 118403922040694=0.315 15997667717=0.365 16143612725=0.355 16143619816=0.355 84063020888988=0.335 138932071140330=0.322 111074210919383=0.414 71484695722621=0.414"
 S.RecOn = false
 S.RecShots = false
@@ -5935,12 +6399,8 @@ function Feat.getBall(force)
 	local b, dist = Feat.findBall()
 	if not r or not b then return false end
 	local flatd = Vector3.new(r.Position.X - b.Position.X, 0, r.Position.Z - b.Position.Z)
-	if S.MagnetMode == "Pull the ball" then
-		local look = Vector3.new(r.CFrame.LookVector.X, 0, r.CFrame.LookVector.Z)
-		if look.Magnitude < 0.1 then look = Vector3.new(0, 0, 1) end
-		local want = r.Position + look.Unit * 3
-		b.CFrame = b.CFrame + (want - b.Position)
-		pcall(function() b.AssemblyLinearVelocity = Vector3.new(0, 0, 0) end)
+	if S.MagnetMode ~= "Go to the ball" then
+		if not Feat.hop(b) then return false end
 	else
 		if flatd.Magnitude < 0.1 then flatd = Vector3.new(0, 0, 1) end
 		local target = Vector3.new(b.Position.X, r.Position.Y, b.Position.Z) + flatd.Unit * 2.5
@@ -7917,6 +8377,384 @@ function Speed.autoPick()
 	Speed.test = nil
 	Speed.testing = false
 	if not ok then log("Speed test error: " .. tostring(err)) end
+end
+
+
+-- BALL MAGNET, PULL TO ME: the game owns the ball, so a client-side move does nothing. Instead the body is put on the ball for one tick
+-- (what the server sees) and put back before the next frame is drawn (what you see)
+function Feat.hop(b)
+	local r = Mover.body()
+	if not r or not b or Feat.hopping then return false end
+	Feat.hopping = true
+	local orig = r.CFrame
+	local flat = Vector3.new(r.Position.X - b.Position.X, 0, r.Position.Z - b.Position.Z)
+	if flat.Magnitude < 0.1 then flat = Vector3.new(0, 0, 1) end
+	local spot = Vector3.new(b.Position.X, r.Position.Y, b.Position.Z) + flat.Unit * 1.5
+	task.spawn(function()
+		local frames = math.max(1, math.floor(S.MagnetFrames or 1))
+		for i = 1, frames do
+			RunService.Heartbeat:Wait()
+			pcall(function()
+				r.CFrame = r.CFrame + (spot - r.Position)
+				Mover.sync(r)
+			end)
+		end
+		local done = false
+		local function back()
+			if done then return end
+			done = true
+			pcall(function()
+				r.CFrame = orig
+				Mover.sync(r)
+			end)
+			Feat.hopping = false
+		end
+		local okb = pcall(function() RunService:BindToRenderStep("JHHop", 0, function() back() RunService:UnbindFromRenderStep("JHHop") end) end)
+		if not okb then
+			RunService.RenderStepped:Wait()
+			back()
+		else
+			task.delay(0.2, back)
+		end
+	end)
+	return true
+end
+
+-- VISUALS (only you see these): logos over your head, a cartoon costume, maxed overall, coins and badges
+do
+	local V = {}
+	Feat.V = V
+	V.orig, V.tmpl, V.extras, V.logoImg, V.saved = {}, {}, {}, {}, {}
+	V.labels = { overall = {}, coins = {}, badges = {} }
+	V.LOGOS = {
+		Owner = { text = "OWNER", color = Color3.fromRGB(255, 196, 40), words = { "owner" } },
+		YouTube = { text = "YOUTUBE", color = Color3.fromRGB(255, 0, 0), words = { "youtube", "yt" } },
+		Twitch = { text = "TWITCH", color = Color3.fromRGB(145, 70, 255), words = { "twitch" } },
+		TikTok = { text = "TIKTOK", color = Color3.fromRGB(30, 30, 30), words = { "tiktok" } },
+		Dev = { text = "DEV", color = Color3.fromRGB(60, 140, 255), words = { "dev", "developer" } },
+	}
+	V.LOGO_NAMES = { "Owner", "YouTube", "Twitch", "TikTok", "Dev" }
+	local function C(r, g, b) return Color3.fromRGB(r, g, b) end
+	V.MASCOTS = {
+		SpongeBob = { skin = C(255, 226, 60), shirt = C(255, 255, 255), pants = C(130, 85, 40), eyes = true, label = "SpongeBob" },
+		Patrick = { skin = C(255, 140, 165), shirt = C(255, 140, 165), pants = C(70, 170, 90), eyes = true, label = "Patrick" },
+		Squidward = { skin = C(120, 200, 200), shirt = C(120, 200, 200), pants = C(110, 90, 60), nose = C(120, 200, 200), label = "Squidward" },
+		Jeffy = { skin = C(255, 205, 150), shirt = C(255, 215, 40), pants = C(70, 100, 190), label = "Jeffy" },
+		IShowSpeed = { skin = C(150, 100, 70), shirt = C(220, 30, 40), pants = C(25, 25, 25), label = "IShowSpeed" },
+		MrBeast = { skin = C(235, 190, 150), shirt = C(50, 120, 230), pants = C(40, 45, 70), label = "MrBeast" },
+		Banana = { skin = C(255, 225, 53), shirt = C(255, 225, 53), pants = C(255, 225, 53), hat = C(110, 75, 30), label = "Banana" },
+		Curry = { skin = C(150, 100, 72), shirt = C(255, 199, 44), pants = C(29, 66, 138), label = "Curry 30" },
+		LeBron = { skin = C(110, 70, 50), shirt = C(85, 37, 130), pants = C(85, 37, 130), label = "LeBron" },
+		Kyrie = { skin = C(140, 95, 70), shirt = C(0, 83, 188), pants = C(0, 83, 188), label = "Kyrie 11" },
+		Wemby = { skin = C(170, 120, 90), shirt = C(20, 20, 20), pants = C(195, 202, 206), label = "Wemby 1" },
+		Mickey = { skin = C(20, 20, 20), shirt = C(20, 20, 20), pants = C(215, 30, 30), hands = C(255, 255, 255), ears = C(20, 20, 20), label = "Mickey" },
+	}
+	V.MASCOT_NAMES = { "SpongeBob", "Patrick", "Squidward", "Jeffy", "IShowSpeed", "MrBeast", "Banana", "Curry", "LeBron", "Kyrie", "Wemby", "Mickey" }
+
+	local function hasWord(name, w)
+		return string.find(string.lower(name), "%f[%a]" .. w .. "%f[%A]") ~= nil
+	end
+	-- the game's own logo pictures, when it has them
+	function V.findLogo(key)
+		if V.logoImg[key] ~= nil then return V.logoImg[key] or nil end
+		local def = V.LOGOS[key]
+		local found
+		local roots = { ReplicatedStorage, LP:FindFirstChild("PlayerGui"), game:GetService("StarterGui"), workspace }
+		local n = 0
+		for _, root in ipairs(roots) do
+			if root and not found then
+				for _, d in ipairs(root:GetDescendants()) do
+					n = n + 1
+					if n % 1500 == 0 then task.wait() end
+					if d:IsA("ImageLabel") or d:IsA("ImageButton") or d:IsA("Decal") or d:IsA("Texture") then
+						local img = d:IsA("Decal") and d.Texture or (d:IsA("Texture") and d.Texture or d.Image)
+						if type(img) == "string" and img ~= "" then
+							for _, w in ipairs(def.words) do
+								if hasWord(d.Name, w) or (d.Parent and hasWord(d.Parent.Name, w)) then
+									found = img
+									break
+								end
+							end
+						end
+						if found then break end
+					end
+				end
+			end
+		end
+		V.logoImg[key] = found or false
+		return found
+	end
+	function V.clearLogo()
+		if V.logoGui then pcall(function() V.logoGui:Destroy() end) end
+		V.logoGui, V.logoKey, V.logoChar = nil, nil, nil
+	end
+	function V.applyLogo(key)
+		V.clearLogo()
+		local c = char()
+		local head = c and (c:FindFirstChild("Head") or c:FindFirstChild("HumanoidRootPart"))
+		local def = V.LOGOS[key]
+		if not head or not def then return end
+		local g = Instance.new("BillboardGui")
+		g.Name = "JHLogo"
+		g.Size = UDim2.new(0, 110, 0, 40)
+		g.StudsOffset = Vector3.new(0, 3.6, 0)
+		g.AlwaysOnTop = true
+		g.Adornee = head
+		local img = V.logoImg[key]
+		if img then
+			local il = Instance.new("ImageLabel")
+			il.BackgroundTransparency = 1
+			il.Size = UDim2.new(1, 0, 1, 0)
+			il.ScaleType = Enum.ScaleType.Fit
+			il.Image = img
+			il.Parent = g
+		else
+			local f = Instance.new("Frame")
+			f.Size = UDim2.new(1, 0, 1, 0)
+			f.BackgroundColor3 = def.color
+			f.BackgroundTransparency = 0.1
+			f.Parent = g
+			local cr = Instance.new("UICorner")
+			cr.CornerRadius = UDim.new(0, 10)
+			cr.Parent = f
+			local t = Instance.new("TextLabel")
+			t.BackgroundTransparency = 1
+			t.Size = UDim2.new(1, 0, 1, 0)
+			t.Font = Enum.Font.GothamBlack
+			t.TextScaled = true
+			t.TextColor3 = Color3.new(1, 1, 1)
+			t.Text = def.text
+			t.Parent = f
+		end
+		g.Parent = head
+		V.logoGui, V.logoKey, V.logoChar = g, key, c
+	end
+
+	-- costume
+	local function recolor(part, color)
+		if V.orig[part] == nil then V.orig[part] = part.Color end
+		part.Color = color
+	end
+	function V.clearMascot()
+		for part, col in pairs(V.orig) do pcall(function() if part.Parent then part.Color = col end end) end
+		V.orig = {}
+		for inst, kv in pairs(V.tmpl) do pcall(function() inst[kv[1]] = kv[2] end) end
+		V.tmpl = {}
+		for _, e in ipairs(V.extras) do pcall(function() e:Destroy() end) end
+		V.extras = {}
+		V.mascotKey, V.mascotChar = nil, nil
+	end
+	local function extra(c, parent, size, color, shape, offset)
+		local p = Instance.new("Part")
+		p.Size = size
+		p.Color = color
+		p.Material = Enum.Material.SmoothPlastic
+		p.CanCollide, p.CanQuery, p.CanTouch, p.Massless = false, false, false, true
+		if shape then pcall(function() p.Shape = shape end) end
+		p.CFrame = parent.CFrame * offset
+		p.Parent = c
+		local w = Instance.new("WeldConstraint")
+		w.Part0, w.Part1 = p, parent
+		w.Parent = p
+		V.extras[#V.extras + 1] = p
+		return p
+	end
+	function V.applyMascot(key)
+		V.clearMascot()
+		local def = V.MASCOTS[key]
+		local c = char()
+		if not def or not c then return end
+		for _, d in ipairs(c:GetDescendants()) do
+			if d:IsA("Shirt") then V.tmpl[d] = { "ShirtTemplate", d.ShirtTemplate }; d.ShirtTemplate = "" end
+			if d:IsA("Pants") then V.tmpl[d] = { "PantsTemplate", d.PantsTemplate }; d.PantsTemplate = "" end
+			if d:IsA("ShirtGraphic") then V.tmpl[d] = { "Graphic", d.Graphic }; d.Graphic = "" end
+			if d:IsA("BasePart") and d.Name ~= "HumanoidRootPart" and not d:FindFirstAncestorOfClass("Accessory") then
+				local n = d.Name
+				if n == "Head" then recolor(d, def.skin)
+				elseif n == "LowerTorso" then recolor(d, def.pants)
+				elseif string.find(n, "Torso", 1, true) then recolor(d, def.shirt)
+				elseif string.find(n, "Hand", 1, true) then recolor(d, def.hands or def.skin)
+				elseif string.find(n, "Arm", 1, true) then recolor(d, def.skin)
+				elseif string.find(n, "Leg", 1, true) or string.find(n, "Foot", 1, true) then recolor(d, def.pants) end
+			end
+		end
+		local head = c:FindFirstChild("Head")
+		if head then
+			if def.eyes then
+				for _, sx in ipairs({ -0.3, 0.3 }) do
+					local e = extra(c, head, Vector3.new(0.55, 0.55, 0.3), Color3.new(1, 1, 1), Enum.PartType.Ball, CFrame.new(sx, 0.2, -0.5))
+					extra(c, e, Vector3.new(0.2, 0.2, 0.2), Color3.new(0, 0, 0), Enum.PartType.Ball, CFrame.new(0, 0, -0.1))
+				end
+			end
+			if def.nose then extra(c, head, Vector3.new(0.45, 0.45, 1.2), def.nose, Enum.PartType.Cylinder, CFrame.new(0, -0.1, -0.9) * CFrame.Angles(0, math.rad(90), 0)) end
+			if def.ears then
+				for _, sx in ipairs({ -0.75, 0.75 }) do extra(c, head, Vector3.new(0.9, 0.9, 0.3), def.ears, Enum.PartType.Ball, CFrame.new(sx, 0.85, 0)) end
+			end
+			if def.hat then extra(c, head, Vector3.new(0.5, 0.5, 0.5), def.hat, nil, CFrame.new(0, 0.85, 0)) end
+			local g = Instance.new("BillboardGui")
+			g.Size = UDim2.new(0, 120, 0, 24)
+			g.StudsOffset = Vector3.new(0, 2.4, 0)
+			g.AlwaysOnTop = true
+			g.Adornee = head
+			local t = Instance.new("TextLabel")
+			t.BackgroundTransparency = 1
+			t.Size = UDim2.new(1, 0, 1, 0)
+			t.Font = Enum.Font.GothamBold
+			t.TextScaled = true
+			t.TextColor3 = Color3.new(1, 1, 1)
+			t.TextStrokeTransparency = 0.3
+			t.Text = def.label
+			t.Parent = g
+			g.Parent = head
+			V.extras[#V.extras + 1] = g
+		end
+		V.mascotKey, V.mascotChar = key, c
+	end
+
+	-- maxed overall, coins and badges: values and the labels that show them
+	local KEYS = {
+		overall = { "overall", "ovr" },
+		coins = { "coins", "coin", "cash", "money", "currency" },
+		badges = { "badge", "badges" },
+	}
+	function V.scanLabels()
+		if V.scanning then return end
+		V.scanning = true
+		task.spawn(function()
+			local gui = LP:FindFirstChild("PlayerGui")
+			if gui then
+				local n = 0
+				local found = { overall = {}, coins = {}, badges = {} }
+				for _, d in ipairs(gui:GetDescendants()) do
+					n = n + 1
+					if n % 1500 == 0 then task.wait() end
+					if d:IsA("TextLabel") or d:IsA("TextButton") then
+						local names = { d.Name, d.Parent and d.Parent.Name or "", d.Parent and d.Parent.Parent and d.Parent.Parent.Name or "" }
+						for kind, words in pairs(KEYS) do
+							for _, nm in ipairs(names) do
+								local low = string.lower(nm)
+								for _, w in ipairs(words) do
+									if string.find(low, w, 1, true) then found[kind][d] = true end
+								end
+							end
+						end
+					end
+				end
+				V.labels = found
+			end
+			V.scanning = false
+			V.scanT = tick()
+		end)
+	end
+	local function setLabels(kind, fn)
+		for d in pairs(V.labels[kind]) do
+			if d.Parent then
+				pcall(function()
+					local nt = fn(d.Text)
+					if nt and nt ~= d.Text then d.Text = nt end
+				end)
+			end
+		end
+	end
+	local function remember(inst, name)
+		local key = inst
+		V.saved[key] = V.saved[key] or {}
+		if V.saved[key][name] == nil then V.saved[key][name] = inst:GetAttribute(name) or false end
+	end
+	function V.maxStep()
+		local any = S.MaxOverall or S.MaxCoins or S.MaxBadges
+		if not any then return end
+		if (not V.scanT or tick() - V.scanT > 8) and not V.scanning then V.scanStarted = tick(); V.scanLabels() end
+		local c = char()
+		if S.MaxOverall then
+			for _, o in ipairs({ LP, c }) do
+				if o and o:GetAttribute("Overall") ~= nil and o:GetAttribute("Overall") ~= 99 then remember(o, "Overall"); o:SetAttribute("Overall", 99) end
+			end
+			setLabels("overall", function(t) if string.find(t, "%d") then return (string.gsub(t, "%d+", "99", 1)) end end)
+		end
+		if S.MaxCoins then
+			local big = 999999999
+			local ls = LP:FindFirstChild("leaderstats")
+			if ls then
+				for _, v in ipairs(ls:GetChildren()) do
+					local low = string.lower(v.Name)
+					if (v:IsA("IntValue") or v:IsA("NumberValue")) and (string.find(low, "coin", 1, true) or string.find(low, "cash", 1, true) or string.find(low, "money", 1, true)) then
+						V.saved[v] = V.saved[v] or { Value = v.Value }
+						v.Value = big
+					end
+				end
+			end
+			for k, val in pairs(LP:GetAttributes()) do
+				local low = string.lower(k)
+				if type(val) == "number" and (string.find(low, "coin", 1, true) or string.find(low, "cash", 1, true) or string.find(low, "money", 1, true)) and val ~= big then
+					remember(LP, k)
+					LP:SetAttribute(k, big)
+				end
+			end
+			setLabels("coins", function(t) if string.find(t, "%d") then return (string.gsub(t, "[%d,%.]+", "999,999,999", 1)) end end)
+		end
+		if S.MaxBadges then
+			local maxp = (c and c:GetAttribute("MaxBadgePoints")) or 109
+			if c and c:GetAttribute("BadgePoints") ~= nil and c:GetAttribute("BadgePoints") ~= maxp then
+				remember(c, "BadgePoints")
+				c:SetAttribute("BadgePoints", maxp)
+			end
+			setLabels("badges", function(t)
+				if string.find(t, "%d+%s*/%s*%d+") then return (string.gsub(t, "%d+(%s*/%s*)%d+", tostring(maxp) .. "%1" .. tostring(maxp), 1)) end
+				if string.find(t, "^%s*%d+%s*$") then return tostring(maxp) end
+			end)
+		end
+	end
+	function V.restoreStats()
+		for inst, kv in pairs(V.saved) do
+			pcall(function()
+				for name, val in pairs(kv) do
+					if name == "Value" then inst.Value = val else inst:SetAttribute(name, val ~= false and val or nil) end
+				end
+			end)
+		end
+		V.saved = {}
+	end
+
+	function V.step()
+		local now = tick()
+		if V.t and now - V.t < 0.5 then return end
+		V.t = now
+		local c = char()
+		pcall(V.stepVisuals, c)
+		pcall(V.maxStep)
+		if not (S.MaxOverall or S.MaxCoins or S.MaxBadges) and next(V.saved) then pcall(V.restoreStats) end
+	end
+	function V.stepVisuals(c)
+		-- logo
+		if S.LogoOn then
+			local key = S.Logo
+			if V.LOGOS[key] and (V.logoKey ~= key or V.logoChar ~= c or not (V.logoGui and V.logoGui.Parent)) then
+				if V.logoImg[key] == nil then
+					if not V.finding then
+						V.finding = true
+						task.spawn(function() pcall(V.findLogo, key) V.finding = false end)
+					end
+				else
+					V.applyLogo(key)
+				end
+			end
+		elseif V.logoGui then
+			V.clearLogo()
+		end
+		-- costume
+		if S.MascotOn then
+			local key = S.Mascot
+			if V.MASCOTS[key] and (V.mascotKey ~= key or V.mascotChar ~= c) then V.applyMascot(key) end
+		elseif V.mascotKey then
+			V.clearMascot()
+		end
+	end
+	function V.cleanup()
+		pcall(V.clearLogo)
+		pcall(V.clearMascot)
+		pcall(V.restoreStats)
+	end
 end
 
 ---------------------------------------------------------------------
@@ -10129,6 +10967,126 @@ do
 	end)
 end
 
+-- BALL ---------------------------------------------------------------------
+P = UI.Page("Ball", "B")
+do
+	local m = UI.Card(P, "Ball magnet")
+	UI.Toggle(m, "Ball magnet", "BallMagnet")
+	UI.Dropdown(m, "How it gets the ball", "MagnetMode", { "Pull to me", "Go to the ball" })
+	UI.Slider(m, "Range", "MagnetRange", 10, 150, 5, 0, " studs")
+	UI.Slider(m, "Pull hold (frames)", "MagnetFrames", 1, 6, 1, 0)
+	UI.Button(m, "Get the ball now", function()
+		if not Feat.getBall(true) then notify("Ball magnet", "No ball found.", 2) end
+	end)
+
+	local rs = UI.Card(P, "Restore")
+	UI.Button(rs, "Restore to default", function()
+		UI.restore({ "BallMagnet", "MagnetMode", "MagnetRange", "MagnetFrames" })
+	end)
+end
+
+-- FEATURES -----------------------------------------------------------------
+P = UI.Page("Features", "F")
+do
+	local lg = UI.Card(P, "Practical Basketball logo")
+	UI.Toggle(lg, "Show logo", "LogoOn")
+	UI.Dropdown(lg, "Logo", "Logo", Feat.V.LOGO_NAMES)
+
+	local mc = UI.Card(P, "Mascot")
+	UI.Toggle(mc, "Mascot", "MascotOn")
+	UI.Dropdown(mc, "Pick a mascot", "Mascot", Feat.V.MASCOT_NAMES)
+
+	local mx = UI.Card(P, "Maxed stats (only you see this)")
+	UI.Toggle(mx, "Max overall", "MaxOverall")
+	UI.Toggle(mx, "Max coins", "MaxCoins")
+	UI.Toggle(mx, "Max badges", "MaxBadges")
+
+	local rs = UI.Card(P, "Restore")
+	UI.Button(rs, "Restore to default", function()
+		UI.restore({ "LogoOn", "Logo", "MascotOn", "Mascot", "MaxOverall", "MaxCoins", "MaxBadges" })
+	end)
+end
+
+-- SHOOTING -----------------------------------------------------------------
+function UI.restore(keys, after)
+	for _, k in ipairs(keys) do S[k] = DEFAULTS[k] end
+	if after then pcall(after) end
+	UI.refreshAll()
+	saveSoon()
+	notify("Restored", "Back to default", 2)
+end
+P = UI.Page("Shooting", "S")
+do
+	local g = UI.Card(P, "Auto Green")
+	UI.Toggle(g, "Auto Green", "AutoGreen")
+	UI.Dropdown(g, "Shot style (Hold or Tap)", "ShotStyle", { "Hold", "Tap" })
+	UI.Slider(g, "Starting hold time", "HoldTime", 0.08, 1.6, 0.005, 3, "s")
+	UI.Slider(g, "Release earlier / later", "Nudge", -150, 150, 5, 0, "ms")
+
+	local cal = UI.Card(P, "Auto Calibrate")
+	UI.Toggle(cal, "Auto Calibrate", "AutoCalibrate")
+	UI.Slider(cal, "Learn speed", "CalSpeed", 0.1, 1, 0.05, 2)
+
+	local at = UI.Card(P, "Auto Timing")
+	UI.Toggle(at, "Auto Timing", "AutoTiming")
+	UI.Slider(at, "Ping compensation", "PingComp", 0, 100, 5, 0, "%")
+
+	local rs = UI.Card(P, "Restore")
+	UI.Button(rs, "Restore to default", function()
+		UI.restore({ "AutoGreen", "ShotStyle", "HoldTime", "Nudge", "AutoCalibrate", "CalSpeed", "AutoTiming", "PingComp", "ShotTimes",
+			"ShotRatio", "PacketMul", "PacketOn" }, function()
+			Shot.parseTimes()
+			Shot.brackets = {}
+		end)
+	end)
+end
+
+-- DRIBBLING ----------------------------------------------------------------
+P = UI.Page("Dribbling", "D")
+do
+	local d = UI.Card(P, "Dribble Glide")
+	UI.Toggle(d, "Dribble Glide", "DribbleGlide")
+	UI.Slider(d, "Glide speed", "DribbleGlidePower", 1, 80, 1, 0)
+	UI.Slider(d, "Time", "DribbleGlideTime", 0.05, 1, 0.01, 2, "s")
+
+	local sg = UI.Card(P, "Shot Glide")
+	UI.Toggle(sg, "Shot Glide", "ShotGlide")
+	UI.Slider(sg, "Glide speed", "ShotGlidePower", 1, 80, 1, 0)
+	UI.Slider(sg, "Time", "ShotGlideTime", 0.05, 1, 0.01, 2, "s")
+
+	local gt = UI.Card(P, "Gather Step Glide")
+	UI.Toggle(gt, "Gather Step Glide", "GatherGlide")
+	UI.Slider(gt, "Glide speed", "GatherGlidePower", 1, 80, 1, 0)
+	UI.Slider(gt, "Time", "GatherGlideTime", 0.05, 1, 0.01, 2, "s")
+
+	local rs = UI.Card(P, "Restore")
+	UI.Button(rs, "Restore to default", function()
+		UI.restore({ "DribbleGlide", "DribbleGlidePower", "DribbleGlideTime", "ShotGlide", "ShotGlidePower", "ShotGlideTime", "GatherGlide",
+			"GatherGlidePower", "GatherGlideTime" })
+	end)
+end
+
+-- PLAYERS ------------------------------------------------------------------
+P = UI.Page("Players", "P")
+do
+	local b = UI.Card(P, "Walk speed boost (walking, no ball)")
+	UI.Toggle(b, "Walk speed boost", "SpeedOn", function(v) if v then Speed.resetAuto() end end)
+	UI.Slider(b, "Level (0 = normal speed)", "SpeedAdd", 0, 15, 1, 0)
+
+	local rb = UI.Card(P, "Run speed boost (running, no ball)")
+	UI.Toggle(rb, "Run speed boost", "RunOn", function(v) if v then Speed.resetAuto() end end)
+	UI.Slider(rb, "Level (0 = normal speed)", "RunAdd", 0, 15, 1, 0)
+
+	local bb = UI.Card(P, "Ball speed boost (with the ball)")
+	UI.Toggle(bb, "Ball speed boost", "BallSpeedOn", function(v) if v then Speed.resetAuto() end end)
+	UI.Slider(bb, "Level (0 = normal speed)", "BallAdd", 0, 15, 1, 0)
+
+	local rs = UI.Card(P, "Restore")
+	UI.Button(rs, "Restore to default", function()
+		UI.restore({ "SpeedOn", "SpeedAdd", "RunOn", "RunAdd", "BallSpeedOn", "BallAdd" }, function() Speed.resetAuto() end)
+	end)
+end
+
 -- FEATURES -----------------------------------------------------------------
 P = UI.Page("Features", "F")
 do
@@ -10385,6 +11343,7 @@ function JH.Unload()
 	if h and Speed.lastSet then pcall(function() h.WalkSpeed = Speed.gameWS end) end
 	if UI.blur then pcall(function() UI.blur:Destroy() end) end
 	pcall(Speed.gvRestore)
+	pcall(Feat.V.cleanup)
 	pcall(Rec.stop)
 	save()
 	pcall(function() gui:Destroy() end)
@@ -10468,6 +11427,7 @@ end)
 task.spawn(function()
 	while JH.Running do
 		pcall(Feat.magnetStep)
+		pcall(Feat.V.step)
 		task.wait(0.05)
 	end
 end)
