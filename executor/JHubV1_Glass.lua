@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.12 shot-line"
+local VERSION = "v1.13 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -1760,7 +1760,17 @@ table.sort(ids)
 if #ids == 0 then return "sit:" .. sit end
 return table.concat(ids, "+")
 end
+Shot.FINAL = {
+["15851912457+15851919155"] = 0.357,
+["15851912457+15851919155+17285155256"] = 0.357,
+["111074210919383"] = 0.357,
+}
 function Shot.remoteHold(key, pk)
+local fin = Shot.FINAL[key]
+if fin then
+Shot.lastSweep = nil
+return clamp(fin, Shot.FLOOR, S.MaxHold), fin
+end
 local base = Shot.times[key]
 local ratio = Shot.times["r:" .. key]
 if ratio and pk and pk > 0 then base = pk * ratio end
@@ -1786,6 +1796,7 @@ end
 Shot.SWEEP = { -0.036, -0.030, -0.024, -0.018, -0.012, -0.006, 0, 0.006, 0.012, 0.018, 0.024, 0.030, 0.036 }
 Shot.greenKeys = {}
 function Shot.learnRemote(info, res, strength)
+if info and Shot.FINAL[info.key] then return end
 if not S.Learn or (S.Sweep and Rec.shotOn) then return end
 local key, held = info.key, info.held
 local new
@@ -5625,7 +5636,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.12 shot-line"
+local VERSION = "v1.13 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -7442,7 +7453,17 @@ function Shot.remoteKey(cap, sit)
 	if #ids == 0 then return "sit:" .. sit end
 	return table.concat(ids, "+")
 end
+Shot.FINAL = {
+	["15851912457+15851919155"] = 0.357,
+	["15851912457+15851919155+17285155256"] = 0.357,
+	["111074210919383"] = 0.357,
+}
 function Shot.remoteHold(key, pk)
+	local fin = Shot.FINAL[key]
+	if fin then
+		Shot.lastSweep = nil
+		return clamp(fin, Shot.FLOOR, S.MaxHold), fin
+	end
 	local base = Shot.times[key]
 	-- some shots (the jumpers) have their green point move with the game's per-shot number: hold = number x ratio
 	local ratio = Shot.times["r:" .. key]
@@ -7473,6 +7494,7 @@ Shot.SWEEP = { -0.036, -0.030, -0.024, -0.018, -0.012, -0.006, 0, 0.006, 0.012, 
 Shot.greenKeys = {}
 -- only Perfect counts: after a green the saved time is anchored to it and misses only nudge it
 function Shot.learnRemote(info, res, strength)
+	if info and Shot.FINAL[info.key] then return end
 	if not S.Learn or (S.Sweep and Rec.shotOn) then return end
 	local key, held = info.key, info.held
 	local new
