@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.20 shot-line"
+local VERSION = "v1.21 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -1822,7 +1822,7 @@ a.greens[#a.greens + 1] = held
 local sum = 0
 for _, g in ipairs(a.greens) do sum = sum + g end
 a.hold = sum / #a.greens
-if #a.greens >= 3 then
+if #a.greens >= 1 then
 a.locked = true
 pcall(notify, "Auto Green", string.format("Learned a new shot: %.3fs", a.hold), 3)
 end
@@ -5730,7 +5730,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.20 shot-line"
+local VERSION = "v1.21 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -7609,7 +7609,7 @@ function Shot.autoLearn(info, res, strength)
 		local sum = 0
 		for _, g in ipairs(a.greens) do sum = sum + g end
 		a.hold = sum / #a.greens
-		if #a.greens >= 3 then
+		if #a.greens >= 1 then
 			a.locked = true
 			pcall(notify, "Auto Green", string.format("Learned a new shot: %.3fs", a.hold), 3)
 		end
