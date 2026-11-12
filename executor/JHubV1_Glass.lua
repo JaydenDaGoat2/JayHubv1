@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.8 shot-line"
+local VERSION = "v1.9 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -1776,6 +1776,7 @@ Shot.sweepN = Shot.sweepN or {}
 local i = (Shot.sweepN[key] or 0) + 1
 Shot.sweepN[key] = i
 local off = Shot.SWEEP[(i - 1) % #Shot.SWEEP + 1]
+if not Shot.times["la:" .. key] then off = off * 2.5 end
 hold = hold + off
 Shot.lastSweep = off
 Rec.shotAdd(string.format("SWEEP key=%s step=%d offset=%+.3f", key, i, off))
@@ -5624,7 +5625,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.8 shot-line"
+local VERSION = "v1.9 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -7460,6 +7461,7 @@ function Shot.remoteHold(key, pk)
 		local i = (Shot.sweepN[key] or 0) + 1
 		Shot.sweepN[key] = i
 		local off = Shot.SWEEP[(i - 1) % #Shot.SWEEP + 1]
+		if not Shot.times["la:" .. key] then off = off * 2.5 end
 		hold = hold + off
 		Shot.lastSweep = off
 		Rec.shotAdd(string.format("SWEEP key=%s step=%d offset=%+.3f", key, i, off))
