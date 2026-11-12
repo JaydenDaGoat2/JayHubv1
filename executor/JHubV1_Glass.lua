@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.9 shot-line"
+local VERSION = "v1.10 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -1771,12 +1771,12 @@ base = pk and pk * S.PacketMul or S.HoldTime
 end
 local hold = base + S.Nudge / 1000
 Shot.lastSweep = nil
-if S.Sweep and Rec.shotOn then
+if S.Sweep and Rec.shotOn and not Shot.times["la:" .. key] then
 Shot.sweepN = Shot.sweepN or {}
 local i = (Shot.sweepN[key] or 0) + 1
 Shot.sweepN[key] = i
 local off = Shot.SWEEP[(i - 1) % #Shot.SWEEP + 1]
-if not Shot.times["la:" .. key] then off = off * 2.5 end
+off = off * 2.5
 hold = hold + off
 Shot.lastSweep = off
 Rec.shotAdd(string.format("SWEEP key=%s step=%d offset=%+.3f", key, i, off))
@@ -5625,7 +5625,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.9 shot-line"
+local VERSION = "v1.10 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -7455,13 +7455,13 @@ function Shot.remoteHold(key, pk)
 	end
 	local hold = base + S.Nudge / 1000
 	Shot.lastSweep = nil
-	if S.Sweep and Rec.shotOn then
+	if S.Sweep and Rec.shotOn and not Shot.times["la:" .. key] then
 		-- sweep: every shot of a type goes out a little earlier or later than the last, so the recording shows exactly where Perfect is
 		Shot.sweepN = Shot.sweepN or {}
 		local i = (Shot.sweepN[key] or 0) + 1
 		Shot.sweepN[key] = i
 		local off = Shot.SWEEP[(i - 1) % #Shot.SWEEP + 1]
-		if not Shot.times["la:" .. key] then off = off * 2.5 end
+		off = off * 2.5
 		hold = hold + off
 		Shot.lastSweep = off
 		Rec.shotAdd(string.format("SWEEP key=%s step=%d offset=%+.3f", key, i, off))
