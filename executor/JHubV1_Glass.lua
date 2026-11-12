@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.19 shot-line"
+local VERSION = "v1.20 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -130,7 +130,7 @@ Codes = "100M RELEASE 100KLIKES 500KMEMBERS SORRYFORBUGS", CodeRemotes = true,
 AutoGreen = true, AutoCalibrate = true, AutoTiming = true, ShotRelease = "Auto",
 HoldTime = 0.55, MaxHold = 1.6, CalSpeed = 0.6, CalStep = 0.02,
 ShotTimes = "", ShotRatio = 0, BarPath = "", BarProp = "", BarAt = 0, BarNudge = 0,
-ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, PacketOn = true, PacketMul = 1,
+ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, PacketOn = true, PacketMul = 1,
 MovingOffset = 0, SprintOffset = 0, PingComp = 0, Humanize = 0, Nudge = 0, GreenSound = true,
 HookShootButton = true, ShootButtonPath = "", ReleaseMethod = "Both", FireClick = true,
 ManualAssist = true, ShootKey = "E", SprintKey = "LeftShift",
@@ -230,13 +230,15 @@ for key, val in pairs(have) do parts[#parts + 1] = key .. "=" .. val end
 table.sort(parts)
 S.ShotTimes = table.concat(parts, " ")
 end
+if S.AutoCal == nil then S.AutoCal = true end
+if S.AutoTimes == nil then S.AutoTimes = "" end
 if S.SettingsVer < 14 then
 if S.MagnetMode == "Pull the ball" then S.MagnetMode = "Pull to me" end
 end
 if S.SettingsVer < 15 then
 S.Learn = false
 end
-if S.SettingsVer < 26 then
+if S.SettingsVer < 27 then
 local seeds = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 local have = {}
 for key, val in string.gmatch(S.ShotTimes or "", "(%S+)=([%d%.]+)") do
@@ -248,8 +250,8 @@ for key, val in pairs(have) do parts[#parts + 1] = key .. "=" .. val end
 table.sort(parts)
 S.ShotTimes = table.concat(parts, " ")
 end
-S.SettingsVer = 26
-DEFAULTS.SettingsVer = 26
+S.SettingsVer = 27
+DEFAULTS.SettingsVer = 27
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 S.ShotTimes = S.ShotTimes
 S.RecOn = false
@@ -1773,11 +1775,88 @@ Shot.FINAL = {
 ["77401448272074"] = 0.329,
 ["128777513307709+77401448272074"] = 0.329,
 }
+Shot.AUTO_START = 0.34
+Shot.auto = {}
+Shot.autoLoaded = false
+function Shot.autoLoad()
+if Shot.autoLoaded then return end
+Shot.autoLoaded = true
+Shot.auto = {}
+for kind, key, val in string.gmatch(S.AutoTimes or "", "(%a):(%S-)=([%d%.]+)") do
+Shot.auto[key] = { hold = tonumber(val), greens = {}, locked = kind == "L", dir = 1 }
+end
+end
+function Shot.autoSave()
+local parts = {}
+for key, a in pairs(Shot.auto) do parts[#parts + 1] = string.format("%s:%s=%.3f", a.locked and "L" or "P", key, a.hold) end
+table.sort(parts)
+S.AutoTimes = table.concat(parts, " ")
+saveSoon()
+end
+function Shot.autoReset()
+Shot.autoLoaded = true
+Shot.auto = {}
+S.AutoTimes = ""
+saveSoon()
+end
+function Shot.autoActive(key)
+if not S.AutoCal or Shot.FINAL[key] then return false end
+if S.Sweep and Rec.shotOn then return false end
+if Shot.times["la:" .. key] or Shot.times["r:" .. key] then return false end
+return true
+end
+function Shot.autoLearn(info, res, strength)
+local key = info.key
+if not Shot.autoActive(key) then return false end
+Shot.autoLoad()
+local a = Shot.auto[key]
+if not a then return false end
+if a.locked then return true end
+local held = info.held
+local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+if not idx or not held then return true end
+if info.manual and idx ~= 5 then return true end
+if not info.manual and math.abs(held - a.hold) > 0.06 then return true end
+if idx == 5 then
+a.greens[#a.greens + 1] = held
+local sum = 0
+for _, g in ipairs(a.greens) do sum = sum + g end
+a.hold = sum / #a.greens
+if #a.greens >= 3 then
+a.locked = true
+pcall(notify, "Auto Green", string.format("Learned a new shot: %.3fs", a.hold), 3)
+end
+elseif idx == 4 then
+a.hold = held + 0.007 * a.dir
+elseif idx <= 3 then
+a.dir = 1
+a.hold = held + (idx == 3 and 0.012 or (idx == 2 and 0.024 or 0.04))
+else
+a.dir = -1
+a.hold = held - (idx == 6 and 0.012 or (idx == 7 and 0.024 or 0.04))
+end
+a.hold = clamp(a.hold, Shot.FLOOR, S.MaxHold)
+Shot.autoSave()
+if Rec.shotOn then
+Rec.shotAdd(string.format("AUTOCAL key=%s idx=%s held=%.3f next=%.3f greens=%d locked=%s", key, tostring(idx), held, a.hold, #a.greens, tostring(a.locked)))
+end
+return true
+end
 function Shot.remoteHold(key, pk)
 local fin = Shot.FINAL[key]
 if fin then
 Shot.lastSweep = nil
 return clamp(fin, Shot.FLOOR, S.MaxHold), fin
+end
+if Shot.autoActive(key) then
+Shot.autoLoad()
+local a = Shot.auto[key]
+if not a then
+a = { hold = Shot.times[key] or Shot.AUTO_START, greens = {}, locked = false, dir = 1 }
+Shot.auto[key] = a
+end
+Shot.lastSweep = nil
+return clamp(a.hold, Shot.FLOOR, S.MaxHold), a.hold
 end
 local base = Shot.times[key]
 local ratio = Shot.times["r:" .. key]
@@ -1806,6 +1885,7 @@ Shot.SWEEP = { -0.036, -0.030, -0.024, -0.018, -0.012, -0.006, 0, 0.006, 0.012, 
 Shot.greenKeys = {}
 function Shot.learnRemote(info, res, strength)
 if info and Shot.FINAL[info.key] then return end
+if info and Shot.autoLearn(info, res, strength) then return end
 if not S.Learn or (S.Sweep and Rec.shotOn) then return end
 local key, held = info.key, info.held
 local new
@@ -5191,6 +5271,11 @@ UI.Slider(g, "Starting hold time", "HoldTime", 0.08, 1.6, 0.005, 3, "s")
 UI.Slider(g, "Release earlier / later", "Nudge", -150, 150, 5, 0, "ms")
 local ln = UI.Card(P, "Learning")
 UI.Toggle(ln, "Learn timing from results", "Learn")
+UI.Toggle(ln, "Auto-learn new shot animations", "AutoCal")
+UI.Button(ln, "Forget learned animations", function()
+Shot.autoReset()
+notify("Auto Green", "Learned animations cleared", 2)
+end)
 local cal = UI.Card(P, "Auto Calibrate")
 UI.Toggle(cal, "Auto Calibrate", "AutoCalibrate")
 UI.Slider(cal, "Learn speed", "CalSpeed", 0.1, 1, 0.05, 2)
@@ -5645,7 +5730,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.19 shot-line"
+local VERSION = "v1.20 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -5735,7 +5820,7 @@ local S = {
 	AutoGreen = true, AutoCalibrate = true, AutoTiming = true, ShotRelease = "Auto",
 	HoldTime = 0.55, MaxHold = 1.6, CalSpeed = 0.6, CalStep = 0.02,
 	ShotTimes = "", ShotRatio = 0, BarPath = "", BarProp = "", BarAt = 0, BarNudge = 0,
-	ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, PacketOn = true, PacketMul = 1,
+	ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, PacketOn = true, PacketMul = 1,
 	MovingOffset = 0, SprintOffset = 0, PingComp = 0, Humanize = 0, Nudge = 0, GreenSound = true,
 	HookShootButton = true, ShootButtonPath = "", ReleaseMethod = "Both", FireClick = true,
 	ManualAssist = true, ShootKey = "E", SprintKey = "LeftShift",
@@ -5842,13 +5927,15 @@ if S.SettingsVer < 13 then
 	table.sort(parts)
 	S.ShotTimes = table.concat(parts, " ")
 end
+if S.AutoCal == nil then S.AutoCal = true end
+if S.AutoTimes == nil then S.AutoTimes = "" end
 if S.SettingsVer < 14 then
 	if S.MagnetMode == "Pull the ball" then S.MagnetMode = "Pull to me" end
 end
 if S.SettingsVer < 15 then
 	S.Learn = false
 end
-if S.SettingsVer < 26 then
+if S.SettingsVer < 27 then
 	local seeds = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 	local have = {}
 	for key, val in string.gmatch(S.ShotTimes or "", "(%S+)=([%d%.]+)") do
@@ -5860,8 +5947,8 @@ if S.SettingsVer < 26 then
 	table.sort(parts)
 	S.ShotTimes = table.concat(parts, " ")
 end
-S.SettingsVer = 26
-DEFAULTS.SettingsVer = 26
+S.SettingsVer = 27
+DEFAULTS.SettingsVer = 27
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 S.ShotTimes = S.ShotTimes
 S.RecOn = false
@@ -7475,11 +7562,88 @@ Shot.FINAL = {
 	["77401448272074"] = 0.329,
 	["128777513307709+77401448272074"] = 0.329,
 }
+Shot.AUTO_START = 0.34
+Shot.auto = {}
+Shot.autoLoaded = false
+function Shot.autoLoad()
+	if Shot.autoLoaded then return end
+	Shot.autoLoaded = true
+	Shot.auto = {}
+	for kind, key, val in string.gmatch(S.AutoTimes or "", "(%a):(%S-)=([%d%.]+)") do
+		Shot.auto[key] = { hold = tonumber(val), greens = {}, locked = kind == "L", dir = 1 }
+	end
+end
+function Shot.autoSave()
+	local parts = {}
+	for key, a in pairs(Shot.auto) do parts[#parts + 1] = string.format("%s:%s=%.3f", a.locked and "L" or "P", key, a.hold) end
+	table.sort(parts)
+	S.AutoTimes = table.concat(parts, " ")
+	saveSoon()
+end
+function Shot.autoReset()
+	Shot.autoLoaded = true
+	Shot.auto = {}
+	S.AutoTimes = ""
+	saveSoon()
+end
+function Shot.autoActive(key)
+	if not S.AutoCal or Shot.FINAL[key] then return false end
+	if S.Sweep and Rec.shotOn then return false end
+	if Shot.times["la:" .. key] or Shot.times["r:" .. key] then return false end
+	return true
+end
+function Shot.autoLearn(info, res, strength)
+	local key = info.key
+	if not Shot.autoActive(key) then return false end
+	Shot.autoLoad()
+	local a = Shot.auto[key]
+	if not a then return false end
+	if a.locked then return true end
+	local held = info.held
+	local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+	if not idx or not held then return true end
+	if info.manual and idx ~= 5 then return true end
+	if not info.manual and math.abs(held - a.hold) > 0.06 then return true end
+	if idx == 5 then
+		a.greens[#a.greens + 1] = held
+		local sum = 0
+		for _, g in ipairs(a.greens) do sum = sum + g end
+		a.hold = sum / #a.greens
+		if #a.greens >= 3 then
+			a.locked = true
+			pcall(notify, "Auto Green", string.format("Learned a new shot: %.3fs", a.hold), 3)
+		end
+	elseif idx == 4 then
+		a.hold = held + 0.007 * a.dir
+	elseif idx <= 3 then
+		a.dir = 1
+		a.hold = held + (idx == 3 and 0.012 or (idx == 2 and 0.024 or 0.04))
+	else
+		a.dir = -1
+		a.hold = held - (idx == 6 and 0.012 or (idx == 7 and 0.024 or 0.04))
+	end
+	a.hold = clamp(a.hold, Shot.FLOOR, S.MaxHold)
+	Shot.autoSave()
+	if Rec.shotOn then
+		Rec.shotAdd(string.format("AUTOCAL key=%s idx=%s held=%.3f next=%.3f greens=%d locked=%s", key, tostring(idx), held, a.hold, #a.greens, tostring(a.locked)))
+	end
+	return true
+end
 function Shot.remoteHold(key, pk)
 	local fin = Shot.FINAL[key]
 	if fin then
 		Shot.lastSweep = nil
 		return clamp(fin, Shot.FLOOR, S.MaxHold), fin
+	end
+	if Shot.autoActive(key) then
+		Shot.autoLoad()
+		local a = Shot.auto[key]
+		if not a then
+			a = { hold = Shot.times[key] or Shot.AUTO_START, greens = {}, locked = false, dir = 1 }
+			Shot.auto[key] = a
+		end
+		Shot.lastSweep = nil
+		return clamp(a.hold, Shot.FLOOR, S.MaxHold), a.hold
 	end
 	local base = Shot.times[key]
 	-- some shots (the jumpers) have their green point move with the game's per-shot number: hold = number x ratio
@@ -7513,6 +7677,7 @@ Shot.greenKeys = {}
 -- only Perfect counts: after a green the saved time is anchored to it and misses only nudge it
 function Shot.learnRemote(info, res, strength)
 	if info and Shot.FINAL[info.key] then return end
+	if info and Shot.autoLearn(info, res, strength) then return end
 	if not S.Learn or (S.Sweep and Rec.shotOn) then return end
 	local key, held = info.key, info.held
 	local new
@@ -11073,6 +11238,11 @@ do
 
 	local ln = UI.Card(P, "Learning")
 	UI.Toggle(ln, "Learn timing from results", "Learn")
+	UI.Toggle(ln, "Auto-learn new shot animations", "AutoCal")
+	UI.Button(ln, "Forget learned animations", function()
+		Shot.autoReset()
+		notify("Auto Green", "Learned animations cleared", 2)
+	end)
 
 	local cal = UI.Card(P, "Auto Calibrate")
 	UI.Toggle(cal, "Auto Calibrate", "AutoCalibrate")
