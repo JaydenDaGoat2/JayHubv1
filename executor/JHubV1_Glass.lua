@@ -236,8 +236,21 @@ end
 if S.SettingsVer < 15 then
 S.Learn = false
 end
-S.SettingsVer = 15
-DEFAULTS.SettingsVer = 15
+if S.SettingsVer < 16 then
+local seeds = "la:15851912457+15851919155=0.150 lb:15851912457+15851919155=0.815 la:15851912457+15851919155+17285155256=0.150 lb:15851912457+15851919155+17285155256=0.815 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.410 71484695722621=0.410"
+local have = {}
+for key, val in string.gmatch(S.ShotTimes or "", "(%S+)=([%d%.]+)") do
+if string.sub(key, 1, 2) ~= "r:" then have[key] = val end
+end
+for key, val in string.gmatch(seeds, "(%S+)=([%d%.]+)") do have[key] = val end
+local parts = {}
+for key, val in pairs(have) do parts[#parts + 1] = key .. "=" .. val end
+table.sort(parts)
+S.ShotTimes = table.concat(parts, " ")
+end
+S.SettingsVer = 16
+DEFAULTS.SettingsVer = 16
+DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.150 lb:15851912457+15851919155=0.815 la:15851912457+15851919155+17285155256=0.150 lb:15851912457+15851919155+17285155256=0.815 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.410 71484695722621=0.410"
 DEFAULTS.ShotTimes = "r:15851912457+15851919155=1.327 r:15851912457+15851919155+17285155256=1.327 16205020756=0.343 16246923753=0.335 118403922040694=0.315 15997667717=0.365 16143612725=0.355 16143619816=0.355 84063020888988=0.335 138932071140330=0.322 111074210919383=0.414 71484695722621=0.414"
 S.RecOn = false
 S.RecShots = false
@@ -1751,6 +1764,8 @@ function Shot.remoteHold(key, pk)
 local base = Shot.times[key]
 local ratio = Shot.times["r:" .. key]
 if ratio and pk and pk > 0 then base = pk * ratio end
+local la, lb = Shot.times["la:" .. key], Shot.times["lb:" .. key]
+if la and lb and pk and pk > 0 then base = la + lb * pk end
 if not base then
 base = pk and pk * S.PacketMul or S.HoldTime
 end
@@ -1777,6 +1792,8 @@ if info.manual then
 if res == "green" then new = held end
 elseif res == "early" and (strength or 2) >= 3 then
 new = held + 0.07
+elseif Shot.times["la:" .. key] then
+return
 elseif info.pk and info.pk > 0 and Shot.times["r:" .. key] and res ~= "early" then
 local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "late" and 5 + (strength or 2))
 local est = (held - (idx - 5) * 0.006) / info.pk
@@ -5852,8 +5869,21 @@ end
 if S.SettingsVer < 15 then
 	S.Learn = false
 end
-S.SettingsVer = 15
-DEFAULTS.SettingsVer = 15
+if S.SettingsVer < 16 then
+	local seeds = "la:15851912457+15851919155=0.150 lb:15851912457+15851919155=0.815 la:15851912457+15851919155+17285155256=0.150 lb:15851912457+15851919155+17285155256=0.815 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.410 71484695722621=0.410"
+	local have = {}
+	for key, val in string.gmatch(S.ShotTimes or "", "(%S+)=([%d%.]+)") do
+		if string.sub(key, 1, 2) ~= "r:" then have[key] = val end
+	end
+	for key, val in string.gmatch(seeds, "(%S+)=([%d%.]+)") do have[key] = val end
+	local parts = {}
+	for key, val in pairs(have) do parts[#parts + 1] = key .. "=" .. val end
+	table.sort(parts)
+	S.ShotTimes = table.concat(parts, " ")
+end
+S.SettingsVer = 16
+DEFAULTS.SettingsVer = 16
+DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.150 lb:15851912457+15851919155=0.815 la:15851912457+15851919155+17285155256=0.150 lb:15851912457+15851919155+17285155256=0.815 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.410 71484695722621=0.410"
 DEFAULTS.ShotTimes = "r:15851912457+15851919155=1.327 r:15851912457+15851919155+17285155256=1.327 16205020756=0.343 16246923753=0.335 118403922040694=0.315 15997667717=0.365 16143612725=0.355 16143619816=0.355 84063020888988=0.335 138932071140330=0.322 111074210919383=0.414 71484695722621=0.414"
 S.RecOn = false
 S.RecShots = false
@@ -7458,6 +7488,9 @@ function Shot.remoteHold(key, pk)
 	-- some shots (the jumpers) have their green point move with the game's per-shot number: hold = number x ratio
 	local ratio = Shot.times["r:" .. key]
 	if ratio and pk and pk > 0 then base = pk * ratio end
+	-- the jumper's green point moves with the game's per-shot number along a straight line: hold = a + b x number
+	local la, lb = Shot.times["la:" .. key], Shot.times["lb:" .. key]
+	if la and lb and pk and pk > 0 then base = la + lb * pk end
 	if not base then
 		base = pk and pk * S.PacketMul or S.HoldTime
 	end
@@ -7488,6 +7521,8 @@ function Shot.learnRemote(info, res, strength)
 	elseif res == "early" and (strength or 2) >= 3 then
 		-- a pump fake or a very early release: far too soon
 		new = held + 0.07
+	elseif Shot.times["la:" .. key] then
+		return
 	elseif info.pk and info.pk > 0 and Shot.times["r:" .. key] and res ~= "early" then
 		local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "late" and 5 + (strength or 2))
 		local est = (held - (idx - 5) * 0.006) / info.pk
