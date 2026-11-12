@@ -216,9 +216,12 @@ end
 if S.SettingsVer < 10 then
 S.MeterTarget, S.MeterBin, S.MeterAim = 1.0, 0.05, false
 end
-if S.SettingsVer < 12 then
+if S.SettingsVer < 13 then
 S.MeterAim = false
-local seeds = "15851912457+15851919155=0.399 15851912457+15851919155+17285155256=0.392 16205020756=0.343 16246923753=0.335 118403922040694=0.315 15997667717=0.365 16143612725=0.355 16143619816=0.355 84063020888988=0.335 138932071140330=0.322 111074210919383=0.414 71484695722621=0.414"
+local old = {}
+for key, val in string.gmatch(S.ShotTimes or "", "(%S+)=([%d%.]+)") do if key ~= "15851912457+15851919155" and key ~= "15851912457+15851919155+17285155256" then old[#old + 1] = key .. "=" .. val end end
+S.ShotTimes = table.concat(old, " ")
+local seeds = "r:15851912457+15851919155=1.327 r:15851912457+15851919155+17285155256=1.327 16205020756=0.343 16246923753=0.335 118403922040694=0.315 15997667717=0.365 16143612725=0.355 16143619816=0.355 84063020888988=0.335 138932071140330=0.322 111074210919383=0.414 71484695722621=0.414"
 local have = {}
 for key, val in string.gmatch(S.ShotTimes or "", "(%S+)=([%d%.]+)") do have[key] = val end
 for key, val in string.gmatch(seeds, "(%S+)=([%d%.]+)") do have[key] = val end
@@ -227,9 +230,9 @@ for key, val in pairs(have) do parts[#parts + 1] = key .. "=" .. val end
 table.sort(parts)
 S.ShotTimes = table.concat(parts, " ")
 end
-S.SettingsVer = 12
-DEFAULTS.SettingsVer = 12
-DEFAULTS.ShotTimes = "15851912457+15851919155=0.399 15851912457+15851919155+17285155256=0.392 16205020756=0.343 16246923753=0.335 118403922040694=0.315 15997667717=0.365 16143612725=0.355 16143619816=0.355 84063020888988=0.335 138932071140330=0.322 111074210919383=0.414 71484695722621=0.414"
+S.SettingsVer = 13
+DEFAULTS.SettingsVer = 13
+DEFAULTS.ShotTimes = "r:15851912457+15851919155=1.327 r:15851912457+15851919155+17285155256=1.327 16205020756=0.343 16246923753=0.335 118403922040694=0.315 15997667717=0.365 16143612725=0.355 16143619816=0.355 84063020888988=0.335 138932071140330=0.322 111074210919383=0.414 71484695722621=0.414"
 S.RecOn = false
 S.RecShots = false
 local function save()
@@ -1734,6 +1737,8 @@ return table.concat(ids, "+")
 end
 function Shot.remoteHold(key, pk)
 local base = Shot.times[key]
+local ratio = Shot.times["r:" .. key]
+if ratio and pk and pk > 0 then base = pk * ratio end
 if not base then
 base = pk and pk * S.PacketMul or S.HoldTime
 end
@@ -1746,6 +1751,13 @@ if info.manual then
 if res == "green" then new = held end
 elseif res == "early" and (strength or 2) >= 3 then
 new = held + 0.07
+elseif info.pk and info.pk > 0 and Shot.times["r:" .. key] and res ~= "early" then
+local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "late" and 5 + (strength or 2))
+local est = (held - (idx - 5) * 0.006) / info.pk
+local old = Shot.times["r:" .. key]
+Shot.times["r:" .. key] = clamp(old + 0.35 * (est - old), 0.5, 3)
+Shot.saveTimes()
+return
 else
 local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 if idx then
@@ -5236,9 +5248,12 @@ end
 if S.SettingsVer < 10 then
 	S.MeterTarget, S.MeterBin, S.MeterAim = 1.0, 0.05, false
 end
-if S.SettingsVer < 12 then
+if S.SettingsVer < 13 then
 	S.MeterAim = false
-	local seeds = "15851912457+15851919155=0.399 15851912457+15851919155+17285155256=0.392 16205020756=0.343 16246923753=0.335 118403922040694=0.315 15997667717=0.365 16143612725=0.355 16143619816=0.355 84063020888988=0.335 138932071140330=0.322 111074210919383=0.414 71484695722621=0.414"
+	local old = {}
+	for key, val in string.gmatch(S.ShotTimes or "", "(%S+)=([%d%.]+)") do if key ~= "15851912457+15851919155" and key ~= "15851912457+15851919155+17285155256" then old[#old + 1] = key .. "=" .. val end end
+	S.ShotTimes = table.concat(old, " ")
+	local seeds = "r:15851912457+15851919155=1.327 r:15851912457+15851919155+17285155256=1.327 16205020756=0.343 16246923753=0.335 118403922040694=0.315 15997667717=0.365 16143612725=0.355 16143619816=0.355 84063020888988=0.335 138932071140330=0.322 111074210919383=0.414 71484695722621=0.414"
 	local have = {}
 	for key, val in string.gmatch(S.ShotTimes or "", "(%S+)=([%d%.]+)") do have[key] = val end
 	for key, val in string.gmatch(seeds, "(%S+)=([%d%.]+)") do have[key] = val end
@@ -5247,9 +5262,9 @@ if S.SettingsVer < 12 then
 	table.sort(parts)
 	S.ShotTimes = table.concat(parts, " ")
 end
-S.SettingsVer = 12
-DEFAULTS.SettingsVer = 12
-DEFAULTS.ShotTimes = "15851912457+15851919155=0.399 15851912457+15851919155+17285155256=0.392 16205020756=0.343 16246923753=0.335 118403922040694=0.315 15997667717=0.365 16143612725=0.355 16143619816=0.355 84063020888988=0.335 138932071140330=0.322 111074210919383=0.414 71484695722621=0.414"
+S.SettingsVer = 13
+DEFAULTS.SettingsVer = 13
+DEFAULTS.ShotTimes = "r:15851912457+15851919155=1.327 r:15851912457+15851919155+17285155256=1.327 16205020756=0.343 16246923753=0.335 118403922040694=0.315 15997667717=0.365 16143612725=0.355 16143619816=0.355 84063020888988=0.335 138932071140330=0.322 111074210919383=0.414 71484695722621=0.414"
 S.RecOn = false
 S.RecShots = false
 local function save()
@@ -6844,6 +6859,9 @@ function Shot.remoteKey(cap, sit)
 end
 function Shot.remoteHold(key, pk)
 	local base = Shot.times[key]
+	-- some shots (the jumpers) have their green point move with the game's per-shot number: hold = number x ratio
+	local ratio = Shot.times["r:" .. key]
+	if ratio and pk and pk > 0 then base = pk * ratio end
 	if not base then
 		base = pk and pk * S.PacketMul or S.HoldTime
 	end
@@ -6858,6 +6876,13 @@ function Shot.learnRemote(info, res, strength)
 	elseif res == "early" and (strength or 2) >= 3 then
 		-- a pump fake or a very early release: far too soon
 		new = held + 0.07
+	elseif info.pk and info.pk > 0 and Shot.times["r:" .. key] and res ~= "early" then
+		local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "late" and 5 + (strength or 2))
+		local est = (held - (idx - 5) * 0.006) / info.pk
+		local old = Shot.times["r:" .. key]
+		Shot.times["r:" .. key] = clamp(old + 0.35 * (est - old), 0.5, 3)
+		Shot.saveTimes()
+		return
 	else
 		-- the game's verdict scale (4 Good, 5 Perfect, 6 Slightly Late, 7 Late) tells how far the release was from the green point:
 		-- every shot moves the saved time part of the way to where it would have been Perfect, so one odd shot cannot throw it off
