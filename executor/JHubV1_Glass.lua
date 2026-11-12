@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.21 shot-line"
+local VERSION = "v1.22 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -1776,6 +1776,7 @@ Shot.FINAL = {
 ["128777513307709+77401448272074"] = 0.329,
 }
 Shot.AUTO_START = 0.34
+Shot.AUTO_SCAN = { 0.30, 0.32, 0.34, 0.36, 0.38, 0.31, 0.33, 0.35, 0.37, 0.29, 0.39, 0.40, 0.28 }
 Shot.auto = {}
 Shot.autoLoaded = false
 function Shot.autoLoad()
@@ -1816,16 +1817,30 @@ local held = info.held
 local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 if not idx or not held then return true end
 if info.manual and idx ~= 5 then return true end
-if not info.manual and math.abs(held - a.hold) > 0.06 then return true end
+if not info.manual and math.abs(held - a.hold) > 0.06 and not a.scan then return true end
+a.n = (a.n or 0) + 1
 if idx == 5 then
 a.greens[#a.greens + 1] = held
+a.miss = 0
+a.scan = false
 local sum = 0
 for _, g in ipairs(a.greens) do sum = sum + g end
 a.hold = sum / #a.greens
-if #a.greens >= 1 then
+if #a.greens >= 2 then
 a.locked = true
 pcall(notify, "Auto Green", string.format("Learned a new shot: %.3fs", a.hold), 3)
 end
+elseif #a.greens >= 1 then
+a.miss = (a.miss or 0) + 1
+if a.miss >= 6 then
+a.greens = {}
+a.miss = 0
+a.n = 0
+end
+elseif a.n >= 8 then
+a.scan = true
+local list = Shot.AUTO_SCAN
+a.hold = list[(a.n - 8) % #list + 1]
 elseif idx == 4 then
 a.hold = held + 0.007 * a.dir
 elseif idx <= 3 then
@@ -5730,7 +5745,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.21 shot-line"
+local VERSION = "v1.22 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -7563,6 +7578,7 @@ Shot.FINAL = {
 	["128777513307709+77401448272074"] = 0.329,
 }
 Shot.AUTO_START = 0.34
+Shot.AUTO_SCAN = { 0.30, 0.32, 0.34, 0.36, 0.38, 0.31, 0.33, 0.35, 0.37, 0.29, 0.39, 0.40, 0.28 }
 Shot.auto = {}
 Shot.autoLoaded = false
 function Shot.autoLoad()
@@ -7603,16 +7619,30 @@ function Shot.autoLearn(info, res, strength)
 	local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 	if not idx or not held then return true end
 	if info.manual and idx ~= 5 then return true end
-	if not info.manual and math.abs(held - a.hold) > 0.06 then return true end
+	if not info.manual and math.abs(held - a.hold) > 0.06 and not a.scan then return true end
+	a.n = (a.n or 0) + 1
 	if idx == 5 then
 		a.greens[#a.greens + 1] = held
+		a.miss = 0
+		a.scan = false
 		local sum = 0
 		for _, g in ipairs(a.greens) do sum = sum + g end
 		a.hold = sum / #a.greens
-		if #a.greens >= 1 then
+		if #a.greens >= 2 then
 			a.locked = true
 			pcall(notify, "Auto Green", string.format("Learned a new shot: %.3fs", a.hold), 3)
 		end
+	elseif #a.greens >= 1 then
+		a.miss = (a.miss or 0) + 1
+		if a.miss >= 6 then
+			a.greens = {}
+			a.miss = 0
+			a.n = 0
+		end
+	elseif a.n >= 8 then
+		a.scan = true
+		local list = Shot.AUTO_SCAN
+		a.hold = list[(a.n - 8) % #list + 1]
 	elseif idx == 4 then
 		a.hold = held + 0.007 * a.dir
 	elseif idx <= 3 then
