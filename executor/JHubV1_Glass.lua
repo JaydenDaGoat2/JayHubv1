@@ -119,7 +119,7 @@ return (ok and v) and v.Y or 0
 end
 local UI, Net, Input, Ball, Shot, Backup, Glide, Anim, Speed, Feat, Picker, Bar, Mover, Rec =
 {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}
-local function notify(title, msg, dur) if UI.notify then UI.notify(title, msg, dur) end end
+local function notify(title, msg, dur) if string.find(tostring(title), "^Glide") or string.find(tostring(title), "^Speed boost") then return end if UI.notify then UI.notify(title, msg, dur) end end
 local S = {
 WinTrans = 0.5, CardTrans = 0.78, Hue = 212, Sat = 0.85, Val = 0.85, WinGradient = true,
 OutlineColor = "White", OutlineThick = 2, OutlineShine = true,
@@ -144,7 +144,7 @@ GfxCullDist = 250, GfxBoost = false, GfxFpsCap = 0, PingStab = false, PingWindow
 ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
 LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
-AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "",
+AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = true,
 LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -8389,6 +8389,73 @@ table.sort(parts)
 return table.concat(parts, " ")
 end
 end
+-- FIRST SHOT ACCURACY: the meter speed is shared by every shot, so a new jumper reads its peak from the shared speed at once
+do
+Shot.GSLOPE = 2.68
+function Shot.gslope()
+local list = {}
+for _, v in pairs(Shot.slopes) do list[#list + 1] = v end
+if #list >= 3 then
+table.sort(list)
+return list[math.ceil(#list / 2)]
+end
+return Shot.GSLOPE
+end
+local prevSmart = Shot.peakFitSmart
+function Shot.peakFitSmart(samples, key)
+local tp = prevSmart(samples, key)
+if not S.FirstShot or not S.LagSync or Shot.slopes[key] then return tp end
+local pts, lastq = {}, -1
+for _, sm in ipairs(samples) do
+if sm.q < lastq - 0.001 then break end
+lastq = sm.q
+if sm.q > 0.12 and sm.q < 0.93 then pts[#pts + 1] = sm end
+end
+local n = #pts
+if n < 3 or pts[n].q < 0.25 then return tp end
+local g = Shot.gslope()
+if n >= 6 then
+local t0, st, sq, stt, stq = pts[1].t, 0, 0, 0, 0
+for _, p in ipairs(pts) do
+local x = p.t - t0
+st, sq, stt, stq = st + x, sq + p.q, stt + x * x, stq + x * p.q
+end
+local den = n * stt - st * st
+if den > 1e-9 then
+local a = (n * stq - st * sq) / den
+if math.abs(a - g) / g > 0.2 then return tp end
+end
+end
+local sum, wsum = 0, 0
+for _, p in ipairs(pts) do
+local w = p.q * p.q
+sum = sum + (p.t + (Shot.PEAK_Q - p.q) / g) * w
+wsum = wsum + w
+end
+return sum / wsum
+end
+-- a brand new jumper aims a little early: Good is on the early side of Perfect, while late shots show a full bar
+local prevSeed2 = Shot.seedLead
+function Shot.seedLead(key)
+local v = prevSeed2(key)
+if S.FirstShot and (S.GLeadN or 0) < 3 then v = clamp(v + 0.008, 0, 0.1) end
+return v
+end
+-- a very early or very late result moves a jumper that is still learning further and at once
+local prevLearn2 = Shot.autoLearn
+function Shot.autoLearn(info, res, strength)
+local r = prevLearn2(info, res, strength)
+if S.FirstShot and info and not info.manual then
+local a = Shot.auto and Shot.auto[info.key]
+local idx = info.idx or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+if a and a.mode == "peak" and not a.locked and idx and (idx >= 7 or idx <= 2) then
+a.hold = clamp(a.hold + (idx - 5) * (a.bin or S.PeakBin or 0.014) * 0.4, 0, 0.1)
+Shot.autoSave()
+end
+end
+return r
+end
+end
 UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
@@ -8619,7 +8686,7 @@ end
 -- Modules are plain tables so they can call each other regardless of definition order.
 local UI, Net, Input, Ball, Shot, Backup, Glide, Anim, Speed, Feat, Picker, Bar, Mover, Rec =
 	{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}
-local function notify(title, msg, dur) if UI.notify then UI.notify(title, msg, dur) end end
+local function notify(title, msg, dur) if string.find(tostring(title), "^Glide") or string.find(tostring(title), "^Speed boost") then return end if UI.notify then UI.notify(title, msg, dur) end end
 
 ---------------------------------------------------------------------
 -- SETTINGS
@@ -8652,7 +8719,7 @@ local S = {
 	ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
 	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
-	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "",
+	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = true,
 	LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 	AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -17243,6 +17310,73 @@ do
 		end
 		table.sort(parts)
 		return table.concat(parts, " ")
+	end
+end
+-- FIRST SHOT ACCURACY: the meter speed is shared by every shot, so a new jumper reads its peak from the shared speed at once
+do
+	Shot.GSLOPE = 2.68
+	function Shot.gslope()
+		local list = {}
+		for _, v in pairs(Shot.slopes) do list[#list + 1] = v end
+		if #list >= 3 then
+			table.sort(list)
+			return list[math.ceil(#list / 2)]
+		end
+		return Shot.GSLOPE
+	end
+	local prevSmart = Shot.peakFitSmart
+	function Shot.peakFitSmart(samples, key)
+		local tp = prevSmart(samples, key)
+		if not S.FirstShot or not S.LagSync or Shot.slopes[key] then return tp end
+		local pts, lastq = {}, -1
+		for _, sm in ipairs(samples) do
+			if sm.q < lastq - 0.001 then break end
+			lastq = sm.q
+			if sm.q > 0.12 and sm.q < 0.93 then pts[#pts + 1] = sm end
+		end
+		local n = #pts
+		if n < 3 or pts[n].q < 0.25 then return tp end
+		local g = Shot.gslope()
+		if n >= 6 then
+			local t0, st, sq, stt, stq = pts[1].t, 0, 0, 0, 0
+			for _, p in ipairs(pts) do
+				local x = p.t - t0
+				st, sq, stt, stq = st + x, sq + p.q, stt + x * x, stq + x * p.q
+			end
+			local den = n * stt - st * st
+			if den > 1e-9 then
+				local a = (n * stq - st * sq) / den
+				if math.abs(a - g) / g > 0.2 then return tp end
+			end
+		end
+		local sum, wsum = 0, 0
+		for _, p in ipairs(pts) do
+			local w = p.q * p.q
+			sum = sum + (p.t + (Shot.PEAK_Q - p.q) / g) * w
+			wsum = wsum + w
+		end
+		return sum / wsum
+	end
+	-- a brand new jumper aims a little early: Good is on the early side of Perfect, while late shots show a full bar
+	local prevSeed2 = Shot.seedLead
+	function Shot.seedLead(key)
+		local v = prevSeed2(key)
+		if S.FirstShot and (S.GLeadN or 0) < 3 then v = clamp(v + 0.008, 0, 0.1) end
+		return v
+	end
+	-- a very early or very late result moves a jumper that is still learning further and at once
+	local prevLearn2 = Shot.autoLearn
+	function Shot.autoLearn(info, res, strength)
+		local r = prevLearn2(info, res, strength)
+		if S.FirstShot and info and not info.manual then
+			local a = Shot.auto and Shot.auto[info.key]
+			local idx = info.idx or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+			if a and a.mode == "peak" and not a.locked and idx and (idx >= 7 or idx <= 2) then
+				a.hold = clamp(a.hold + (idx - 5) * (a.bin or S.PeakBin or 0.014) * 0.4, 0, 0.1)
+				Shot.autoSave()
+			end
+		end
+		return r
 	end
 end
 UI.syncAuto()
