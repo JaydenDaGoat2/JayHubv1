@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.17 shot-line"
+local VERSION = "v1.18 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -146,7 +146,8 @@ LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, Gre
 AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
 FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6,
-AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "",
+AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
+BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
 BindKey1 = "", BindArgs1 = "", BindKey2 = "", BindArgs2 = "", BindKey3 = "", BindArgs3 = "", BindKey4 = "", BindArgs4 = "", BindKey5 = "", BindArgs5 = "", BindKey6 = "", BindArgs6 = "",
 LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
@@ -6327,7 +6328,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.17  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.18  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -7457,7 +7458,7 @@ if dist <= S.ABRange and math.random(100) <= S.ABChance then
 Bot.blockT = now
 if S.ABChase then Bot.chaseUntil, Bot.chaseRoot = now + S.ABDelay + 0.35, o.root end
 task.delay(S.ABDelay, function()
-if JH.Running then Bot.press(S.ABKey, 0.18, { "jump", "block" }) end
+if JH.Running then Bot.press(S.ABKey, 0.18, { "block", "contest", "shield", "defend", "jump" }) end
 end)
 end
 end
@@ -8800,7 +8801,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.17"
+d.Text = "JHub V1.18"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -9963,7 +9964,7 @@ task.delay(S.ABDelay * (0.85 + math.random() * 0.3), function()
 if not JH.Running then return end
 -- a pump fake turns the shot into a gather: only jump if he is really still shooting
 if S.ABRecheck ~= false and c:GetAttribute("Action") ~= "Shooting" then return end
-Bot.press(S.ABKey, 0.18, { "jump", "block" })
+Bot.press(S.ABKey, 0.18, { "block", "contest", "shield", "defend", "jump" })
 end)
 end
 end
@@ -10044,10 +10045,13 @@ end
 end
 end
 end
--- KEYBOARD BINDS: bind any key to a dribble move. Teach a bind by doing the move once in the game; the key then repeats it, and the game picks left or right from the hand the ball is in
+-- KEYBOARD BINDS: pick any dribble move by name and bind a key to it. The script learns each move's signal the first time you do that move with the game's own button, then the key repeats it
 do
 local N = 6
-local Bind = { learning = nil, tmpl = {} }
+local MOVES = { "None", "Crossover 1", "Crossover 2", "BehindBack 1", "BehindBack 3", "DoubleBehindBack 1", "Spin 1", "Spin 2", "Spin 3", "HalfSpin 1",
+"StepBack 1", "StepBack 2", "Retreat StepBack 1", "Hesitation 1", "Drive Hesitation 1", "Retreat Hesitation 1", "Misdirection Cross", "SwitchHand 1",
+"Sidestep 1", "Eurostep 1", "Hopstep 1", "PowerHopstep 1" }
+local lib = {}
 local function ser(args)
 local out = {}
 for i = 1, args.n do
@@ -10076,14 +10080,29 @@ end
 args.n = n
 return args
 end
-for i = 1, N do Bind.tmpl[i] = deser(S["BindArgs" .. i]) end
+for entry in string.gmatch(S.BindLib or "", "([^;]+);") do
+local name, text = string.match(entry, "^(.-)@@(.*)$")
+if name then lib[name] = deser(text) end
+end
+local function saveLib()
+local parts = {}
+for name, args in pairs(lib) do parts[#parts + 1] = name .. "@@" .. ser(args) .. ";" end
+S.BindLib = table.concat(parts)
+saveSoon()
+end
 local function remote()
 local d = game:GetService("ReplicatedStorage"):FindFirstChild("Dribble", true)
 return (d and d:IsA("RemoteEvent")) and d or Mover.lastDribbleRemote
 end
 local function replay(slot)
-local t, rem = Bind.tmpl[slot], remote()
-if not t or not rem then return end
+local name = S["BindMove" .. slot]
+if not name or name == "None" then return end
+local t, rem = lib[name], remote()
+if not t then
+notify("Binds", "Do " .. name .. " once with the game's own button first, so the script learns it", 4)
+return
+end
+if not rem then return end
 local h, r = hum(), Mover.body()
 local dir = Vector3.new(0, 0, 1)
 if h and r then
@@ -10096,17 +10115,19 @@ Mover.selfFire = true
 pcall(function() rem:FireServer(table.unpack(args, 1, t.n)) end)
 Mover.selfFire = false
 end
+-- every dribble you do with the game's own button is remembered by the move's name
 local prevOD = Mover.onDribble
 function Mover.onDribble(args)
-local slot = Bind.learning
-if slot then
-Bind.learning = nil
-Bind.tmpl[slot] = args
-S["BindArgs" .. slot] = ser(args)
-saveSoon()
-notify("Binds", "Bind " .. slot .. " learned. Press its key to use it.", 4)
-if Bind.stats and Bind.stats[slot] then Bind.stats[slot].Text = tostring(args[1]) end
+local copy = table.pack(table.unpack(args, 1, args.n))
+task.spawn(function()
+task.wait(0.12)
+local c = char()
+local name = c and c:GetAttribute("LastDribblePackage")
+if type(name) == "string" and name ~= "" and ser(lib[name] or { n = 0 }) ~= ser(copy) then
+lib[name] = copy
+saveLib()
 end
+end)
 return prevOD(args)
 end
 UIS.InputBegan:Connect(function(i, gp)
@@ -10126,30 +10147,61 @@ lay.FillDirection = Enum.FillDirection.Horizontal
 lay.Wraps = true
 lay.Padding = UDim.new(0, 8)
 end
-Bind.stats = {}
 local info = UI.Card(pg, "How binds work")
 info.frame.Size = UDim2.new(1, -4, 0, 0)
-UI.Note(info, "1. Tap Teach next to a bind.  2. Do the dribble move once in the game, with the game's own button.  3. Pick the key for that bind.  After that the key repeats the move, and the game itself picks left or right from the hand the ball is in.")
+UI.Note(info, "Pick a dribble move for each bind and a key. The first time you do a move with the game's own button, the script learns it. After that your key does that move, and the game picks left or right from the hand the ball is in.")
 for slot = 1, N do
 local c = UI.Card(pg, "Bind " .. slot)
 c.frame.Size = UDim2.new(0.5, -4, 0, 0)
-Bind.stats[slot] = UI.Stat(c, "Move")
-local t0 = Bind.tmpl[slot]
-Bind.stats[slot].Text = t0 and tostring(t0[1]) or "not taught yet"
+UI.Dropdown(c, "Move", "BindMove" .. slot, MOVES)
 UI.Keybind(c, "Key", function() return S["BindKey" .. slot] end, function(v) S["BindKey" .. slot] = v end)
-UI.Buttons(c, {
-{ "Teach", function()
-Bind.learning = slot
-Bind.stats[slot].Text = "do the move now..."
-notify("Binds", "Do the move once in the game now", 4)
-end },
-{ "Clear", function()
-Bind.tmpl[slot] = nil
-S["BindArgs" .. slot], S["BindKey" .. slot] = "", ""
-Bind.stats[slot].Text = "not taught yet"
-saveSoon()
-end },
-})
+end
+end
+-- LESS OBVIOUS GUARD, AUTO PLAY CARD, AUTO BLOCK BUTTON WORDS
+do
+local Bot = JH.api.Bot
+-- a real defender lags behind a change of direction: the direction he runs in is smoothed over a third of a second
+local dirS
+local lastT = tick()
+local prevMove = Bot.move
+function Bot.move(dir, mul)
+local now = tick()
+if S.AGHuman and now - (Bot.guardingNow or 0) < 0.15 and dir then
+local dt = math.min(now - lastT, 0.2)
+local tau = 0.18 + 0.35 * ((S.AGHumanAmt or 50) / 100)
+dirS = dirS and dirS:Lerp(dir, math.clamp(dt / tau, 0, 1)) or dir
+lastT = now
+return prevMove(dirS, math.min(mul or 1, 1.02))
+end
+dirS = nil
+lastT = now
+return prevMove(dir, mul)
+end
+local prevGuard = Bot.guardStep
+function Bot.guardStep(me, others, forced)
+Bot.guardingNow = tick()
+return prevGuard(me, others, forced)
+end
+-- the guard gives some room by default instead of hugging him
+if (S.AGDist or 0) < 4 then S.AGDist = 4.5 end
+if (S.AGReact or 0) < 0.15 then S.AGReact = 0.2 end
+
+-- Auto play card at the top of the locked tab
+if UI.lockedTools then
+local lp = UI.lockedPage
+local ap
+for _, p in ipairs(UI.pages) do
+if p.name == "Auto Guard" then ap = p end
+end
+if ap then
+local c = UI.Card(ap, "Auto play")
+local _, lbl = UI.Button(c, S.AP and "Auto play: ON (tap to stop)" or "Auto play: OFF (tap to start)", function() Bot.setAP(not S.AP) end, true)
+Bot.apLabel = lbl
+UI.Dropdown(c, "Build", "APBuild", { "Big", "Small", "Wing", "Shooter" })
+UI.Note(c, "Turns on Auto Green, dribbles to get open, shoots open shots, takes layups and dunks, follows the shot for the rebound and guards when the other team has the ball. Touch the stick and it hands the game back to you.")
+table.insert(UI.lockedTools, 2, c.frame)
+c.frame.Visible = false
+end
 end
 end
 UI.syncAuto()
@@ -10315,7 +10367,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.17", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.18", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -10396,7 +10448,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.17 shot-line"
+local VERSION = "v1.18 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -10503,7 +10555,8 @@ local S = {
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
 	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6,
-	AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "",
+	AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
+	BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
 	BindKey1 = "", BindArgs1 = "", BindKey2 = "", BindArgs2 = "", BindKey3 = "", BindArgs3 = "", BindKey4 = "", BindArgs4 = "", BindKey5 = "", BindArgs5 = "", BindKey6 = "", BindArgs6 = "",
 	LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 	AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
@@ -17024,7 +17077,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.17  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.18  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -18162,7 +18215,7 @@ do
 						Bot.blockT = now
 						if S.ABChase then Bot.chaseUntil, Bot.chaseRoot = now + S.ABDelay + 0.35, o.root end
 						task.delay(S.ABDelay, function()
-							if JH.Running then Bot.press(S.ABKey, 0.18, { "jump", "block" }) end
+							if JH.Running then Bot.press(S.ABKey, 0.18, { "block", "contest", "shield", "defend", "jump" }) end
 						end)
 					end
 				end
@@ -19505,7 +19558,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.17"
+				d.Text = "JHub V1.18"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -20668,7 +20721,7 @@ do
 							if not JH.Running then return end
 							-- a pump fake turns the shot into a gather: only jump if he is really still shooting
 							if S.ABRecheck ~= false and c:GetAttribute("Action") ~= "Shooting" then return end
-							Bot.press(S.ABKey, 0.18, { "jump", "block" })
+							Bot.press(S.ABKey, 0.18, { "block", "contest", "shield", "defend", "jump" })
 						end)
 					end
 				end
@@ -20749,10 +20802,13 @@ do
 		end
 	end
 end
--- KEYBOARD BINDS: bind any key to a dribble move. Teach a bind by doing the move once in the game; the key then repeats it, and the game picks left or right from the hand the ball is in
+-- KEYBOARD BINDS: pick any dribble move by name and bind a key to it. The script learns each move's signal the first time you do that move with the game's own button, then the key repeats it
 do
 	local N = 6
-	local Bind = { learning = nil, tmpl = {} }
+	local MOVES = { "None", "Crossover 1", "Crossover 2", "BehindBack 1", "BehindBack 3", "DoubleBehindBack 1", "Spin 1", "Spin 2", "Spin 3", "HalfSpin 1",
+		"StepBack 1", "StepBack 2", "Retreat StepBack 1", "Hesitation 1", "Drive Hesitation 1", "Retreat Hesitation 1", "Misdirection Cross", "SwitchHand 1",
+		"Sidestep 1", "Eurostep 1", "Hopstep 1", "PowerHopstep 1" }
+	local lib = {}
 	local function ser(args)
 		local out = {}
 		for i = 1, args.n do
@@ -20781,14 +20837,29 @@ do
 		args.n = n
 		return args
 	end
-	for i = 1, N do Bind.tmpl[i] = deser(S["BindArgs" .. i]) end
+	for entry in string.gmatch(S.BindLib or "", "([^;]+);") do
+		local name, text = string.match(entry, "^(.-)@@(.*)$")
+		if name then lib[name] = deser(text) end
+	end
+	local function saveLib()
+		local parts = {}
+		for name, args in pairs(lib) do parts[#parts + 1] = name .. "@@" .. ser(args) .. ";" end
+		S.BindLib = table.concat(parts)
+		saveSoon()
+	end
 	local function remote()
 		local d = game:GetService("ReplicatedStorage"):FindFirstChild("Dribble", true)
 		return (d and d:IsA("RemoteEvent")) and d or Mover.lastDribbleRemote
 	end
 	local function replay(slot)
-		local t, rem = Bind.tmpl[slot], remote()
-		if not t or not rem then return end
+		local name = S["BindMove" .. slot]
+		if not name or name == "None" then return end
+		local t, rem = lib[name], remote()
+		if not t then
+			notify("Binds", "Do " .. name .. " once with the game's own button first, so the script learns it", 4)
+			return
+		end
+		if not rem then return end
 		local h, r = hum(), Mover.body()
 		local dir = Vector3.new(0, 0, 1)
 		if h and r then
@@ -20801,17 +20872,19 @@ do
 		pcall(function() rem:FireServer(table.unpack(args, 1, t.n)) end)
 		Mover.selfFire = false
 	end
+	-- every dribble you do with the game's own button is remembered by the move's name
 	local prevOD = Mover.onDribble
 	function Mover.onDribble(args)
-		local slot = Bind.learning
-		if slot then
-			Bind.learning = nil
-			Bind.tmpl[slot] = args
-			S["BindArgs" .. slot] = ser(args)
-			saveSoon()
-			notify("Binds", "Bind " .. slot .. " learned. Press its key to use it.", 4)
-			if Bind.stats and Bind.stats[slot] then Bind.stats[slot].Text = tostring(args[1]) end
-		end
+		local copy = table.pack(table.unpack(args, 1, args.n))
+		task.spawn(function()
+			task.wait(0.12)
+			local c = char()
+			local name = c and c:GetAttribute("LastDribblePackage")
+			if type(name) == "string" and name ~= "" and ser(lib[name] or { n = 0 }) ~= ser(copy) then
+				lib[name] = copy
+				saveLib()
+			end
+		end)
 		return prevOD(args)
 	end
 	UIS.InputBegan:Connect(function(i, gp)
@@ -20831,30 +20904,61 @@ do
 		lay.Wraps = true
 		lay.Padding = UDim.new(0, 8)
 	end
-	Bind.stats = {}
 	local info = UI.Card(pg, "How binds work")
 	info.frame.Size = UDim2.new(1, -4, 0, 0)
-	UI.Note(info, "1. Tap Teach next to a bind.  2. Do the dribble move once in the game, with the game's own button.  3. Pick the key for that bind.  After that the key repeats the move, and the game itself picks left or right from the hand the ball is in.")
+	UI.Note(info, "Pick a dribble move for each bind and a key. The first time you do a move with the game's own button, the script learns it. After that your key does that move, and the game picks left or right from the hand the ball is in.")
 	for slot = 1, N do
 		local c = UI.Card(pg, "Bind " .. slot)
 		c.frame.Size = UDim2.new(0.5, -4, 0, 0)
-		Bind.stats[slot] = UI.Stat(c, "Move")
-		local t0 = Bind.tmpl[slot]
-		Bind.stats[slot].Text = t0 and tostring(t0[1]) or "not taught yet"
+		UI.Dropdown(c, "Move", "BindMove" .. slot, MOVES)
 		UI.Keybind(c, "Key", function() return S["BindKey" .. slot] end, function(v) S["BindKey" .. slot] = v end)
-		UI.Buttons(c, {
-			{ "Teach", function()
-				Bind.learning = slot
-				Bind.stats[slot].Text = "do the move now..."
-				notify("Binds", "Do the move once in the game now", 4)
-			end },
-			{ "Clear", function()
-				Bind.tmpl[slot] = nil
-				S["BindArgs" .. slot], S["BindKey" .. slot] = "", ""
-				Bind.stats[slot].Text = "not taught yet"
-				saveSoon()
-			end },
-		})
+	end
+end
+-- LESS OBVIOUS GUARD, AUTO PLAY CARD, AUTO BLOCK BUTTON WORDS
+do
+	local Bot = JH.api.Bot
+	-- a real defender lags behind a change of direction: the direction he runs in is smoothed over a third of a second
+	local dirS
+	local lastT = tick()
+	local prevMove = Bot.move
+	function Bot.move(dir, mul)
+		local now = tick()
+		if S.AGHuman and now - (Bot.guardingNow or 0) < 0.15 and dir then
+			local dt = math.min(now - lastT, 0.2)
+			local tau = 0.18 + 0.35 * ((S.AGHumanAmt or 50) / 100)
+			dirS = dirS and dirS:Lerp(dir, math.clamp(dt / tau, 0, 1)) or dir
+			lastT = now
+			return prevMove(dirS, math.min(mul or 1, 1.02))
+		end
+		dirS = nil
+		lastT = now
+		return prevMove(dir, mul)
+	end
+	local prevGuard = Bot.guardStep
+	function Bot.guardStep(me, others, forced)
+		Bot.guardingNow = tick()
+		return prevGuard(me, others, forced)
+	end
+	-- the guard gives some room by default instead of hugging him
+	if (S.AGDist or 0) < 4 then S.AGDist = 4.5 end
+	if (S.AGReact or 0) < 0.15 then S.AGReact = 0.2 end
+
+	-- Auto play card at the top of the locked tab
+	if UI.lockedTools then
+		local lp = UI.lockedPage
+		local ap
+		for _, p in ipairs(UI.pages) do
+			if p.name == "Auto Guard" then ap = p end
+		end
+		if ap then
+			local c = UI.Card(ap, "Auto play")
+			local _, lbl = UI.Button(c, S.AP and "Auto play: ON (tap to stop)" or "Auto play: OFF (tap to start)", function() Bot.setAP(not S.AP) end, true)
+			Bot.apLabel = lbl
+			UI.Dropdown(c, "Build", "APBuild", { "Big", "Small", "Wing", "Shooter" })
+			UI.Note(c, "Turns on Auto Green, dribbles to get open, shoots open shots, takes layups and dunks, follows the shot for the rebound and guards when the other team has the ball. Touch the stick and it hands the game back to you.")
+			table.insert(UI.lockedTools, 2, c.frame)
+			c.frame.Visible = false
+		end
 	end
 end
 UI.syncAuto()
