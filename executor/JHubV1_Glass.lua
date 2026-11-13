@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.2 shot-line"
+local VERSION = "v1.3 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -145,6 +145,7 @@ ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, St
 LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
+FadeNudge = 8, MagnetDelay = 120,
 LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -6086,6 +6087,7 @@ UI.Toggle(m, "Ball magnet", "BallMagnet")
 UI.Dropdown(m, "How it gets the ball", "MagnetMode", { "Pull to me", "Go to the ball" })
 UI.Slider(m, "Range", "MagnetRange", 10, 150, 5, 0, " studs")
 UI.Slider(m, "Minimum time on the ball (frames)", "MagnetFrames", 1, 6, 1, 0)
+UI.Slider(m, "Grab delay (so it is not instant)", "MagnetDelay", 0, 400, 10, 0, " ms")
 UI.Button(m, "Get the ball now", function()
 if not Feat.getBall(true) then notify("Ball magnet", "No ball found.", 2) end
 end)
@@ -6320,7 +6322,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.2  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.3  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -8046,6 +8048,7 @@ UI.Toggle(c, "Auto Green MAX (best timing, all upgrades)", "GreenMax", function(
 for _, k in ipairs({ "LagSync", "PrecFit", "AdaptPlus" }) do UI.set(k, v, false) end
 end)
 UI.Toggle(c, "Green every jumper (shared learning)", "AllJumpers")
+UI.Slider(c, "Fade and step back timing (later)", "FadeNudge", -30, 40, 1, 0, " ms")
 UI.Buttons(c, { { "Copy my locked timings", function() local t = Shot.exportTimings() if setclipboard then setclipboard(t) end notify("Timings", t == "" and "Nothing locked yet" or "Copied to clipboard", 3) end } })
 UI.Input(c, "Import timings", "ImportTimes", nil, "paste copied timings, then rejoin")
 UI.Toggle(c, "Lag sync (follow my ping and FPS)", "LagSync")
@@ -8785,7 +8788,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.2"
+d.Text = "JHub V1.3"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -8948,6 +8951,42 @@ end
 end
 end)
 UI.applyTheme()
+end
+-- TIMING SLIDERS IN THE MENU: fade and step back release later, ball magnet waits a moment before it grabs
+do
+local POSTFADE = { ["111074210919383"] = true, ["71484695722621"] = true, ["77401448272074"] = true, ["128777513307709+77401448272074"] = true }
+local prevHold = Shot.remoteHold
+function Shot.remoteHold(key, pk)
+local hold, base, mode = prevHold(key, pk)
+Shot.lastNudge = nil
+local n = (S.FadeNudge or 0) / 1000
+if n ~= 0 and hold then
+local fade = POSTFADE[key] == true
+local moving = Shot.situation() ~= "stand"
+if mode == "peak" and (fade or moving) then
+Shot.lastNudge = n
+hold = clamp(hold - n, 0, 0.1)
+elseif mode ~= "peak" and fade then
+hold = hold + n
+end
+end
+return hold, base, mode
+end
+-- the learner is told the timing it chose itself, so the slider is not learned twice
+local prevLearn = Shot.autoLearn
+function Shot.autoLearn(info, res, strength)
+if info and info.lead and Shot.lastNudge then info.lead = info.lead + Shot.lastNudge end
+return prevLearn(info, res, strength)
+end
+local innerGet = Feat.getBall
+function Feat.getBall(force)
+local d = (S.MagnetDelay or 0) / 1000
+if d <= 0 then return innerGet(force) end
+task.delay(d * (0.8 + math.random() * 0.4), function()
+if JH.Running then pcall(innerGet, force) end
+end)
+return true
+end
 end
 UI.syncAuto()
 UI.applyTheme()
@@ -9112,7 +9151,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.2", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.3", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -9193,7 +9232,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.2 shot-line"
+local VERSION = "v1.3 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -9299,6 +9338,7 @@ local S = {
 	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
+	FadeNudge = 8, MagnetDelay = 120,
 	LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 	AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -15545,6 +15585,7 @@ do
 	UI.Dropdown(m, "How it gets the ball", "MagnetMode", { "Pull to me", "Go to the ball" })
 	UI.Slider(m, "Range", "MagnetRange", 10, 150, 5, 0, " studs")
 	UI.Slider(m, "Minimum time on the ball (frames)", "MagnetFrames", 1, 6, 1, 0)
+	UI.Slider(m, "Grab delay (so it is not instant)", "MagnetDelay", 0, 400, 10, 0, " ms")
 	UI.Button(m, "Get the ball now", function()
 		if not Feat.getBall(true) then notify("Ball magnet", "No ball found.", 2) end
 	end)
@@ -15814,7 +15855,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.2  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.3  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -17548,6 +17589,7 @@ do
 		for _, k in ipairs({ "LagSync", "PrecFit", "AdaptPlus" }) do UI.set(k, v, false) end
 		end)
 		UI.Toggle(c, "Green every jumper (shared learning)", "AllJumpers")
+		UI.Slider(c, "Fade and step back timing (later)", "FadeNudge", -30, 40, 1, 0, " ms")
 		UI.Buttons(c, { { "Copy my locked timings", function() local t = Shot.exportTimings() if setclipboard then setclipboard(t) end notify("Timings", t == "" and "Nothing locked yet" or "Copied to clipboard", 3) end } })
 		UI.Input(c, "Import timings", "ImportTimes", nil, "paste copied timings, then rejoin")
 		UI.Toggle(c, "Lag sync (follow my ping and FPS)", "LagSync")
@@ -18287,7 +18329,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.2"
+				d.Text = "JHub V1.3"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -18450,6 +18492,42 @@ do
 		end
 	end)
 	UI.applyTheme()
+end
+-- TIMING SLIDERS IN THE MENU: fade and step back release later, ball magnet waits a moment before it grabs
+do
+	local POSTFADE = { ["111074210919383"] = true, ["71484695722621"] = true, ["77401448272074"] = true, ["128777513307709+77401448272074"] = true }
+	local prevHold = Shot.remoteHold
+	function Shot.remoteHold(key, pk)
+		local hold, base, mode = prevHold(key, pk)
+		Shot.lastNudge = nil
+		local n = (S.FadeNudge or 0) / 1000
+		if n ~= 0 and hold then
+			local fade = POSTFADE[key] == true
+			local moving = Shot.situation() ~= "stand"
+			if mode == "peak" and (fade or moving) then
+				Shot.lastNudge = n
+				hold = clamp(hold - n, 0, 0.1)
+			elseif mode ~= "peak" and fade then
+				hold = hold + n
+			end
+		end
+		return hold, base, mode
+	end
+	-- the learner is told the timing it chose itself, so the slider is not learned twice
+	local prevLearn = Shot.autoLearn
+	function Shot.autoLearn(info, res, strength)
+		if info and info.lead and Shot.lastNudge then info.lead = info.lead + Shot.lastNudge end
+		return prevLearn(info, res, strength)
+	end
+	local innerGet = Feat.getBall
+	function Feat.getBall(force)
+		local d = (S.MagnetDelay or 0) / 1000
+		if d <= 0 then return innerGet(force) end
+		task.delay(d * (0.8 + math.random() * 0.4), function()
+			if JH.Running then pcall(innerGet, force) end
+		end)
+		return true
+	end
 end
 UI.syncAuto()
 UI.applyTheme()
