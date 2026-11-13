@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.10 shot-line"
+local VERSION = "v1.11 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -6322,7 +6322,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.10  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.11  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -8793,7 +8793,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.10"
+d.Text = "JHub V1.11"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -9454,6 +9454,45 @@ end, true)
 UI.Note(lock, "The recorders, the game scanner and the Shot Lab are locked.")
 end
 end
+-- MINIMISED BAR: the artwork draws the minimise and close buttons, so when the artwork is hidden the buttons are drawn on the bar itself
+do
+local YEL = Color3.fromRGB(255, 214, 60)
+local function setup(b, text)
+local l = b:FindFirstChild("JHMark")
+if l then return l, b:FindFirstChild("JHMarkStroke") end
+l = Instance.new("TextLabel")
+l.Name = "JHMark"
+l.BackgroundTransparency = 1
+l.Size = UDim2.fromScale(1, 1)
+l.Font = Enum.Font.GothamBold
+l.TextSize = 20
+l.Text = text
+l.TextColor3 = YEL
+l.Visible = false
+l.Parent = b
+local st = Instance.new("UIStroke")
+st.Name = "JHMarkStroke"
+st.Color = YEL
+st.Thickness = 1.5
+st.Enabled = false
+st.Parent = b
+local c = Instance.new("UICorner")
+c.CornerRadius = UDim.new(0, 8)
+c.Parent = b
+return l, st
+end
+local la, sa = setup(CollapseBtn, "-")
+local lb, sb = setup(CloseBtn, "X")
+local function show(on)
+la.Visible, lb.Visible = on, on
+sa.Enabled, sb.Enabled = on, on
+end
+CollapseBtn.Activated:Connect(function()
+task.wait(0.06)
+show(collapsed == true)
+end)
+show(false)
+end
 UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
@@ -9617,7 +9656,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.10", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.11", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -9698,7 +9737,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.10 shot-line"
+local VERSION = "v1.11 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -16321,7 +16360,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.10  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.11  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -18800,7 +18839,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.10"
+				d.Text = "JHub V1.11"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -19460,6 +19499,45 @@ do
 		end, true)
 		UI.Note(lock, "The recorders, the game scanner and the Shot Lab are locked.")
 	end
+end
+-- MINIMISED BAR: the artwork draws the minimise and close buttons, so when the artwork is hidden the buttons are drawn on the bar itself
+do
+	local YEL = Color3.fromRGB(255, 214, 60)
+	local function setup(b, text)
+		local l = b:FindFirstChild("JHMark")
+		if l then return l, b:FindFirstChild("JHMarkStroke") end
+		l = Instance.new("TextLabel")
+		l.Name = "JHMark"
+		l.BackgroundTransparency = 1
+		l.Size = UDim2.fromScale(1, 1)
+		l.Font = Enum.Font.GothamBold
+		l.TextSize = 20
+		l.Text = text
+		l.TextColor3 = YEL
+		l.Visible = false
+		l.Parent = b
+		local st = Instance.new("UIStroke")
+		st.Name = "JHMarkStroke"
+		st.Color = YEL
+		st.Thickness = 1.5
+		st.Enabled = false
+		st.Parent = b
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(0, 8)
+		c.Parent = b
+		return l, st
+	end
+	local la, sa = setup(CollapseBtn, "-")
+	local lb, sb = setup(CloseBtn, "X")
+	local function show(on)
+		la.Visible, lb.Visible = on, on
+		sa.Enabled, sb.Enabled = on, on
+	end
+	CollapseBtn.Activated:Connect(function()
+		task.wait(0.06)
+		show(collapsed == true)
+	end)
+	show(false)
 end
 UI.syncAuto()
 UI.applyTheme()
