@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.1 shot-line"
+local VERSION = "v1.2 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -130,7 +130,7 @@ Codes = "100M 100KLIKES 500KMEMBERS 100KCCUPLS RELEASE SORRYFORBUGS", CodeRemote
 AutoGreen = true, AutoCalibrate = true, AutoTiming = true, ShotRelease = "Auto",
 HoldTime = 0.55, MaxHold = 1.6, CalSpeed = 0.6, CalStep = 0.02,
 ShotTimes = "", ShotRatio = 0, BarPath = "", BarProp = "", BarAt = 0, BarNudge = 0,
-ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, PeakLead = 0.027, PerfectGreen = false, PerfectGreenPct = 100, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, Lightning = true, BoltCount = 6, BoltSpeed = 1, BoltThick = 2, BoltBright = 0.9, BoltColor = "White + Yellow", BgMove = true, BgGlow = 0.5, BgOrbs = true, AccentMode = "Gold", OutlineSpeed = 1, LogoStyle = "J bolt H", LogoBg = true, Preset = "Lightning Gold", PacketOn = true, PacketMul = 1,
+ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 25, Learn = false, PeakLead = 0.027, PerfectGreen = false, PerfectGreenPct = 100, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, Lightning = true, BoltCount = 6, BoltSpeed = 1, BoltThick = 2, BoltBright = 0.9, BoltColor = "White + Yellow", BgMove = true, BgGlow = 0.5, BgOrbs = true, AccentMode = "Gold", OutlineSpeed = 1, LogoStyle = "J bolt H", LogoBg = true, Preset = "Lightning Gold", PacketOn = true, PacketMul = 1,
 MovingOffset = 0, SprintOffset = 0, PingComp = 0, Humanize = 0, Nudge = 0, GreenSound = true,
 HookShootButton = true, ShootButtonPath = "", ReleaseMethod = "Both", FireClick = true,
 ManualAssist = true, ShootKey = "E", SprintKey = "LeftShift",
@@ -144,11 +144,11 @@ GfxCullDist = 250, GfxBoost = false, GfxFpsCap = 0, PingStab = false, PingWindow
 ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
 LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
-AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Red",
+AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
 LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
-AR = false, ARSpeed = 1.3, ARReact = 0.05, ARRange = 70, ARJump = true, ARMagnet = true, ARMagRange = 8, ARMarker = false,
+AR = false, ARSpeed = 1, ARReact = 0.18, ARRange = 45, ARJump = true, ARMagnet = true, ARMagRange = 4, ARMarker = false,
 AP = false, APBuild = "Small", APPostScore = true, APAllAround = true, APOpenDist = 6, APRange = 24, APThree = true, APDrive = true, APLayups = true, APSprint = true, APMoves = true,
 APShotDelay = 0.8, APDefend = true, APRebound = true, APAntiAfk = true, APPause = true, APStaminaMin = 20, APHoop = "Nearest", APPostRange = 8, APSpot = 22, APSpeed = 1, APTeam = "By team",
 GlideFade = 60, GlideSmart = true, GlideStopAtWalls = false, GlideNeedBall = true, GlideMethod = "Auto",
@@ -283,8 +283,12 @@ if kind == "l" or kind == "p" then return string.format("%s:%s=%.4f", kind, key,
 return kind .. ":" .. key .. "=" .. val
 end)
 end
-S.SettingsVer = 35
-DEFAULTS.SettingsVer = 35
+if S.SettingsVer < 36 then
+S.AccentTone, S.ARSpeed, S.ARReact, S.ARRange, S.ARMagRange = "Rainbow", 1, 0.18, 45, 4
+if S.MagnetRange > 25 then S.MagnetRange = 25 end
+end
+S.SettingsVer = 36
+DEFAULTS.SettingsVer = 36
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 S.ShotTimes = S.ShotTimes
 S.RecOn = false
@@ -6316,7 +6320,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.1  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.2  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -8579,8 +8583,8 @@ end
 end
 -- JHUB LOGO: the menu button shows the J-Hub picture (downloaded once, falls back to the old J bolt H if the executor cannot)
 do
-local URL = "https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/claude/claudechud-8cord-executor-wclom3/executor/jhub_logo.png"
-local FILE = "JHub_logo_v1.png"
+local URL = "https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/claude/claudechud-8cord-executor-wclom3/executor/jhub_logo2.png"
+local FILE = "JHub_logo_v2.png"
 task.spawn(function()
 if type(getcustomasset) ~= "function" or type(writefile) ~= "function" then return end
 local have = false
@@ -8681,8 +8685,8 @@ layout()
 end
 end)
 
-local URL = "https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/claude/claudechud-8cord-executor-wclom3/executor/jhub_ui_bg.png"
-local FILE = "JHub_ui_bg_v1.png"
+local URL = "https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/claude/claudechud-8cord-executor-wclom3/executor/jhub_ui_bg2.png"
+local FILE = "JHub_ui_bg_v2.png"
 task.spawn(function()
 if type(getcustomasset) ~= "function" or type(writefile) ~= "function" then return end
 local have = false
@@ -8713,20 +8717,20 @@ end
 -- J-HUB RED: one red theme everywhere, the old blue glass, lightning and logo backing are gone
 do
 local TONES = {
-Red = { Color3.fromRGB(255, 40, 40), Color3.fromRGB(255, 90, 90), Color3.fromRGB(225, 20, 30) },
-Crimson = { Color3.fromRGB(210, 0, 70), Color3.fromRGB(255, 70, 120), Color3.fromRGB(170, 0, 50) },
-Orange = { Color3.fromRGB(255, 130, 30), Color3.fromRGB(255, 175, 90), Color3.fromRGB(230, 90, 10) },
-White = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 255, 255), Color3.fromRGB(200, 200, 200) },
+Rainbow = { Color3.fromRGB(70, 140, 255), Color3.fromRGB(255, 214, 60), Color3.fromRGB(165, 95, 255) },
+Blue = { Color3.fromRGB(70, 140, 255), Color3.fromRGB(130, 185, 255), Color3.fromRGB(40, 100, 230) },
+Yellow = { Color3.fromRGB(255, 214, 60), Color3.fromRGB(255, 236, 140), Color3.fromRGB(230, 180, 20) },
+Purple = { Color3.fromRGB(165, 95, 255), Color3.fromRGB(200, 150, 255), Color3.fromRGB(130, 60, 230) },
 }
 computeTheme = function()
-local t = TONES[S.AccentTone] or TONES.Red
-Theme.Glass = Color3.fromRGB(8, 0, 2)
-Theme.Sheen = Color3.fromRGB(60, 0, 8)
-Theme.Card = Color3.fromRGB(14, 2, 4)
-Theme.Elem = Color3.fromRGB(30, 4, 8)
-Theme.Stroke = Color3.fromRGB(40, 0, 0)
-Theme.Text = Color3.fromRGB(255, 244, 244)
-Theme.Sub = Color3.fromRGB(225, 170, 170)
+local t = TONES[S.AccentTone] or TONES.Rainbow
+Theme.Glass = Color3.fromRGB(6, 6, 10)
+Theme.Sheen = Color3.fromRGB(20, 20, 40)
+Theme.Card = Color3.fromRGB(10, 10, 16)
+Theme.Elem = Color3.fromRGB(20, 20, 30)
+Theme.Stroke = Color3.fromRGB(0, 0, 30)
+Theme.Text = Color3.fromRGB(255, 255, 255)
+Theme.Sub = Color3.fromRGB(190, 195, 225)
 Theme.Outline = t[1]
 Theme.AccentA = t[2]
 Theme.AccentB = t[3]
@@ -8781,7 +8785,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.1"
+d.Text = "JHub V1.2"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -8808,12 +8812,141 @@ end
 end
 end
 local c = UI.Card(p, "Colors")
-UI.Dropdown(c, "Menu color", "AccentTone", { "Red", "Crimson", "Orange", "White" }, function() UI.applyTheme() end)
+UI.Dropdown(c, "Menu color", "AccentTone", { "Rainbow", "Blue", "Yellow", "Purple" }, function() UI.applyTheme() end)
 UI.Slider(c, "Card darkness", "CardTrans", 0.1, 0.9, 0.01, 2, nil, function() UI.applyTheme() end)
 c.frame.LayoutOrder = -1
 c.frame.Size = UDim2.new(0.5, -4, 0, 0)
 end
 end
+UI.applyTheme()
+end
+-- NATURAL REBOUND AND BALL MAGNET: runs like a player (normal speed, reaction time, jumps on time), no locking onto the ball
+do
+local Bot = JH.api.Bot
+function Bot.reboundStep(me, r)
+if not Feat.ballLoose() then
+Bot.marker(nil)
+Bot.rbT = nil
+return false
+end
+local b = Feat.findBall()
+if not b or not b.Parent then return false end
+local now = tick()
+local bd = flat(b.Position - me).Magnitude
+if bd > S.ARRange then return false end
+if not Bot.rbT then
+Bot.rbT = now
+Bot.rbDelay = (S.ARReact or 0.18) * (0.8 + math.random() * 0.5)
+Bot.rbSway = { math.random() - 0.5, math.random() - 0.5 }
+end
+if now - Bot.rbT < Bot.rbDelay then return false end
+local land, t = Bot.predictBall(b)
+Bot.marker(land)
+-- stand just inside the landing spot, between it and the hoop, so the ball comes down in front of you
+local spot = land
+local hoop = Bot.nearestHoop(land)
+if hoop then
+local toHoop = flat(hoop - land)
+if toHoop.Magnitude > 3 then spot = land + toHoop.Unit * math.min(1.6, toHoop.Magnitude * 0.1) end
+end
+spot = spot + Vector3.new(Bot.rbSway[1] * 0.8, 0, Bot.rbSway[2] * 0.8)
+local to = flat(spot - me)
+local d = to.Magnitude
+local speed = clamp(S.ARSpeed or 1, 0.5, 1.3)
+if d > 1.3 then
+Bot.move(to.Unit * math.min(1, d / 3), speed)
+Bot.setSprint(d > 12 and t > 0.8)
+else
+Bot.stopMove()
+Bot.faceAt(b.Position)
+end
+-- jump so the top of the jump meets the ball
+if S.ARJump and t < 0.42 and bd < 6 and b.Position.Y > me.Y + 2 and now - Bot.jumpT > 0.9 then
+Bot.jumpT = now
+Bot.press("Space", 0.15, { "jump" })
+end
+-- a short reach only, like a long arm: it does nothing from far away or when the ball is high above you
+if S.ARMagnet and bd <= math.min(S.ARMagRange or 4, 5) and b.Position.Y < me.Y + 7 and now - Bot.ballT > 0.5 then
+Bot.ballT = now
+pcall(Feat.getBall, true)
+end
+Bot.status = string.format("Rebound (%.1fs)", t)
+return true
+end
+
+-- ball magnet: runs over in short quick steps instead of jumping straight onto the ball, and never reaches for a ball that is high above you
+function Feat.getBall(force)
+local r = Mover.body()
+local b, dist = Feat.findBall()
+if not r or not b then return false end
+if b.Position.Y > r.Position.Y + 12 then return false end
+if S.MagnetMode ~= "Go to the ball" then
+if not Feat.hop(b) then return false end
+else
+task.spawn(function()
+local t0 = tick()
+while JH.Running and tick() - t0 < 0.45 do
+local rr, bb = Mover.body(), Feat.findBall()
+if not rr or not bb then return end
+local d = Vector3.new(bb.Position.X - rr.Position.X, 0, bb.Position.Z - rr.Position.Z)
+if d.Magnitude < 3 then return end
+rr.CFrame = rr.CFrame + d.Unit * math.min(d.Magnitude - 2.5, 5)
+Mover.sync(rr)
+RunService.Heartbeat:Wait()
+end
+end)
+end
+log(string.format("Ball magnet: %s (%.0f studs away)", S.MagnetMode, dist or 0))
+return true
+end
+local origMag = Feat.magnetStep
+function Feat.magnetStep()
+local now = tick()
+if S.BallMagnet and now < (Feat.magnetNext or 0) then return end
+local before = Feat.magnetT
+origMag()
+if Feat.magnetT ~= before then Feat.magnetNext = now + 0.3 + math.random() * 0.5 end
+end
+end
+-- RAINBOW MENU: blue, yellow and purple on black, slowly cycling
+do
+local BLUE, YEL, PUR = Color3.fromRGB(70, 140, 255), Color3.fromRGB(255, 214, 60), Color3.fromRGB(165, 95, 255)
+local cyc = { BLUE, YEL, PUR }
+local function cycColor(t)
+local i = math.floor(t / 2.6) % #cyc + 1
+local j = i % #cyc + 1
+local k = ((t % 2.6) - 2.1) / 0.5
+if k <= 0 then return cyc[i] end
+k = k * k * (3 - 2 * k)
+return cyc[i]:Lerp(cyc[j], k)
+end
+local origPaint = UI.paintGrad
+function UI.paintGrad(g)
+if S.AccentTone == "Rainbow" then
+g.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, BLUE), ColorSequenceKeypoint.new(0.5, PUR), ColorSequenceKeypoint.new(1, YEL) })
+else
+origPaint(g)
+end
+end
+task.spawn(function()
+while JH.Running do
+task.wait(0.12)
+if S.AccentTone == "Rainbow" and Window.Visible then
+local t = tick()
+local c = cycColor(t)
+Theme.AccentA, Theme.AccentB, Theme.Outline = c:Lerp(Color3.new(1, 1, 1), 0.3), c, c
+for _, it in ipairs(UI.themed) do
+local key = it[3]
+if (key == "AccentA" or key == "AccentB" or key == "Outline") and it[1].Parent then
+pcall(function() it[1][it[2]] = Theme[key] end)
+end
+end
+for _, g in ipairs(UI.grads) do
+if g.Parent then g.Rotation = (t * 40) % 360 end
+end
+end
+end
+end)
 UI.applyTheme()
 end
 UI.syncAuto()
@@ -8956,14 +9089,14 @@ do
 		box.AnchorPoint = Vector2.new(0.5, 0.5)
 		box.Position = UDim2.fromScale(0.5, 0.5)
 		box.Size = UDim2.fromOffset(340, 230)
-		box.BackgroundColor3 = Color3.fromRGB(11, 2, 4)
+		box.BackgroundColor3 = Color3.fromRGB(6, 6, 10)
 		box.BorderSizePixel = 0
 		box.Parent = shade
 		local c = Instance.new("UICorner")
 		c.CornerRadius = UDim.new(0, 14)
 		c.Parent = box
 		local st = Instance.new("UIStroke")
-		st.Color = Color3.fromRGB(255, 42, 54)
+		st.Color = Color3.fromRGB(70, 140, 255)
 		st.Thickness = 2
 		st.Parent = box
 		local function label(text, size, y, h, color)
@@ -8979,16 +9112,16 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.1", 22, 14, 28, Color3.fromRGB(255, 244, 244))
-		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(217, 163, 166))
+		label("JHub V1.2", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
-		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 96, 106))
+		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
 		local function button(text, x, fill)
 			local b = Instance.new("TextButton")
 			b.Text = text
 			b.Font = Enum.Font.GothamBold
 			b.TextSize = 15
-			b.TextColor3 = Color3.fromRGB(255, 244, 244)
+			b.TextColor3 = Color3.fromRGB(255, 255, 255)
 			b.AutoButtonColor = true
 			b.BackgroundColor3 = fill
 			b.BorderSizePixel = 0
@@ -9000,8 +9133,8 @@ do
 			bc.Parent = b
 			return b
 		end
-		local copy = button("Copy invite", 16, Color3.fromRGB(60, 8, 14))
-		local joined = button("I joined", 170, Color3.fromRGB(225, 20, 30))
+		local copy = button("Copy invite", 16, Color3.fromRGB(30, 40, 90))
+		local joined = button("I joined", 170, Color3.fromRGB(120, 70, 230))
 		local done = false
 		copy.Activated:Connect(function()
 			local ok = type(setclipboard) == "function" and pcall(setclipboard, INVITE)
@@ -9060,7 +9193,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.1 shot-line"
+local VERSION = "v1.2 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -9150,7 +9283,7 @@ local S = {
 	AutoGreen = true, AutoCalibrate = true, AutoTiming = true, ShotRelease = "Auto",
 	HoldTime = 0.55, MaxHold = 1.6, CalSpeed = 0.6, CalStep = 0.02,
 	ShotTimes = "", ShotRatio = 0, BarPath = "", BarProp = "", BarAt = 0, BarNudge = 0,
-	ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, PeakLead = 0.027, PerfectGreen = false, PerfectGreenPct = 100, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, Lightning = true, BoltCount = 6, BoltSpeed = 1, BoltThick = 2, BoltBright = 0.9, BoltColor = "White + Yellow", BgMove = true, BgGlow = 0.5, BgOrbs = true, AccentMode = "Gold", OutlineSpeed = 1, LogoStyle = "J bolt H", LogoBg = true, Preset = "Lightning Gold", PacketOn = true, PacketMul = 1,
+	ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 25, Learn = false, PeakLead = 0.027, PerfectGreen = false, PerfectGreenPct = 100, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, Lightning = true, BoltCount = 6, BoltSpeed = 1, BoltThick = 2, BoltBright = 0.9, BoltColor = "White + Yellow", BgMove = true, BgGlow = 0.5, BgOrbs = true, AccentMode = "Gold", OutlineSpeed = 1, LogoStyle = "J bolt H", LogoBg = true, Preset = "Lightning Gold", PacketOn = true, PacketMul = 1,
 	MovingOffset = 0, SprintOffset = 0, PingComp = 0, Humanize = 0, Nudge = 0, GreenSound = true,
 	HookShootButton = true, ShootButtonPath = "", ReleaseMethod = "Both", FireClick = true,
 	ManualAssist = true, ShootKey = "E", SprintKey = "LeftShift",
@@ -9165,11 +9298,11 @@ local S = {
 	ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
 	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
-	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Red",
+	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
 	LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 	AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
-	AR = false, ARSpeed = 1.3, ARReact = 0.05, ARRange = 70, ARJump = true, ARMagnet = true, ARMagRange = 8, ARMarker = false,
+	AR = false, ARSpeed = 1, ARReact = 0.18, ARRange = 45, ARJump = true, ARMagnet = true, ARMagRange = 4, ARMarker = false,
 	AP = false, APBuild = "Small", APPostScore = true, APAllAround = true, APOpenDist = 6, APRange = 24, APThree = true, APDrive = true, APLayups = true, APSprint = true, APMoves = true,
 	APShotDelay = 0.8, APDefend = true, APRebound = true, APAntiAfk = true, APPause = true, APStaminaMin = 20, APHoop = "Nearest", APPostRange = 8, APSpot = 22, APSpeed = 1, APTeam = "By team",
 	GlideFade = 60, GlideSmart = true, GlideStopAtWalls = false, GlideNeedBall = true, GlideMethod = "Auto",
@@ -9310,8 +9443,12 @@ if kind == "l" or kind == "p" then return string.format("%s:%s=%.4f", kind, key,
 return kind .. ":" .. key .. "=" .. val
 end)
 end
-S.SettingsVer = 35
-DEFAULTS.SettingsVer = 35
+if S.SettingsVer < 36 then
+S.AccentTone, S.ARSpeed, S.ARReact, S.ARRange, S.ARMagRange = "Rainbow", 1, 0.18, 45, 4
+if S.MagnetRange > 25 then S.MagnetRange = 25 end
+end
+S.SettingsVer = 36
+DEFAULTS.SettingsVer = 36
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 S.ShotTimes = S.ShotTimes
 S.RecOn = false
@@ -15677,7 +15814,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.1  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.2  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -17948,8 +18085,8 @@ do
 end
 -- JHUB LOGO: the menu button shows the J-Hub picture (downloaded once, falls back to the old J bolt H if the executor cannot)
 do
-	local URL = "https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/claude/claudechud-8cord-executor-wclom3/executor/jhub_logo.png"
-	local FILE = "JHub_logo_v1.png"
+	local URL = "https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/claude/claudechud-8cord-executor-wclom3/executor/jhub_logo2.png"
+	local FILE = "JHub_logo_v2.png"
 	task.spawn(function()
 		if type(getcustomasset) ~= "function" or type(writefile) ~= "function" then return end
 		local have = false
@@ -18050,8 +18187,8 @@ do
 		end
 	end)
 
-	local URL = "https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/claude/claudechud-8cord-executor-wclom3/executor/jhub_ui_bg.png"
-	local FILE = "JHub_ui_bg_v1.png"
+	local URL = "https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/claude/claudechud-8cord-executor-wclom3/executor/jhub_ui_bg2.png"
+	local FILE = "JHub_ui_bg_v2.png"
 	task.spawn(function()
 		if type(getcustomasset) ~= "function" or type(writefile) ~= "function" then return end
 		local have = false
@@ -18082,20 +18219,20 @@ end
 -- J-HUB RED: one red theme everywhere, the old blue glass, lightning and logo backing are gone
 do
 	local TONES = {
-		Red = { Color3.fromRGB(255, 40, 40), Color3.fromRGB(255, 90, 90), Color3.fromRGB(225, 20, 30) },
-		Crimson = { Color3.fromRGB(210, 0, 70), Color3.fromRGB(255, 70, 120), Color3.fromRGB(170, 0, 50) },
-		Orange = { Color3.fromRGB(255, 130, 30), Color3.fromRGB(255, 175, 90), Color3.fromRGB(230, 90, 10) },
-		White = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 255, 255), Color3.fromRGB(200, 200, 200) },
+		Rainbow = { Color3.fromRGB(70, 140, 255), Color3.fromRGB(255, 214, 60), Color3.fromRGB(165, 95, 255) },
+		Blue = { Color3.fromRGB(70, 140, 255), Color3.fromRGB(130, 185, 255), Color3.fromRGB(40, 100, 230) },
+		Yellow = { Color3.fromRGB(255, 214, 60), Color3.fromRGB(255, 236, 140), Color3.fromRGB(230, 180, 20) },
+		Purple = { Color3.fromRGB(165, 95, 255), Color3.fromRGB(200, 150, 255), Color3.fromRGB(130, 60, 230) },
 	}
 	computeTheme = function()
-		local t = TONES[S.AccentTone] or TONES.Red
-		Theme.Glass = Color3.fromRGB(8, 0, 2)
-		Theme.Sheen = Color3.fromRGB(60, 0, 8)
-		Theme.Card = Color3.fromRGB(14, 2, 4)
-		Theme.Elem = Color3.fromRGB(30, 4, 8)
-		Theme.Stroke = Color3.fromRGB(40, 0, 0)
-		Theme.Text = Color3.fromRGB(255, 244, 244)
-		Theme.Sub = Color3.fromRGB(225, 170, 170)
+		local t = TONES[S.AccentTone] or TONES.Rainbow
+		Theme.Glass = Color3.fromRGB(6, 6, 10)
+		Theme.Sheen = Color3.fromRGB(20, 20, 40)
+		Theme.Card = Color3.fromRGB(10, 10, 16)
+		Theme.Elem = Color3.fromRGB(20, 20, 30)
+		Theme.Stroke = Color3.fromRGB(0, 0, 30)
+		Theme.Text = Color3.fromRGB(255, 255, 255)
+		Theme.Sub = Color3.fromRGB(190, 195, 225)
 		Theme.Outline = t[1]
 		Theme.AccentA = t[2]
 		Theme.AccentB = t[3]
@@ -18150,7 +18287,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.1"
+				d.Text = "JHub V1.2"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -18177,12 +18314,141 @@ do
 				end
 			end
 			local c = UI.Card(p, "Colors")
-			UI.Dropdown(c, "Menu color", "AccentTone", { "Red", "Crimson", "Orange", "White" }, function() UI.applyTheme() end)
+			UI.Dropdown(c, "Menu color", "AccentTone", { "Rainbow", "Blue", "Yellow", "Purple" }, function() UI.applyTheme() end)
 			UI.Slider(c, "Card darkness", "CardTrans", 0.1, 0.9, 0.01, 2, nil, function() UI.applyTheme() end)
 			c.frame.LayoutOrder = -1
 			c.frame.Size = UDim2.new(0.5, -4, 0, 0)
 		end
 	end
+	UI.applyTheme()
+end
+-- NATURAL REBOUND AND BALL MAGNET: runs like a player (normal speed, reaction time, jumps on time), no locking onto the ball
+do
+	local Bot = JH.api.Bot
+	function Bot.reboundStep(me, r)
+		if not Feat.ballLoose() then
+			Bot.marker(nil)
+			Bot.rbT = nil
+			return false
+		end
+		local b = Feat.findBall()
+		if not b or not b.Parent then return false end
+		local now = tick()
+		local bd = flat(b.Position - me).Magnitude
+		if bd > S.ARRange then return false end
+		if not Bot.rbT then
+			Bot.rbT = now
+			Bot.rbDelay = (S.ARReact or 0.18) * (0.8 + math.random() * 0.5)
+			Bot.rbSway = { math.random() - 0.5, math.random() - 0.5 }
+		end
+		if now - Bot.rbT < Bot.rbDelay then return false end
+		local land, t = Bot.predictBall(b)
+		Bot.marker(land)
+		-- stand just inside the landing spot, between it and the hoop, so the ball comes down in front of you
+		local spot = land
+		local hoop = Bot.nearestHoop(land)
+		if hoop then
+			local toHoop = flat(hoop - land)
+			if toHoop.Magnitude > 3 then spot = land + toHoop.Unit * math.min(1.6, toHoop.Magnitude * 0.1) end
+		end
+		spot = spot + Vector3.new(Bot.rbSway[1] * 0.8, 0, Bot.rbSway[2] * 0.8)
+		local to = flat(spot - me)
+		local d = to.Magnitude
+		local speed = clamp(S.ARSpeed or 1, 0.5, 1.3)
+		if d > 1.3 then
+			Bot.move(to.Unit * math.min(1, d / 3), speed)
+			Bot.setSprint(d > 12 and t > 0.8)
+		else
+			Bot.stopMove()
+			Bot.faceAt(b.Position)
+		end
+		-- jump so the top of the jump meets the ball
+		if S.ARJump and t < 0.42 and bd < 6 and b.Position.Y > me.Y + 2 and now - Bot.jumpT > 0.9 then
+			Bot.jumpT = now
+			Bot.press("Space", 0.15, { "jump" })
+		end
+		-- a short reach only, like a long arm: it does nothing from far away or when the ball is high above you
+		if S.ARMagnet and bd <= math.min(S.ARMagRange or 4, 5) and b.Position.Y < me.Y + 7 and now - Bot.ballT > 0.5 then
+			Bot.ballT = now
+			pcall(Feat.getBall, true)
+		end
+		Bot.status = string.format("Rebound (%.1fs)", t)
+		return true
+	end
+
+	-- ball magnet: runs over in short quick steps instead of jumping straight onto the ball, and never reaches for a ball that is high above you
+	function Feat.getBall(force)
+		local r = Mover.body()
+		local b, dist = Feat.findBall()
+		if not r or not b then return false end
+		if b.Position.Y > r.Position.Y + 12 then return false end
+		if S.MagnetMode ~= "Go to the ball" then
+			if not Feat.hop(b) then return false end
+		else
+			task.spawn(function()
+				local t0 = tick()
+				while JH.Running and tick() - t0 < 0.45 do
+					local rr, bb = Mover.body(), Feat.findBall()
+					if not rr or not bb then return end
+					local d = Vector3.new(bb.Position.X - rr.Position.X, 0, bb.Position.Z - rr.Position.Z)
+					if d.Magnitude < 3 then return end
+					rr.CFrame = rr.CFrame + d.Unit * math.min(d.Magnitude - 2.5, 5)
+					Mover.sync(rr)
+					RunService.Heartbeat:Wait()
+				end
+			end)
+		end
+		log(string.format("Ball magnet: %s (%.0f studs away)", S.MagnetMode, dist or 0))
+		return true
+	end
+	local origMag = Feat.magnetStep
+	function Feat.magnetStep()
+		local now = tick()
+		if S.BallMagnet and now < (Feat.magnetNext or 0) then return end
+		local before = Feat.magnetT
+		origMag()
+		if Feat.magnetT ~= before then Feat.magnetNext = now + 0.3 + math.random() * 0.5 end
+	end
+end
+-- RAINBOW MENU: blue, yellow and purple on black, slowly cycling
+do
+	local BLUE, YEL, PUR = Color3.fromRGB(70, 140, 255), Color3.fromRGB(255, 214, 60), Color3.fromRGB(165, 95, 255)
+	local cyc = { BLUE, YEL, PUR }
+	local function cycColor(t)
+		local i = math.floor(t / 2.6) % #cyc + 1
+		local j = i % #cyc + 1
+		local k = ((t % 2.6) - 2.1) / 0.5
+		if k <= 0 then return cyc[i] end
+		k = k * k * (3 - 2 * k)
+		return cyc[i]:Lerp(cyc[j], k)
+	end
+	local origPaint = UI.paintGrad
+	function UI.paintGrad(g)
+		if S.AccentTone == "Rainbow" then
+			g.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, BLUE), ColorSequenceKeypoint.new(0.5, PUR), ColorSequenceKeypoint.new(1, YEL) })
+		else
+			origPaint(g)
+		end
+	end
+	task.spawn(function()
+		while JH.Running do
+			task.wait(0.12)
+			if S.AccentTone == "Rainbow" and Window.Visible then
+				local t = tick()
+				local c = cycColor(t)
+				Theme.AccentA, Theme.AccentB, Theme.Outline = c:Lerp(Color3.new(1, 1, 1), 0.3), c, c
+				for _, it in ipairs(UI.themed) do
+					local key = it[3]
+					if (key == "AccentA" or key == "AccentB" or key == "Outline") and it[1].Parent then
+						pcall(function() it[1][it[2]] = Theme[key] end)
+					end
+				end
+				for _, g in ipairs(UI.grads) do
+					if g.Parent then g.Rotation = (t * 40) % 360 end
+				end
+			end
+		end
+	end)
 	UI.applyTheme()
 end
 UI.syncAuto()
