@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.11 shot-line"
+local VERSION = "v1.12 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -145,7 +145,7 @@ ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, St
 LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "",
+FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true,
 LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -6322,7 +6322,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.11  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.12  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -8051,6 +8051,7 @@ UI.Toggle(c, "Green every jumper (shared learning)", "AllJumpers")
 UI.Slider(c, "Fade and step back timing (later)", "FadeNudge", -30, 40, 1, 0, " ms")
 UI.Toggle(c, "Auto adapt: learn every shot from the first one", "AutoAdaptAll")
 UI.Toggle(c, "Instant green (works at low FPS and high ping)", "InstantGreen")
+UI.Toggle(c, "Smart steps (faster learning, no bouncing)", "SmartSteps")
 UI.Toggle(c, "Keep glides away from my shot", "GlideShotSafe")
 UI.Buttons(c, { { "Copy my locked timings", function() local t = Shot.exportTimings() if setclipboard then setclipboard(t) end notify("Timings", t == "" and "Nothing locked yet" or "Copied to clipboard", 3) end } })
 UI.Input(c, "Import timings", "ImportTimes", nil, "paste copied timings, then rejoin")
@@ -8540,7 +8541,7 @@ local s = st[key] or { b = 0 }
 st[key] = s
 local first = (s.n or 0) == 0
 s.n = (s.n or 0) + 1
-local bin, old = 0.014 * (first and 1.5 or 1), Shot.finalAdj[key] or 0
+local bin, old = 0.014 * (first and 1.5 or 1) * (Shot.adaptGain and Shot.adaptGain(key, off) or 1), Shot.finalAdj[key] or 0
 local new = old
 s.b = s.b * 0.7 + off * 0.3
 if math.abs(off) >= 2 then
@@ -8793,7 +8794,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.11"
+d.Text = "JHub V1.12"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -9493,6 +9494,53 @@ show(collapsed == true)
 end)
 show(false)
 end
+-- SMART STEPS FOR AUTO CALIBRATE: bigger steps on the first result and when the misses keep going the same way, small steps when it bounces, and almost none for a lag spike
+do
+local hist = {}
+function Shot.adaptGain(key, off)
+if not S.SmartSteps then return 1 end
+local h = hist[key]
+if not h then
+h = {}
+hist[key] = h
+end
+local n = #h
+local last, prev = h[n], h[n - 1]
+local gain = 1
+if n == 0 then
+gain = 1.5
+elseif n >= 2 and math.abs(off) >= 3 and math.abs(last) <= 1 and math.abs(prev) <= 1 then
+gain = 0.3
+elseif last * off < 0 and math.abs(last) >= 0.5 and math.abs(off) >= 0.5 then
+gain = 0.6
+elseif last * off > 0 and math.abs(last) >= 0.5 and math.abs(off) >= 0.5 then
+gain = 1.4
+end
+if (Shot.lastShotEx or 0) >= 0.03 then gain = math.min(gain, 0.3) end
+h[#h + 1] = off
+if #h > 6 then table.remove(h, 1) end
+return gain
+end
+local prevLearn = Shot.autoLearn
+function Shot.autoLearn(info, res, strength)
+local a = Shot.auto and info and Shot.auto[info.key]
+local before = a and a.hold
+local r = prevLearn(info, res, strength)
+if S.SmartSteps and a and before and a.mode == "peak" and not info.manual and not Shot.FINAL[info.key] then
+local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+if idx then
+local off = (idx == 5 and 0) or (idx == 4 and -1) or (idx - 5)
+local gain = Shot.adaptGain(info.key, off)
+local after = a.hold
+if after ~= before and gain ~= 1 then
+a.hold = clamp(before + (after - before) * gain, 0, 0.1)
+Shot.autoSave()
+end
+end
+end
+return r
+end
+end
 UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
@@ -9656,7 +9704,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.11", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.12", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -9737,7 +9785,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.11 shot-line"
+local VERSION = "v1.12 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -9843,7 +9891,7 @@ local S = {
 	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "",
+	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true,
 	LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 	AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -16360,7 +16408,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.11  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.12  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -18097,6 +18145,7 @@ do
 		UI.Slider(c, "Fade and step back timing (later)", "FadeNudge", -30, 40, 1, 0, " ms")
 		UI.Toggle(c, "Auto adapt: learn every shot from the first one", "AutoAdaptAll")
 		UI.Toggle(c, "Instant green (works at low FPS and high ping)", "InstantGreen")
+		UI.Toggle(c, "Smart steps (faster learning, no bouncing)", "SmartSteps")
 		UI.Toggle(c, "Keep glides away from my shot", "GlideShotSafe")
 		UI.Buttons(c, { { "Copy my locked timings", function() local t = Shot.exportTimings() if setclipboard then setclipboard(t) end notify("Timings", t == "" and "Nothing locked yet" or "Copied to clipboard", 3) end } })
 		UI.Input(c, "Import timings", "ImportTimes", nil, "paste copied timings, then rejoin")
@@ -18586,7 +18635,7 @@ do
 		st[key] = s
 		local first = (s.n or 0) == 0
 s.n = (s.n or 0) + 1
-local bin, old = 0.014 * (first and 1.5 or 1), Shot.finalAdj[key] or 0
+local bin, old = 0.014 * (first and 1.5 or 1) * (Shot.adaptGain and Shot.adaptGain(key, off) or 1), Shot.finalAdj[key] or 0
 		local new = old
 		s.b = s.b * 0.7 + off * 0.3
 		if math.abs(off) >= 2 then
@@ -18839,7 +18888,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.11"
+				d.Text = "JHub V1.12"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -19538,6 +19587,53 @@ do
 		show(collapsed == true)
 	end)
 	show(false)
+end
+-- SMART STEPS FOR AUTO CALIBRATE: bigger steps on the first result and when the misses keep going the same way, small steps when it bounces, and almost none for a lag spike
+do
+	local hist = {}
+	function Shot.adaptGain(key, off)
+		if not S.SmartSteps then return 1 end
+		local h = hist[key]
+		if not h then
+			h = {}
+			hist[key] = h
+		end
+		local n = #h
+		local last, prev = h[n], h[n - 1]
+		local gain = 1
+		if n == 0 then
+			gain = 1.5
+		elseif n >= 2 and math.abs(off) >= 3 and math.abs(last) <= 1 and math.abs(prev) <= 1 then
+			gain = 0.3
+		elseif last * off < 0 and math.abs(last) >= 0.5 and math.abs(off) >= 0.5 then
+			gain = 0.6
+		elseif last * off > 0 and math.abs(last) >= 0.5 and math.abs(off) >= 0.5 then
+			gain = 1.4
+		end
+		if (Shot.lastShotEx or 0) >= 0.03 then gain = math.min(gain, 0.3) end
+		h[#h + 1] = off
+		if #h > 6 then table.remove(h, 1) end
+		return gain
+	end
+	local prevLearn = Shot.autoLearn
+	function Shot.autoLearn(info, res, strength)
+		local a = Shot.auto and info and Shot.auto[info.key]
+		local before = a and a.hold
+		local r = prevLearn(info, res, strength)
+		if S.SmartSteps and a and before and a.mode == "peak" and not info.manual and not Shot.FINAL[info.key] then
+			local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+			if idx then
+				local off = (idx == 5 and 0) or (idx == 4 and -1) or (idx - 5)
+				local gain = Shot.adaptGain(info.key, off)
+				local after = a.hold
+				if after ~= before and gain ~= 1 then
+					a.hold = clamp(before + (after - before) * gain, 0, 0.1)
+					Shot.autoSave()
+				end
+			end
+		end
+		return r
+	end
 end
 UI.syncAuto()
 UI.applyTheme()
