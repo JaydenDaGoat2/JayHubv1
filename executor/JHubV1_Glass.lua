@@ -8488,6 +8488,55 @@ if Shot.isFinalShot then return 0.02 end
 return prevLook()
 end
 end
+-- POST FADES: these built-in timings keep learning from the game's verdicts and settle on Perfect; every other built-in shot is left alone
+do
+local POST = {
+["111074210919383"] = true, ["71484695722621"] = true,
+["77401448272074"] = true, ["128777513307709+77401448272074"] = true,
+}
+local loaded, st = false, {}
+local function load()
+if loaded then return end
+loaded = true
+for key, val in string.gmatch(S.FinalAdj or "", "(%S-)=([%-%d%.]+)") do
+if POST[key] then Shot.finalAdj[key] = tonumber(val) end
+end
+end
+local function save()
+local parts = {}
+for key in pairs(POST) do
+if Shot.finalAdj[key] then parts[#parts + 1] = string.format("%s=%.4f", key, Shot.finalAdj[key]) end
+end
+table.sort(parts)
+S.FinalAdj = table.concat(parts, " ")
+saveSoon()
+end
+function Shot.finalLoad() load() end
+function Shot.finalLearn(info, res, strength)
+if info.manual or not POST[info.key] then return end
+local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+if not idx then return end
+load()
+local key = info.key
+local off = (idx == 5 and 0) or (idx == 4 and -0.6) or (idx - 5)
+local s = st[key] or { b = 0 }
+st[key] = s
+local bin, old = 0.014, Shot.finalAdj[key] or 0
+local new = old
+s.b = s.b * 0.7 + off * 0.3
+if math.abs(off) >= 2 then
+new, s.b = old - off * bin * 0.9, 0
+elseif math.abs(s.b) >= 0.45 then
+new, s.b = old - s.b * bin * 0.8, 0
+end
+new = clamp(new, -0.06, 0.06)
+if new ~= old then
+Shot.finalAdj[key] = new
+Shot.noteAdjust(key, (Shot.FINAL[key] or 0) + old, (Shot.FINAL[key] or 0) + new, Shot.VERDICT[idx] or "?")
+save()
+end
+end
+end
 UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
@@ -17441,6 +17490,55 @@ do
 	function Shot.lookAhead()
 		if Shot.isFinalShot then return 0.02 end
 		return prevLook()
+	end
+end
+-- POST FADES: these built-in timings keep learning from the game's verdicts and settle on Perfect; every other built-in shot is left alone
+do
+	local POST = {
+		["111074210919383"] = true, ["71484695722621"] = true,
+		["77401448272074"] = true, ["128777513307709+77401448272074"] = true,
+	}
+	local loaded, st = false, {}
+	local function load()
+		if loaded then return end
+		loaded = true
+		for key, val in string.gmatch(S.FinalAdj or "", "(%S-)=([%-%d%.]+)") do
+			if POST[key] then Shot.finalAdj[key] = tonumber(val) end
+		end
+	end
+	local function save()
+		local parts = {}
+		for key in pairs(POST) do
+			if Shot.finalAdj[key] then parts[#parts + 1] = string.format("%s=%.4f", key, Shot.finalAdj[key]) end
+		end
+		table.sort(parts)
+		S.FinalAdj = table.concat(parts, " ")
+		saveSoon()
+	end
+	function Shot.finalLoad() load() end
+	function Shot.finalLearn(info, res, strength)
+		if info.manual or not POST[info.key] then return end
+		local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+		if not idx then return end
+		load()
+		local key = info.key
+		local off = (idx == 5 and 0) or (idx == 4 and -0.6) or (idx - 5)
+		local s = st[key] or { b = 0 }
+		st[key] = s
+		local bin, old = 0.014, Shot.finalAdj[key] or 0
+		local new = old
+		s.b = s.b * 0.7 + off * 0.3
+		if math.abs(off) >= 2 then
+			new, s.b = old - off * bin * 0.9, 0
+		elseif math.abs(s.b) >= 0.45 then
+			new, s.b = old - s.b * bin * 0.8, 0
+		end
+		new = clamp(new, -0.06, 0.06)
+		if new ~= old then
+			Shot.finalAdj[key] = new
+			Shot.noteAdjust(key, (Shot.FINAL[key] or 0) + old, (Shot.FINAL[key] or 0) + new, Shot.VERDICT[idx] or "?")
+			save()
+		end
 	end
 end
 UI.syncAuto()
