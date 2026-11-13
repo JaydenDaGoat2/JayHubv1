@@ -8924,6 +8924,92 @@ end)
 end
 ]==]
 
+-- DISCORD GATE: the first time the script runs, a window asks for a Discord join before anything else loads
+do
+	local FILE = "JHub_discord_ok.txt"
+	local INVITE = "https://discord.gg/fk5TsZMrRM"
+	local seen = false
+	pcall(function() seen = type(isfile) == "function" and isfile(FILE) == true end)
+	if not seen then
+		local gui = Instance.new("ScreenGui")
+		gui.Name = "JHubDiscordGate"
+		gui.ResetOnSpawn = false
+		gui.IgnoreGuiInset = true
+		gui.DisplayOrder = 2000
+		local okP = pcall(function() gui.Parent = (gethui and gethui()) or game:GetService("CoreGui") end)
+		if not okP or not gui.Parent then gui.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui") end
+		local shade = Instance.new("TextButton")
+		shade.Text = ""
+		shade.AutoButtonColor = false
+		shade.Size = UDim2.fromScale(1, 1)
+		shade.BackgroundColor3 = Color3.new(0, 0, 0)
+		shade.BackgroundTransparency = 0.35
+		shade.BorderSizePixel = 0
+		shade.Parent = gui
+		local box = Instance.new("Frame")
+		box.AnchorPoint = Vector2.new(0.5, 0.5)
+		box.Position = UDim2.fromScale(0.5, 0.5)
+		box.Size = UDim2.fromOffset(340, 230)
+		box.BackgroundColor3 = Color3.fromRGB(11, 2, 4)
+		box.BorderSizePixel = 0
+		box.Parent = shade
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(0, 14)
+		c.Parent = box
+		local st = Instance.new("UIStroke")
+		st.Color = Color3.fromRGB(255, 42, 54)
+		st.Thickness = 2
+		st.Parent = box
+		local function label(text, size, y, h, color)
+			local l = Instance.new("TextLabel")
+			l.BackgroundTransparency = 1
+			l.Position = UDim2.new(0, 16, 0, y)
+			l.Size = UDim2.new(1, -32, 0, h)
+			l.Font = Enum.Font.GothamBold
+			l.TextSize = size
+			l.TextWrapped = true
+			l.TextColor3 = color
+			l.Text = text
+			l.Parent = box
+			return l
+		end
+		label("JHub V1", 22, 14, 28, Color3.fromRGB(255, 244, 244))
+		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(217, 163, 166))
+		msg.Font = Enum.Font.Gotham
+		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 96, 106))
+		local function button(text, x, fill)
+			local b = Instance.new("TextButton")
+			b.Text = text
+			b.Font = Enum.Font.GothamBold
+			b.TextSize = 15
+			b.TextColor3 = Color3.fromRGB(255, 244, 244)
+			b.AutoButtonColor = true
+			b.BackgroundColor3 = fill
+			b.BorderSizePixel = 0
+			b.Position = UDim2.new(0, x, 1, -64)
+			b.Size = UDim2.new(0.5, -22, 0, 44)
+			b.Parent = box
+			local bc = Instance.new("UICorner")
+			bc.CornerRadius = UDim.new(0, 10)
+			bc.Parent = b
+			return b
+		end
+		local copy = button("Copy invite", 16, Color3.fromRGB(60, 8, 14))
+		local joined = button("I joined", 170, Color3.fromRGB(225, 20, 30))
+		local done = false
+		copy.Activated:Connect(function()
+			local ok = type(setclipboard) == "function" and pcall(setclipboard, INVITE)
+			msg.Text = ok and "Invite copied. Paste it in your browser, join the server, then tap I joined." or "Copy the invite link shown above, join the server, then tap I joined."
+		end)
+		joined.Activated:Connect(function()
+			done = true
+			pcall(function() if type(writefile) == "function" then writefile(FILE, "1") end end)
+		end)
+		while not done and gui.Parent do task.wait(0.1) end
+		pcall(function() gui:Destroy() end)
+	end
+end
+
 local function JHubMain()
 
 -- A re-run removes the previous copy of this menu and the older JHub menu first.
