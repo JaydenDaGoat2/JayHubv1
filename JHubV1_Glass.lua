@@ -139,6 +139,8 @@ DribbleGlide = false, DribbleGlidePower = 30, DribbleGlideTime = 0.45, GlideSpee
 ShotGlide = false, ShotGlidePower = 22, ShotGlideTime = 0.45,
 GatherGlide = false, GatherGlidePower = 26, GatherGlideTime = 0.45,
 DribbleGlideSpeed = 1, ShotGlideSpeed = 1, GatherGlideSpeed = 1,
+GfxLow = false, GfxEffects = false, GfxTextures = false, GfxShadows = false, GfxPost = false, GfxHideOthers = false, GfxCull = false,
+GfxCullDist = 250, GfxBoost = false, GfxFpsCap = 0, PingStab = false, PingWindow = 3, FinalAdj = "",
 GlideFade = 60, GlideSmart = true, GlideStopAtWalls = false, GlideNeedBall = true, GlideMethod = "Auto",
 DribbleKeys = "Z C X V", GatherKeys = "", DribbleBtnPaths = "", GatherBtnPaths = "",
 AnimDribble = "", AnimGather = "", AnimShot = "",
@@ -1956,7 +1958,7 @@ if not Shot.autoActive(key) then return false end
 Shot.autoLoad()
 local a = Shot.auto[key]
 if not a then return false end
-if a.locked then return true end
+if a.locked and a.mode ~= "peak" then return true end
 if a.mode == "peak" then return Shot.peakLearn(info, res, strength, a, key) end
 local held = (info.held or 0) + (info.comp or 0)
 local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
@@ -2009,6 +2011,7 @@ return true
 end
 function Shot.remoteHold(key, pk)
 local fin = Shot.FINAL[key]
+if fin then Shot.finalLoad() fin = fin + (Shot.finalAdj[key] or 0) end
 if fin then
 Shot.lastSweep = nil
 Shot.cur = { key = key, hold = fin, state = "Locked (built in)" }
@@ -2062,7 +2065,7 @@ local ch = char()
 Shot.last = { t = tick(), held = info.held, idx = info.idx, res = res, key = info.key }
 if Shot.cur and Shot.cur.key == info.key and ch then Shot.cur.anim = ch:GetAttribute("BaseAnimation") end
 end
-if info and Shot.FINAL[info.key] then return end
+if info and Shot.FINAL[info.key] then pcall(Shot.finalLearn, info, res, strength) return end
 if info and Shot.autoLearn(info, res, strength) then return end
 if not S.Learn or (S.Sweep and Rec.shotOn) then return end
 local key, held = info.key, info.held + (info.comp or 0)
@@ -2170,7 +2173,7 @@ local hold, base, mode = Shot.remoteHold(key, pk)
 local comp, peakLead = 0, nil
 if mode == "peak" then
 peakLead = hold
-hold = Shot.AUTO_START
+hold = Shot.peakDur[key] and math.max(Shot.FLOOR, Shot.peakDur[key] - (Shot.pingNow() + peakLead)) or Shot.AUTO_START
 else
 comp = Shot.pingComp()
 if comp ~= 0 then hold = math.max(Shot.FLOOR, hold - comp) end
@@ -2181,6 +2184,7 @@ local usedMeter, qpred = false, nil
 local peakAimed = false
 local ok0, ping0 = pcall(function() return LP:GetNetworkPing() end)
 local lead = (ok0 and ping0 or 0.04) + 0.016 + S.Nudge / 1000
+local look = clamp(1.4 / math.max(JH.FPS or 60, 10), 0.02, 0.1)
 while tick() - m0 < S.MaxHold do
 if ctx.ended then
 manual = true
@@ -2193,8 +2197,9 @@ local tp = Shot.peakFit(samples)
 if tp then
 hold = math.max(Shot.FLOOR, tp - (Shot.pingNow() + peakLead) - m0)
 peakAimed = true
+Shot.peakDur[key] = tp - m0
 end
-if now - m0 >= hold - 0.02 and (peakAimed or now - m0 >= Shot.AUTO_START - 0.02) then break end
+if now - m0 >= hold - look then break end
 elseif S.MeterAim and n >= 3 and now - samples[n].t < 0.15 then
 local a, b = samples[math.max(1, n - 3)], samples[n]
 local dt = b.t - a.t
@@ -2206,7 +2211,7 @@ qpred = b.q + rate * ((now - b.t) + lead)
 if qpred >= S.MeterTarget then break end
 end
 end
-elseif now - m0 >= hold - 0.02 then
+elseif now - m0 >= hold - look then
 break
 end
 RunService.Heartbeat:Wait()
@@ -6466,6 +6471,557 @@ if not dir and body then dir = flat(body.CFrame.LookVector) end
 Glide.fire("shot", "shot", dir)
 end)
 end
+-- AUTO GREEN, GRAPHICS AND PING UPGRADE
+do
+Shot.PEAK_BIN = 0.014
+Shot.peakDur = Shot.peakDur or {}
+Shot.finalAdj = Shot.finalAdj or {}
+Shot.finalRun = {}
+Shot.finalLoaded = false
+
+local function verdictIdx(info, res, strength)
+return info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+end
+
+-- the meter line is fitted on the newest readings only, a stray reading is thrown out, and it works at low FPS too
+function Shot.peakFit(samples)
+local pts, lastq = {}, -1
+for _, sm in ipairs(samples) do
+if sm.q < lastq - 0.001 then break end
+lastq = sm.q
+if sm.q > 0.1 and sm.q < 0.93 then pts[#pts + 1] = sm end
+end
+local n = #pts
+if n < 4 or pts[n].q < 0.25 then return nil end
+if n < 6 and pts[n].t - pts[1].t < 0.06 then return nil end
+if n > 16 then
+local cut = {}
+for i = n - 15, n do cut[#cut + 1] = pts[i] end
+pts, n = cut, #cut
+end
+local function fit(list)
+local m = #list
+local t0 = list[1].t
+local st, sq, stt, stq = 0, 0, 0, 0
+for _, p in ipairs(list) do
+local x = p.t - t0
+st, sq, stt, stq = st + x, sq + p.q, stt + x * x, stq + x * p.q
+end
+local den = m * stt - st * st
+if den <= 1e-9 then return nil end
+local a = (m * stq - st * sq) / den
+return a, (sq - a * st) / m, t0
+end
+local a, b, t0 = fit(pts)
+if not a then return nil end
+if n >= 7 then
+local worst, wi = 0, nil
+for i, p in ipairs(pts) do
+local e = math.abs(p.q - (a * (p.t - t0) + b))
+if e > worst then worst, wi = e, i end
+end
+if worst > 0.03 then
+local cut = {}
+for i, p in ipairs(pts) do
+if i ~= wi then cut[#cut + 1] = p end
+end
+local a2, b2, t02 = fit(cut)
+if a2 then a, b, t0 = a2, b2, t02 end
+end
+end
+if a < 1.2 or a > 5 then return nil end
+return t0 + (Shot.PEAK_Q - b) / a
+end
+
+-- the verdict scale runs early to late, so every verdict says which way and about how far the release was off
+function Shot.peakLearn(info, res, strength, a, key)
+local idx = verdictIdx(info, res, strength)
+if not idx then return true end
+if info.manual and idx ~= 5 then return true end
+local lead = info.lead or a.hold
+if not info.manual and math.abs(lead - a.hold) > 0.05 then return true end
+local before = a.hold
+a.n = (a.n or 0) + 1
+a.bin = a.bin or Shot.PEAK_BIN
+a.hist = a.hist or {}
+a.hist[#a.hist + 1] = idx
+if #a.hist > 5 then table.remove(a.hist, 1) end
+local prev = a.prev
+if prev and idx ~= 5 and prev.idx ~= 5 and prev.idx ~= idx and math.abs(lead - prev.lead) > 0.002 then
+local est = -(lead - prev.lead) / (idx - prev.idx)
+if est > 0 then a.bin = clamp(a.bin * 0.5 + est * 0.5, 0.006, 0.04) end
+end
+a.prev = { idx = idx, lead = lead }
+local why
+if idx == 5 then
+a.greens = a.greens or {}
+a.greens[#a.greens + 1] = lead
+if #a.greens > 6 then table.remove(a.greens, 1) end
+local sum = 0
+for _, g in ipairs(a.greens) do sum = sum + g end
+a.hold = sum / #a.greens
+a.misses = 0
+if not a.locked then
+a.locked = true
+pcall(notify, "Auto Green", string.format("Learned this shot: %.0f ms before the peak", a.hold * 1000), 3)
+end
+S.PeakLead = clamp(S.PeakLead * 0.7 + a.hold * 0.3, 0, 0.15)
+why = "Perfect, locked"
+else
+local off = idx - 5
+if idx == 4 then
+local last = a.hist[#a.hist - 1]
+off = (last and last > 5) and 0.5 or -0.5
+end
+local same = 0
+for i = math.max(1, #a.hist - 2), #a.hist do
+local h = a.hist[i]
+if (off > 0 and h > 5) or (off < 0 and h < 5) then same = same + 1 end
+end
+local newLead = lead
+if a.locked then
+a.misses = (a.misses or 0) + 1
+if math.abs(off) >= 2 or same >= 2 then
+newLead = lead + off * a.bin * 0.7
+if same >= 2 then
+a.locked = false
+a.greens = {}
+end
+why = (Shot.VERDICT[idx] or "?") .. ", correcting the lock"
+else
+why = (Shot.VERDICT[idx] or "?") .. ", keeping the lock"
+end
+else
+newLead = lead + off * a.bin * 0.9
+why = (Shot.VERDICT[idx] or "?") .. (off > 0 and ", letting go earlier" or ", letting go later")
+end
+if newLead ~= lead then
+a.hold = clamp(newLead, 0, 0.15)
+S.PeakLead = clamp(S.PeakLead + (a.hold - lead) * 0.25, 0, 0.15)
+end
+end
+if math.abs(a.hold - before) > 0.0003 or idx == 5 then Shot.noteAdjust(key, before, a.hold, why) end
+Shot.autoSave()
+if Rec.shotOn then
+Rec.shotAdd(string.format("AUTOCAL(meter) key=%s idx=%s lead=%.4f next=%.4f locked=%s bin=%.4f", key, tostring(idx), lead, a.hold, tostring(a.locked), a.bin))
+end
+return true
+end
+
+-- the built in shots drift when your ping changes, so they now follow the verdicts too
+function Shot.finalLoad()
+if Shot.finalLoaded then return end
+Shot.finalLoaded = true
+for key, val in string.gmatch(S.FinalAdj or "", "(%S-)=([%-%d%.]+)") do
+Shot.finalAdj[key] = tonumber(val)
+end
+end
+function Shot.finalSave()
+local parts = {}
+for key, val in pairs(Shot.finalAdj) do parts[#parts + 1] = string.format("%s=%.4f", key, val) end
+table.sort(parts)
+S.FinalAdj = table.concat(parts, " ")
+saveSoon()
+end
+function Shot.finalLearn(info, res, strength)
+if info.manual then return end
+local idx = verdictIdx(info, res, strength)
+if not idx then return end
+Shot.finalLoad()
+local key = info.key
+local off = idx - 5
+if idx == 4 then off = -0.5 end
+local run = Shot.finalRun[key]
+if not run then
+run = { sign = 0, n = 0 }
+Shot.finalRun[key] = run
+end
+if off == 0 then
+run.sign, run.n = 0, 0
+return
+end
+local sign = off > 0 and 1 or -1
+if run.sign == sign then run.n = run.n + 1 else run.sign, run.n = sign, 1 end
+if run.n >= 2 or math.abs(off) >= 2 then
+local old = Shot.finalAdj[key] or 0
+local new = clamp(old - off * Shot.PEAK_BIN * 0.6, -0.05, 0.05)
+Shot.finalAdj[key] = new
+Shot.noteAdjust(key, (Shot.FINAL[key] or 0) + old, (Shot.FINAL[key] or 0) + new, Shot.VERDICT[idx] or "?")
+Shot.finalSave()
+end
+end
+
+---------------------------------------------------------------------
+-- PING STABILIZER
+---------------------------------------------------------------------
+local Ping = { buf = {}, stable = nil, jitter = 0, raw = 0 }
+JH.api.Ping = Ping
+function Ping.step()
+local ok, p = pcall(function() return LP:GetNetworkPing() end)
+if not ok or type(p) ~= "number" then return end
+Ping.raw = p
+local n = math.max(5, math.floor((S.PingWindow or 3) * 10))
+Ping.buf[#Ping.buf + 1] = p
+while #Ping.buf > n do table.remove(Ping.buf, 1) end
+local t = {}
+for i, v in ipairs(Ping.buf) do t[i] = v end
+table.sort(t)
+local med = t[math.floor((#t + 1) / 2)]
+local dev = 0
+for _, v in ipairs(Ping.buf) do dev = dev + math.abs(v - med) end
+Ping.stable = med
+Ping.jitter = dev / #Ping.buf
+end
+function Ping.trim(on)
+pcall(function()
+local net = settings().Network
+if on then
+if Ping.oldLag == nil then Ping.oldLag = net.IncomingReplicationLag end
+net.IncomingReplicationLag = 0
+elseif Ping.oldLag ~= nil then
+net.IncomingReplicationLag = Ping.oldLag
+Ping.oldLag = nil
+end
+end)
+end
+local basePing = Shot.pingNow
+function Shot.pingNow()
+if S.PingStab and Ping.stable then return Ping.stable end
+return basePing()
+end
+task.spawn(function()
+while JH.Running do
+Ping.step()
+task.wait(0.1)
+end
+end)
+
+---------------------------------------------------------------------
+-- GRAPHICS AND FPS BOOSTER
+---------------------------------------------------------------------
+local Gfx = { saved = setmetatable({}, { __mode = "k" }), culled = setmetatable({}, { __mode = "k" }), removed = {},
+low = {}, queue = {}, qh = 1, qt = 0, tok = 0, any = false }
+JH.api.Gfx = Gfx
+local EFFECTS = { ParticleEmitter = true, Trail = true, Beam = true, Fire = true, Smoke = true, Sparkles = true,
+PointLight = true, SpotLight = true, SurfaceLight = true }
+local POST = { BloomEffect = true, BlurEffect = true, ColorCorrectionEffect = true, DepthOfFieldEffect = true, SunRaysEffect = true }
+local FLAGS = { "GfxLow", "GfxEffects", "GfxTextures", "GfxShadows", "GfxPost", "GfxHideOthers", "GfxCull" }
+
+function Gfx.set(inst, prop, value)
+local ok, cur = pcall(function() return inst[prop] end)
+if not ok or cur == value then return end
+local rec = Gfx.saved[inst]
+if not rec then
+rec = {}
+Gfx.saved[inst] = rec
+end
+if rec[prop] == nil then rec[prop] = cur end
+pcall(function() inst[prop] = value end)
+end
+function Gfx.isChar(d)
+local m = d.Parent
+while m and m ~= workspace do
+if m:IsA("Model") and m:FindFirstChildOfClass("Humanoid") then return true end
+m = m.Parent
+end
+return false
+end
+function Gfx.remove(d)
+Gfx.removed[#Gfx.removed + 1] = { inst = d, parent = d.Parent }
+d.Parent = nil
+end
+function Gfx.apply(d)
+local cls = d.ClassName
+if S.GfxEffects then
+if EFFECTS[cls] then
+Gfx.set(d, "Enabled", false)
+return
+elseif cls == "Explosion" then
+Gfx.set(d, "Visible", false)
+return
+end
+end
+if S.GfxPost then
+if POST[cls] and d.Name ~= "JHubBlur" then
+Gfx.set(d, "Enabled", false)
+return
+elseif cls == "Atmosphere" then
+Gfx.set(d, "Density", 0)
+Gfx.set(d, "Haze", 0)
+Gfx.set(d, "Glare", 0)
+return
+end
+end
+if d:IsA("BasePart") then
+if d.Name == "ProxyCharacter" or Ball.parts[d] then return end
+if S.GfxShadows then Gfx.set(d, "CastShadow", false) end
+if S.GfxTextures and not Gfx.isChar(d) then
+Gfx.set(d, "Material", Enum.Material.SmoothPlastic)
+Gfx.set(d, "Reflectance", 0)
+if cls == "MeshPart" then Gfx.set(d, "TextureID", "") end
+end
+elseif S.GfxTextures then
+if cls == "Decal" or cls == "Texture" then
+if not Gfx.isChar(d) and not (d.Parent and Ball.parts[d.Parent]) then Gfx.set(d, "Transparency", 1) end
+elseif cls == "SurfaceAppearance" and not Gfx.isChar(d) then
+Gfx.remove(d)
+end
+end
+end
+function Gfx.sweep()
+local tok = Gfx.tok
+task.spawn(function()
+local n = 0
+for _, root in ipairs({ Lighting, workspace }) do
+for _, d in ipairs(root:GetDescendants()) do
+if tok ~= Gfx.tok or not JH.Running then return end
+pcall(Gfx.apply, d)
+n = n + 1
+if n % 400 == 0 then task.wait() end
+end
+end
+end)
+end
+local function push(d)
+if Gfx.any then
+Gfx.qt = Gfx.qt + 1
+Gfx.queue[Gfx.qt] = d
+end
+end
+bind(workspace.DescendantAdded, push)
+bind(Lighting.DescendantAdded, push)
+bind(RunService.Heartbeat, function()
+local q = Gfx.queue
+local n = 0
+while Gfx.qh <= Gfx.qt and n < 120 do
+local d = q[Gfx.qh]
+q[Gfx.qh] = nil
+Gfx.qh = Gfx.qh + 1
+if d and d.Parent then pcall(Gfx.apply, d) end
+n = n + 1
+end
+end)
+function Gfx.restoreProps()
+for inst, rec in pairs(Gfx.saved) do
+for prop, val in pairs(rec) do pcall(function() inst[prop] = val end) end
+end
+Gfx.saved = setmetatable({}, { __mode = "k" })
+for _, r in ipairs(Gfx.removed) do
+pcall(function() r.inst.Parent = r.parent end)
+end
+Gfx.removed = {}
+end
+function Gfx.lowOn()
+local low = Gfx.low
+pcall(function()
+local r = settings().Rendering
+if low.quality == nil then low.quality = r.QualityLevel end
+r.QualityLevel = Enum.QualityLevel.Level01
+end)
+pcall(function()
+local r = settings().Rendering
+if low.mesh == nil then low.mesh = r.MeshPartDetailLevel end
+r.MeshPartDetailLevel = Enum.MeshPartDetailLevel.Level04
+end)
+pcall(function()
+local ugs = UserSettings():GetService("UserGameSettings")
+if low.saved == nil then low.saved = ugs.SavedQualityLevel end
+ugs.SavedQualityLevel = Enum.SavedQualitySetting.QualityLevel1
+end)
+pcall(function()
+if sethiddenproperty and gethiddenproperty then
+if low.tech == nil then low.tech = gethiddenproperty(Lighting, "Technology") end
+sethiddenproperty(Lighting, "Technology", Enum.Technology.Compatibility)
+end
+end)
+Gfx.set(Lighting, "GlobalShadows", false)
+local t = workspace:FindFirstChildOfClass("Terrain")
+if t then
+Gfx.set(t, "Decoration", false)
+Gfx.set(t, "WaterWaveSize", 0)
+Gfx.set(t, "WaterWaveSpeed", 0)
+Gfx.set(t, "WaterReflectance", 0)
+end
+end
+function Gfx.lowOff()
+local low = Gfx.low
+pcall(function()
+if low.quality ~= nil then settings().Rendering.QualityLevel = low.quality end
+if low.mesh ~= nil then settings().Rendering.MeshPartDetailLevel = low.mesh end
+end)
+pcall(function()
+if low.saved ~= nil then UserSettings():GetService("UserGameSettings").SavedQualityLevel = low.saved end
+end)
+pcall(function()
+if low.tech ~= nil and sethiddenproperty then sethiddenproperty(Lighting, "Technology", low.tech) end
+end)
+Gfx.low = {}
+end
+function Gfx.restoreCull()
+for d in pairs(Gfx.culled) do pcall(function() d.LocalTransparencyModifier = 0 end) end
+Gfx.culled = setmetatable({}, { __mode = "k" })
+Gfx.parts = nil
+end
+function Gfx.cullStep()
+if not S.GfxCull then return end
+local cam = workspace.CurrentCamera
+if not cam then return end
+if not Gfx.parts or tick() - (Gfx.partsT or 0) > 15 then
+Gfx.partsT = tick()
+local list, n = {}, 0
+for _, d in ipairs(workspace:GetDescendants()) do
+if d:IsA("BasePart") and d.Name ~= "ProxyCharacter" and not Ball.parts[d] and d.Size.Magnitude < 40 and not Gfx.isChar(d) then
+list[#list + 1] = d
+end
+n = n + 1
+if n % 600 == 0 then task.wait() end
+end
+Gfx.parts = list
+Gfx.cursor = 1
+end
+local list = Gfx.parts
+if not list then return end
+local pos = cam.CFrame.Position
+local lim = S.GfxCullDist
+local total = #list
+local first = Gfx.cursor or 1
+local last = math.min(total, first + 1200)
+for i = first, last do
+local d = list[i]
+if d and d.Parent then
+local far = (d.Position - pos).Magnitude > lim
+if far and not Gfx.culled[d] then
+Gfx.culled[d] = true
+d.LocalTransparencyModifier = 1
+elseif not far and Gfx.culled[d] then
+Gfx.culled[d] = nil
+d.LocalTransparencyModifier = 0
+end
+end
+end
+Gfx.cursor = (last >= total) and 1 or (last + 1)
+end
+function Gfx.hideOthersStep()
+if not S.GfxHideOthers then return end
+for _, pl in ipairs(Players:GetPlayers()) do
+if pl ~= LP and pl.Character then
+for _, a in ipairs(pl.Character:GetChildren()) do
+if a:IsA("Accessory") then
+local h = a:FindFirstChild("Handle")
+if h then Gfx.set(h, "LocalTransparencyModifier", 1) end
+end
+end
+end
+end
+end
+function Gfx.applyCap()
+local cap = S.GfxFpsCap
+if cap and cap > 0 then
+if Gfx.oldCap == nil then
+local ok, v = pcall(function() return getfpscap and getfpscap() or 60 end)
+Gfx.oldCap = (ok and tonumber(v)) or 60
+end
+if setfpscap then pcall(setfpscap, cap) end
+elseif Gfx.oldCap ~= nil then
+if setfpscap then pcall(setfpscap, Gfx.oldCap) end
+Gfx.oldCap = nil
+end
+end
+function Gfx.onChange()
+Gfx.tok = Gfx.tok + 1
+Gfx.restoreProps()
+if S.GfxLow then Gfx.lowOn() else Gfx.lowOff() end
+if S.GfxShadows then Gfx.set(Lighting, "GlobalShadows", false) end
+Gfx.any = (S.GfxEffects or S.GfxTextures or S.GfxShadows or S.GfxPost) and true or false
+if Gfx.any then Gfx.sweep() end
+if not S.GfxCull then Gfx.restoreCull() end
+Gfx.hideOthersStep()
+Gfx.applyCap()
+end
+function Gfx.boost(on)
+for _, k in ipairs(FLAGS) do UI.set(k, on, false) end
+Gfx.onChange()
+if on then pcall(collectgarbage, "collect") end
+end
+function Gfx.restoreAll()
+Gfx.tok = Gfx.tok + 1
+Gfx.restoreProps()
+Gfx.lowOff()
+Gfx.restoreCull()
+if Gfx.oldCap ~= nil and setfpscap then pcall(setfpscap, Gfx.oldCap) end
+end
+local oldUnload = JH.Unload
+function JH.Unload()
+pcall(Gfx.restoreAll)
+pcall(Ping.trim, false)
+oldUnload()
+end
+task.spawn(function()
+local gcT = tick()
+while JH.Running do
+pcall(Gfx.cullStep)
+pcall(Gfx.hideOthersStep)
+if S.GfxBoost and tick() - gcT > 30 then
+gcT = tick()
+pcall(collectgarbage, "step", 200)
+end
+task.wait(0.4)
+end
+end)
+
+-- the Graphics tab
+local PG = UI.Page("Graphics", "G")
+local c1 = UI.Card(PG, "FPS booster")
+UI.Toggle(c1, "FPS booster", "GfxBoost", function(v) Gfx.boost(v) end)
+UI.Note(c1, "Turns on every option below at once and keeps cleaning up anything new that appears. Turn it off to put everything back.")
+local fpsStat = UI.Stat(c1, "FPS")
+UI.Slider(c1, "FPS cap (0 = leave alone)", "GfxFpsCap", 0, 360, 5, 0, nil, function() Gfx.applyCap() end)
+
+local c2 = UI.Card(PG, "Lower graphics")
+local function opt(card, text, flag) UI.Toggle(card, text, flag, function() Gfx.onChange() end) end
+opt(c2, "Lowest graphics", "GfxLow")
+opt(c2, "Remove textures and fancy materials", "GfxTextures")
+opt(c2, "Remove particles, trails and lights", "GfxEffects")
+opt(c2, "Turn off shadows", "GfxShadows")
+opt(c2, "Turn off blur, bloom, fog and haze", "GfxPost")
+opt(c2, "Hide other players' accessories", "GfxHideOthers")
+
+local c3 = UI.Card(PG, "Map cleanup")
+opt(c3, "Hide small map parts far away", "GfxCull")
+UI.Slider(c3, "Hide parts farther than", "GfxCullDist", 60, 600, 10, 0, " studs")
+UI.Note(c3, "The court, big walls, players and the ball are never hidden.")
+UI.Button(c3, "Turn everything off", function()
+for _, k in ipairs(FLAGS) do UI.set(k, false, false) end
+UI.set("GfxBoost", false, false)
+UI.set("GfxFpsCap", 0, false)
+Gfx.onChange()
+end)
+
+local c4 = UI.Card(PG, "Ping stabilizer")
+UI.Toggle(c4, "Ping stabilizer", "PingStab", function(v) Ping.trim(v) end)
+UI.Note(c4, "Your real ping comes from your connection and cannot be lowered here. This smooths out ping spikes so Auto Green and Perfect green time off a steady number, and it turns off the client's own extra network delay.")
+UI.Slider(c4, "Smoothing window", "PingWindow", 1, 6, 1, 0, "s")
+local pingStat = UI.Stat(c4, "Ping (now)")
+local stableStat = UI.Stat(c4, "Ping (stable)")
+local jitterStat = UI.Stat(c4, "Jitter")
+
+task.spawn(function()
+while JH.Running do
+if Window.Visible and UI.current and UI.current.name == "Graphics" then
+pcall(function()
+fpsStat.Text = string.format("%d", math.floor(JH.FPS + 0.5))
+pingStat.Text = string.format("%d ms", math.floor(Ping.raw * 1000 + 0.5))
+stableStat.Text = Ping.stable and string.format("%d ms", math.floor(Ping.stable * 1000 + 0.5)) or "-"
+jitterStat.Text = string.format("%.1f ms", Ping.jitter * 1000)
+end)
+end
+task.wait(0.5)
+end
+end)
+
+Ping.trim(S.PingStab)
+Gfx.onChange()
+end
 UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
@@ -6720,6 +7276,8 @@ local S = {
 	ShotGlide = false, ShotGlidePower = 22, ShotGlideTime = 0.45,
 	GatherGlide = false, GatherGlidePower = 26, GatherGlideTime = 0.45,
 	DribbleGlideSpeed = 1, ShotGlideSpeed = 1, GatherGlideSpeed = 1,
+	GfxLow = false, GfxEffects = false, GfxTextures = false, GfxShadows = false, GfxPost = false, GfxHideOthers = false, GfxCull = false,
+	GfxCullDist = 250, GfxBoost = false, GfxFpsCap = 0, PingStab = false, PingWindow = 3, FinalAdj = "",
 	GlideFade = 60, GlideSmart = true, GlideStopAtWalls = false, GlideNeedBall = true, GlideMethod = "Auto",
 	DribbleKeys = "Z C X V", GatherKeys = "", DribbleBtnPaths = "", GatherBtnPaths = "",
 	AnimDribble = "", AnimGather = "", AnimShot = "",
@@ -8636,7 +9194,7 @@ function Shot.autoLearn(info, res, strength)
 	Shot.autoLoad()
 	local a = Shot.auto[key]
 	if not a then return false end
-	if a.locked then return true end
+	if a.locked and a.mode ~= "peak" then return true end
 	if a.mode == "peak" then return Shot.peakLearn(info, res, strength, a, key) end
 	local held = (info.held or 0) + (info.comp or 0)
 	local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
@@ -8692,6 +9250,7 @@ function Shot.autoLearn(info, res, strength)
 end
 function Shot.remoteHold(key, pk)
 	local fin = Shot.FINAL[key]
+	if fin then Shot.finalLoad() fin = fin + (Shot.finalAdj[key] or 0) end
 	if fin then
 		Shot.lastSweep = nil
 		Shot.cur = { key = key, hold = fin, state = "Locked (built in)" }
@@ -8750,7 +9309,7 @@ function Shot.learnRemote(info, res, strength)
 		Shot.last = { t = tick(), held = info.held, idx = info.idx, res = res, key = info.key }
 		if Shot.cur and Shot.cur.key == info.key and ch then Shot.cur.anim = ch:GetAttribute("BaseAnimation") end
 	end
-	if info and Shot.FINAL[info.key] then return end
+	if info and Shot.FINAL[info.key] then pcall(Shot.finalLearn, info, res, strength) return end
 	if info and Shot.autoLearn(info, res, strength) then return end
 	if not S.Learn or (S.Sweep and Rec.shotOn) then return end
 	local key, held = info.key, info.held + (info.comp or 0)
@@ -8866,7 +9425,7 @@ function Shot.remoteCore(ctx)
 	local comp, peakLead = 0, nil
 	if mode == "peak" then
 		peakLead = hold
-		hold = Shot.AUTO_START
+		hold = Shot.peakDur[key] and math.max(Shot.FLOOR, Shot.peakDur[key] - (Shot.pingNow() + peakLead)) or Shot.AUTO_START
 	else
 		comp = Shot.pingComp()
 		if comp ~= 0 then hold = math.max(Shot.FLOOR, hold - comp) end
@@ -8877,6 +9436,7 @@ function Shot.remoteCore(ctx)
 	local peakAimed = false
 	local ok0, ping0 = pcall(function() return LP:GetNetworkPing() end)
 	local lead = (ok0 and ping0 or 0.04) + 0.016 + S.Nudge / 1000
+	local look = clamp(1.4 / math.max(JH.FPS or 60, 10), 0.02, 0.1)
 	while tick() - m0 < S.MaxHold do
 		if ctx.ended then
 			manual = true
@@ -8891,8 +9451,9 @@ function Shot.remoteCore(ctx)
 			if tp then
 				hold = math.max(Shot.FLOOR, tp - (Shot.pingNow() + peakLead) - m0)
 				peakAimed = true
+				Shot.peakDur[key] = tp - m0
 			end
-			if now - m0 >= hold - 0.02 and (peakAimed or now - m0 >= Shot.AUTO_START - 0.02) then break end
+			if now - m0 >= hold - look then break end
 		elseif S.MeterAim and n >= 3 and now - samples[n].t < 0.15 then
 			local a, b = samples[math.max(1, n - 3)], samples[n]
 			local dt = b.t - a.t
@@ -8904,7 +9465,7 @@ function Shot.remoteCore(ctx)
 					if qpred >= S.MeterTarget then break end
 				end
 			end
-		elseif now - m0 >= hold - 0.02 then
+		elseif now - m0 >= hold - look then
 			break
 		end
 		RunService.Heartbeat:Wait()
@@ -13394,6 +13955,557 @@ function Mover.watchShot(pressT)
 		if not dir and body then dir = flat(body.CFrame.LookVector) end
 		Glide.fire("shot", "shot", dir)
 	end)
+end
+-- AUTO GREEN, GRAPHICS AND PING UPGRADE
+do
+	Shot.PEAK_BIN = 0.014
+	Shot.peakDur = Shot.peakDur or {}
+	Shot.finalAdj = Shot.finalAdj or {}
+	Shot.finalRun = {}
+	Shot.finalLoaded = false
+
+	local function verdictIdx(info, res, strength)
+		return info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+	end
+
+	-- the meter line is fitted on the newest readings only, a stray reading is thrown out, and it works at low FPS too
+	function Shot.peakFit(samples)
+		local pts, lastq = {}, -1
+		for _, sm in ipairs(samples) do
+			if sm.q < lastq - 0.001 then break end
+			lastq = sm.q
+			if sm.q > 0.1 and sm.q < 0.93 then pts[#pts + 1] = sm end
+		end
+		local n = #pts
+		if n < 4 or pts[n].q < 0.25 then return nil end
+		if n < 6 and pts[n].t - pts[1].t < 0.06 then return nil end
+		if n > 16 then
+			local cut = {}
+			for i = n - 15, n do cut[#cut + 1] = pts[i] end
+			pts, n = cut, #cut
+		end
+		local function fit(list)
+			local m = #list
+			local t0 = list[1].t
+			local st, sq, stt, stq = 0, 0, 0, 0
+			for _, p in ipairs(list) do
+				local x = p.t - t0
+				st, sq, stt, stq = st + x, sq + p.q, stt + x * x, stq + x * p.q
+			end
+			local den = m * stt - st * st
+			if den <= 1e-9 then return nil end
+			local a = (m * stq - st * sq) / den
+			return a, (sq - a * st) / m, t0
+		end
+		local a, b, t0 = fit(pts)
+		if not a then return nil end
+		if n >= 7 then
+			local worst, wi = 0, nil
+			for i, p in ipairs(pts) do
+				local e = math.abs(p.q - (a * (p.t - t0) + b))
+				if e > worst then worst, wi = e, i end
+			end
+			if worst > 0.03 then
+				local cut = {}
+				for i, p in ipairs(pts) do
+					if i ~= wi then cut[#cut + 1] = p end
+				end
+				local a2, b2, t02 = fit(cut)
+				if a2 then a, b, t0 = a2, b2, t02 end
+			end
+		end
+		if a < 1.2 or a > 5 then return nil end
+		return t0 + (Shot.PEAK_Q - b) / a
+	end
+
+	-- the verdict scale runs early to late, so every verdict says which way and about how far the release was off
+	function Shot.peakLearn(info, res, strength, a, key)
+		local idx = verdictIdx(info, res, strength)
+		if not idx then return true end
+		if info.manual and idx ~= 5 then return true end
+		local lead = info.lead or a.hold
+		if not info.manual and math.abs(lead - a.hold) > 0.05 then return true end
+		local before = a.hold
+		a.n = (a.n or 0) + 1
+		a.bin = a.bin or Shot.PEAK_BIN
+		a.hist = a.hist or {}
+		a.hist[#a.hist + 1] = idx
+		if #a.hist > 5 then table.remove(a.hist, 1) end
+		local prev = a.prev
+		if prev and idx ~= 5 and prev.idx ~= 5 and prev.idx ~= idx and math.abs(lead - prev.lead) > 0.002 then
+			local est = -(lead - prev.lead) / (idx - prev.idx)
+			if est > 0 then a.bin = clamp(a.bin * 0.5 + est * 0.5, 0.006, 0.04) end
+		end
+		a.prev = { idx = idx, lead = lead }
+		local why
+		if idx == 5 then
+			a.greens = a.greens or {}
+			a.greens[#a.greens + 1] = lead
+			if #a.greens > 6 then table.remove(a.greens, 1) end
+			local sum = 0
+			for _, g in ipairs(a.greens) do sum = sum + g end
+			a.hold = sum / #a.greens
+			a.misses = 0
+			if not a.locked then
+				a.locked = true
+				pcall(notify, "Auto Green", string.format("Learned this shot: %.0f ms before the peak", a.hold * 1000), 3)
+			end
+			S.PeakLead = clamp(S.PeakLead * 0.7 + a.hold * 0.3, 0, 0.15)
+			why = "Perfect, locked"
+		else
+			local off = idx - 5
+			if idx == 4 then
+				local last = a.hist[#a.hist - 1]
+				off = (last and last > 5) and 0.5 or -0.5
+			end
+			local same = 0
+			for i = math.max(1, #a.hist - 2), #a.hist do
+				local h = a.hist[i]
+				if (off > 0 and h > 5) or (off < 0 and h < 5) then same = same + 1 end
+			end
+			local newLead = lead
+			if a.locked then
+				a.misses = (a.misses or 0) + 1
+				if math.abs(off) >= 2 or same >= 2 then
+					newLead = lead + off * a.bin * 0.7
+					if same >= 2 then
+						a.locked = false
+						a.greens = {}
+					end
+					why = (Shot.VERDICT[idx] or "?") .. ", correcting the lock"
+				else
+					why = (Shot.VERDICT[idx] or "?") .. ", keeping the lock"
+				end
+			else
+				newLead = lead + off * a.bin * 0.9
+				why = (Shot.VERDICT[idx] or "?") .. (off > 0 and ", letting go earlier" or ", letting go later")
+			end
+			if newLead ~= lead then
+				a.hold = clamp(newLead, 0, 0.15)
+				S.PeakLead = clamp(S.PeakLead + (a.hold - lead) * 0.25, 0, 0.15)
+			end
+		end
+		if math.abs(a.hold - before) > 0.0003 or idx == 5 then Shot.noteAdjust(key, before, a.hold, why) end
+		Shot.autoSave()
+		if Rec.shotOn then
+			Rec.shotAdd(string.format("AUTOCAL(meter) key=%s idx=%s lead=%.4f next=%.4f locked=%s bin=%.4f", key, tostring(idx), lead, a.hold, tostring(a.locked), a.bin))
+		end
+		return true
+	end
+
+	-- the built in shots drift when your ping changes, so they now follow the verdicts too
+	function Shot.finalLoad()
+		if Shot.finalLoaded then return end
+		Shot.finalLoaded = true
+		for key, val in string.gmatch(S.FinalAdj or "", "(%S-)=([%-%d%.]+)") do
+			Shot.finalAdj[key] = tonumber(val)
+		end
+	end
+	function Shot.finalSave()
+		local parts = {}
+		for key, val in pairs(Shot.finalAdj) do parts[#parts + 1] = string.format("%s=%.4f", key, val) end
+		table.sort(parts)
+		S.FinalAdj = table.concat(parts, " ")
+		saveSoon()
+	end
+	function Shot.finalLearn(info, res, strength)
+		if info.manual then return end
+		local idx = verdictIdx(info, res, strength)
+		if not idx then return end
+		Shot.finalLoad()
+		local key = info.key
+		local off = idx - 5
+		if idx == 4 then off = -0.5 end
+		local run = Shot.finalRun[key]
+		if not run then
+			run = { sign = 0, n = 0 }
+			Shot.finalRun[key] = run
+		end
+		if off == 0 then
+			run.sign, run.n = 0, 0
+			return
+		end
+		local sign = off > 0 and 1 or -1
+		if run.sign == sign then run.n = run.n + 1 else run.sign, run.n = sign, 1 end
+		if run.n >= 2 or math.abs(off) >= 2 then
+			local old = Shot.finalAdj[key] or 0
+			local new = clamp(old - off * Shot.PEAK_BIN * 0.6, -0.05, 0.05)
+			Shot.finalAdj[key] = new
+			Shot.noteAdjust(key, (Shot.FINAL[key] or 0) + old, (Shot.FINAL[key] or 0) + new, Shot.VERDICT[idx] or "?")
+			Shot.finalSave()
+		end
+	end
+
+	---------------------------------------------------------------------
+	-- PING STABILIZER
+	---------------------------------------------------------------------
+	local Ping = { buf = {}, stable = nil, jitter = 0, raw = 0 }
+	JH.api.Ping = Ping
+	function Ping.step()
+		local ok, p = pcall(function() return LP:GetNetworkPing() end)
+		if not ok or type(p) ~= "number" then return end
+		Ping.raw = p
+		local n = math.max(5, math.floor((S.PingWindow or 3) * 10))
+		Ping.buf[#Ping.buf + 1] = p
+		while #Ping.buf > n do table.remove(Ping.buf, 1) end
+		local t = {}
+		for i, v in ipairs(Ping.buf) do t[i] = v end
+		table.sort(t)
+		local med = t[math.floor((#t + 1) / 2)]
+		local dev = 0
+		for _, v in ipairs(Ping.buf) do dev = dev + math.abs(v - med) end
+		Ping.stable = med
+		Ping.jitter = dev / #Ping.buf
+	end
+	function Ping.trim(on)
+		pcall(function()
+			local net = settings().Network
+			if on then
+				if Ping.oldLag == nil then Ping.oldLag = net.IncomingReplicationLag end
+				net.IncomingReplicationLag = 0
+			elseif Ping.oldLag ~= nil then
+				net.IncomingReplicationLag = Ping.oldLag
+				Ping.oldLag = nil
+			end
+		end)
+	end
+	local basePing = Shot.pingNow
+	function Shot.pingNow()
+		if S.PingStab and Ping.stable then return Ping.stable end
+		return basePing()
+	end
+	task.spawn(function()
+		while JH.Running do
+			Ping.step()
+			task.wait(0.1)
+		end
+	end)
+
+	---------------------------------------------------------------------
+	-- GRAPHICS AND FPS BOOSTER
+	---------------------------------------------------------------------
+	local Gfx = { saved = setmetatable({}, { __mode = "k" }), culled = setmetatable({}, { __mode = "k" }), removed = {},
+		low = {}, queue = {}, qh = 1, qt = 0, tok = 0, any = false }
+	JH.api.Gfx = Gfx
+	local EFFECTS = { ParticleEmitter = true, Trail = true, Beam = true, Fire = true, Smoke = true, Sparkles = true,
+		PointLight = true, SpotLight = true, SurfaceLight = true }
+	local POST = { BloomEffect = true, BlurEffect = true, ColorCorrectionEffect = true, DepthOfFieldEffect = true, SunRaysEffect = true }
+	local FLAGS = { "GfxLow", "GfxEffects", "GfxTextures", "GfxShadows", "GfxPost", "GfxHideOthers", "GfxCull" }
+
+	function Gfx.set(inst, prop, value)
+		local ok, cur = pcall(function() return inst[prop] end)
+		if not ok or cur == value then return end
+		local rec = Gfx.saved[inst]
+		if not rec then
+			rec = {}
+			Gfx.saved[inst] = rec
+		end
+		if rec[prop] == nil then rec[prop] = cur end
+		pcall(function() inst[prop] = value end)
+	end
+	function Gfx.isChar(d)
+		local m = d.Parent
+		while m and m ~= workspace do
+			if m:IsA("Model") and m:FindFirstChildOfClass("Humanoid") then return true end
+			m = m.Parent
+		end
+		return false
+	end
+	function Gfx.remove(d)
+		Gfx.removed[#Gfx.removed + 1] = { inst = d, parent = d.Parent }
+		d.Parent = nil
+	end
+	function Gfx.apply(d)
+		local cls = d.ClassName
+		if S.GfxEffects then
+			if EFFECTS[cls] then
+				Gfx.set(d, "Enabled", false)
+				return
+			elseif cls == "Explosion" then
+				Gfx.set(d, "Visible", false)
+				return
+			end
+		end
+		if S.GfxPost then
+			if POST[cls] and d.Name ~= "JHubBlur" then
+				Gfx.set(d, "Enabled", false)
+				return
+			elseif cls == "Atmosphere" then
+				Gfx.set(d, "Density", 0)
+				Gfx.set(d, "Haze", 0)
+				Gfx.set(d, "Glare", 0)
+				return
+			end
+		end
+		if d:IsA("BasePart") then
+			if d.Name == "ProxyCharacter" or Ball.parts[d] then return end
+			if S.GfxShadows then Gfx.set(d, "CastShadow", false) end
+			if S.GfxTextures and not Gfx.isChar(d) then
+				Gfx.set(d, "Material", Enum.Material.SmoothPlastic)
+				Gfx.set(d, "Reflectance", 0)
+				if cls == "MeshPart" then Gfx.set(d, "TextureID", "") end
+			end
+		elseif S.GfxTextures then
+			if cls == "Decal" or cls == "Texture" then
+				if not Gfx.isChar(d) and not (d.Parent and Ball.parts[d.Parent]) then Gfx.set(d, "Transparency", 1) end
+			elseif cls == "SurfaceAppearance" and not Gfx.isChar(d) then
+				Gfx.remove(d)
+			end
+		end
+	end
+	function Gfx.sweep()
+		local tok = Gfx.tok
+		task.spawn(function()
+			local n = 0
+			for _, root in ipairs({ Lighting, workspace }) do
+				for _, d in ipairs(root:GetDescendants()) do
+					if tok ~= Gfx.tok or not JH.Running then return end
+					pcall(Gfx.apply, d)
+					n = n + 1
+					if n % 400 == 0 then task.wait() end
+				end
+			end
+		end)
+	end
+	local function push(d)
+		if Gfx.any then
+			Gfx.qt = Gfx.qt + 1
+			Gfx.queue[Gfx.qt] = d
+		end
+	end
+	bind(workspace.DescendantAdded, push)
+	bind(Lighting.DescendantAdded, push)
+	bind(RunService.Heartbeat, function()
+		local q = Gfx.queue
+		local n = 0
+		while Gfx.qh <= Gfx.qt and n < 120 do
+			local d = q[Gfx.qh]
+			q[Gfx.qh] = nil
+			Gfx.qh = Gfx.qh + 1
+			if d and d.Parent then pcall(Gfx.apply, d) end
+			n = n + 1
+		end
+	end)
+	function Gfx.restoreProps()
+		for inst, rec in pairs(Gfx.saved) do
+			for prop, val in pairs(rec) do pcall(function() inst[prop] = val end) end
+		end
+		Gfx.saved = setmetatable({}, { __mode = "k" })
+		for _, r in ipairs(Gfx.removed) do
+			pcall(function() r.inst.Parent = r.parent end)
+		end
+		Gfx.removed = {}
+	end
+	function Gfx.lowOn()
+		local low = Gfx.low
+		pcall(function()
+			local r = settings().Rendering
+			if low.quality == nil then low.quality = r.QualityLevel end
+			r.QualityLevel = Enum.QualityLevel.Level01
+		end)
+		pcall(function()
+			local r = settings().Rendering
+			if low.mesh == nil then low.mesh = r.MeshPartDetailLevel end
+			r.MeshPartDetailLevel = Enum.MeshPartDetailLevel.Level04
+		end)
+		pcall(function()
+			local ugs = UserSettings():GetService("UserGameSettings")
+			if low.saved == nil then low.saved = ugs.SavedQualityLevel end
+			ugs.SavedQualityLevel = Enum.SavedQualitySetting.QualityLevel1
+		end)
+		pcall(function()
+			if sethiddenproperty and gethiddenproperty then
+				if low.tech == nil then low.tech = gethiddenproperty(Lighting, "Technology") end
+				sethiddenproperty(Lighting, "Technology", Enum.Technology.Compatibility)
+			end
+		end)
+		Gfx.set(Lighting, "GlobalShadows", false)
+		local t = workspace:FindFirstChildOfClass("Terrain")
+		if t then
+			Gfx.set(t, "Decoration", false)
+			Gfx.set(t, "WaterWaveSize", 0)
+			Gfx.set(t, "WaterWaveSpeed", 0)
+			Gfx.set(t, "WaterReflectance", 0)
+		end
+	end
+	function Gfx.lowOff()
+		local low = Gfx.low
+		pcall(function()
+			if low.quality ~= nil then settings().Rendering.QualityLevel = low.quality end
+			if low.mesh ~= nil then settings().Rendering.MeshPartDetailLevel = low.mesh end
+		end)
+		pcall(function()
+			if low.saved ~= nil then UserSettings():GetService("UserGameSettings").SavedQualityLevel = low.saved end
+		end)
+		pcall(function()
+			if low.tech ~= nil and sethiddenproperty then sethiddenproperty(Lighting, "Technology", low.tech) end
+		end)
+		Gfx.low = {}
+	end
+	function Gfx.restoreCull()
+		for d in pairs(Gfx.culled) do pcall(function() d.LocalTransparencyModifier = 0 end) end
+		Gfx.culled = setmetatable({}, { __mode = "k" })
+		Gfx.parts = nil
+	end
+	function Gfx.cullStep()
+		if not S.GfxCull then return end
+		local cam = workspace.CurrentCamera
+		if not cam then return end
+		if not Gfx.parts or tick() - (Gfx.partsT or 0) > 15 then
+			Gfx.partsT = tick()
+			local list, n = {}, 0
+			for _, d in ipairs(workspace:GetDescendants()) do
+				if d:IsA("BasePart") and d.Name ~= "ProxyCharacter" and not Ball.parts[d] and d.Size.Magnitude < 40 and not Gfx.isChar(d) then
+					list[#list + 1] = d
+				end
+				n = n + 1
+				if n % 600 == 0 then task.wait() end
+			end
+			Gfx.parts = list
+			Gfx.cursor = 1
+		end
+		local list = Gfx.parts
+		if not list then return end
+		local pos = cam.CFrame.Position
+		local lim = S.GfxCullDist
+		local total = #list
+		local first = Gfx.cursor or 1
+		local last = math.min(total, first + 1200)
+		for i = first, last do
+			local d = list[i]
+			if d and d.Parent then
+				local far = (d.Position - pos).Magnitude > lim
+				if far and not Gfx.culled[d] then
+					Gfx.culled[d] = true
+					d.LocalTransparencyModifier = 1
+				elseif not far and Gfx.culled[d] then
+					Gfx.culled[d] = nil
+					d.LocalTransparencyModifier = 0
+				end
+			end
+		end
+		Gfx.cursor = (last >= total) and 1 or (last + 1)
+	end
+	function Gfx.hideOthersStep()
+		if not S.GfxHideOthers then return end
+		for _, pl in ipairs(Players:GetPlayers()) do
+			if pl ~= LP and pl.Character then
+				for _, a in ipairs(pl.Character:GetChildren()) do
+					if a:IsA("Accessory") then
+						local h = a:FindFirstChild("Handle")
+						if h then Gfx.set(h, "LocalTransparencyModifier", 1) end
+					end
+				end
+			end
+		end
+	end
+	function Gfx.applyCap()
+		local cap = S.GfxFpsCap
+		if cap and cap > 0 then
+			if Gfx.oldCap == nil then
+				local ok, v = pcall(function() return getfpscap and getfpscap() or 60 end)
+				Gfx.oldCap = (ok and tonumber(v)) or 60
+			end
+			if setfpscap then pcall(setfpscap, cap) end
+		elseif Gfx.oldCap ~= nil then
+			if setfpscap then pcall(setfpscap, Gfx.oldCap) end
+			Gfx.oldCap = nil
+		end
+	end
+	function Gfx.onChange()
+		Gfx.tok = Gfx.tok + 1
+		Gfx.restoreProps()
+		if S.GfxLow then Gfx.lowOn() else Gfx.lowOff() end
+		if S.GfxShadows then Gfx.set(Lighting, "GlobalShadows", false) end
+		Gfx.any = (S.GfxEffects or S.GfxTextures or S.GfxShadows or S.GfxPost) and true or false
+		if Gfx.any then Gfx.sweep() end
+		if not S.GfxCull then Gfx.restoreCull() end
+		Gfx.hideOthersStep()
+		Gfx.applyCap()
+	end
+	function Gfx.boost(on)
+		for _, k in ipairs(FLAGS) do UI.set(k, on, false) end
+		Gfx.onChange()
+		if on then pcall(collectgarbage, "collect") end
+	end
+	function Gfx.restoreAll()
+		Gfx.tok = Gfx.tok + 1
+		Gfx.restoreProps()
+		Gfx.lowOff()
+		Gfx.restoreCull()
+		if Gfx.oldCap ~= nil and setfpscap then pcall(setfpscap, Gfx.oldCap) end
+	end
+	local oldUnload = JH.Unload
+	function JH.Unload()
+		pcall(Gfx.restoreAll)
+		pcall(Ping.trim, false)
+		oldUnload()
+	end
+	task.spawn(function()
+		local gcT = tick()
+		while JH.Running do
+			pcall(Gfx.cullStep)
+			pcall(Gfx.hideOthersStep)
+			if S.GfxBoost and tick() - gcT > 30 then
+				gcT = tick()
+				pcall(collectgarbage, "step", 200)
+			end
+			task.wait(0.4)
+		end
+	end)
+
+	-- the Graphics tab
+	local PG = UI.Page("Graphics", "G")
+	local c1 = UI.Card(PG, "FPS booster")
+	UI.Toggle(c1, "FPS booster", "GfxBoost", function(v) Gfx.boost(v) end)
+	UI.Note(c1, "Turns on every option below at once and keeps cleaning up anything new that appears. Turn it off to put everything back.")
+	local fpsStat = UI.Stat(c1, "FPS")
+	UI.Slider(c1, "FPS cap (0 = leave alone)", "GfxFpsCap", 0, 360, 5, 0, nil, function() Gfx.applyCap() end)
+
+	local c2 = UI.Card(PG, "Lower graphics")
+	local function opt(card, text, flag) UI.Toggle(card, text, flag, function() Gfx.onChange() end) end
+	opt(c2, "Lowest graphics", "GfxLow")
+	opt(c2, "Remove textures and fancy materials", "GfxTextures")
+	opt(c2, "Remove particles, trails and lights", "GfxEffects")
+	opt(c2, "Turn off shadows", "GfxShadows")
+	opt(c2, "Turn off blur, bloom, fog and haze", "GfxPost")
+	opt(c2, "Hide other players' accessories", "GfxHideOthers")
+
+	local c3 = UI.Card(PG, "Map cleanup")
+	opt(c3, "Hide small map parts far away", "GfxCull")
+	UI.Slider(c3, "Hide parts farther than", "GfxCullDist", 60, 600, 10, 0, " studs")
+	UI.Note(c3, "The court, big walls, players and the ball are never hidden.")
+	UI.Button(c3, "Turn everything off", function()
+		for _, k in ipairs(FLAGS) do UI.set(k, false, false) end
+		UI.set("GfxBoost", false, false)
+		UI.set("GfxFpsCap", 0, false)
+		Gfx.onChange()
+	end)
+
+	local c4 = UI.Card(PG, "Ping stabilizer")
+	UI.Toggle(c4, "Ping stabilizer", "PingStab", function(v) Ping.trim(v) end)
+	UI.Note(c4, "Your real ping comes from your connection and cannot be lowered here. This smooths out ping spikes so Auto Green and Perfect green time off a steady number, and it turns off the client's own extra network delay.")
+	UI.Slider(c4, "Smoothing window", "PingWindow", 1, 6, 1, 0, "s")
+	local pingStat = UI.Stat(c4, "Ping (now)")
+	local stableStat = UI.Stat(c4, "Ping (stable)")
+	local jitterStat = UI.Stat(c4, "Jitter")
+
+	task.spawn(function()
+		while JH.Running do
+			if Window.Visible and UI.current and UI.current.name == "Graphics" then
+				pcall(function()
+					fpsStat.Text = string.format("%d", math.floor(JH.FPS + 0.5))
+					pingStat.Text = string.format("%d ms", math.floor(Ping.raw * 1000 + 0.5))
+					stableStat.Text = Ping.stable and string.format("%d ms", math.floor(Ping.stable * 1000 + 0.5)) or "-"
+					jitterStat.Text = string.format("%.1f ms", Ping.jitter * 1000)
+				end)
+			end
+			task.wait(0.5)
+		end
+	end)
+
+	Ping.trim(S.PingStab)
+	Gfx.onChange()
 end
 UI.syncAuto()
 UI.applyTheme()
