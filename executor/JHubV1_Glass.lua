@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.41 shot-line"
+local VERSION = "v1.42 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -8456,6 +8456,32 @@ end
 return r
 end
 end
+-- FADES AND BUILT IN SHOTS: exactly as they were before the upgrades, none of the new timing changes touch them
+do
+local prevHold = Shot.remoteHold
+function Shot.remoteHold(key, pk)
+Shot.isFinalShot = Shot.FINAL[key] ~= nil
+return prevHold(key, pk)
+end
+Shot.finalAdj = {}
+function Shot.finalLoad() Shot.finalLoaded = true end
+function Shot.finalLearn() end
+function Shot.lagLearn() end
+local prevPC = Shot.pingComp
+function Shot.pingComp()
+if Shot.isFinalShot then
+local p = Shot.pingNow()
+if not S.PerfectGreen then return 0, p end
+return clamp((p - Shot.PING_REF) * ((S.PerfectGreenPct or 100) / 100), 0, 0.2), p
+end
+return prevPC()
+end
+local prevLook = Shot.lookAhead
+function Shot.lookAhead()
+if Shot.isFinalShot then return 0.02 end
+return prevLook()
+end
+end
 UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
@@ -8614,7 +8640,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.41 shot-line"
+local VERSION = "v1.42 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -17377,6 +17403,32 @@ do
 			end
 		end
 		return r
+	end
+end
+-- FADES AND BUILT IN SHOTS: exactly as they were before the upgrades, none of the new timing changes touch them
+do
+	local prevHold = Shot.remoteHold
+	function Shot.remoteHold(key, pk)
+		Shot.isFinalShot = Shot.FINAL[key] ~= nil
+		return prevHold(key, pk)
+	end
+	Shot.finalAdj = {}
+	function Shot.finalLoad() Shot.finalLoaded = true end
+	function Shot.finalLearn() end
+	function Shot.lagLearn() end
+	local prevPC = Shot.pingComp
+	function Shot.pingComp()
+		if Shot.isFinalShot then
+			local p = Shot.pingNow()
+			if not S.PerfectGreen then return 0, p end
+			return clamp((p - Shot.PING_REF) * ((S.PerfectGreenPct or 100) / 100), 0, 0.2), p
+		end
+		return prevPC()
+	end
+	local prevLook = Shot.lookAhead
+	function Shot.lookAhead()
+		if Shot.isFinalShot then return 0.02 end
+		return prevLook()
 	end
 end
 UI.syncAuto()
