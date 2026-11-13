@@ -8570,6 +8570,43 @@ end
 return prevLearn3(info, res, strength)
 end
 end
+-- JHUB LOGO: the menu button shows the J-Hub picture (downloaded once, falls back to the old J bolt H if the executor cannot)
+do
+local URL = "https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/claude/claudechud-8cord-executor-wclom3/executor/jhub_logo.png"
+local FILE = "JHub_logo_v1.png"
+task.spawn(function()
+if type(getcustomasset) ~= "function" or type(writefile) ~= "function" then return end
+local have = false
+if type(isfile) == "function" then
+local ok, r = pcall(isfile, FILE)
+have = ok and r
+end
+if not have then
+local ok, data = pcall(function() return game:HttpGet(URL) end)
+if not ok or type(data) ~= "string" or #data < 1000 then return end
+if not pcall(writefile, FILE, data) then return end
+end
+local ok, asset = pcall(getcustomasset, FILE)
+if not ok or not asset or asset == "" then return end
+local body = UI.LogoBody
+if not body or not body.Parent then return end
+local img = Instance.new("ImageLabel")
+img.Name = "JHubLogo"
+img.BackgroundTransparency = 1
+img.Size = UDim2.fromScale(1, 1)
+img.Image = asset
+img.ScaleType = Enum.ScaleType.Fit
+img.ZIndex = 3
+img.Parent = body
+local c = Instance.new("UICorner")
+c.CornerRadius = UDim.new(0.2, 0)
+c.Parent = img
+for _, d in ipairs(body:GetChildren()) do
+if d:IsA("GuiObject") and d ~= img then d.Visible = false end
+end
+for _, l in ipairs(UI.FloatLetters or {}) do pcall(function() l.Visible = false end) end
+end)
+end
 UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
@@ -17606,6 +17643,43 @@ do
 		end
 		return prevLearn3(info, res, strength)
 	end
+end
+-- JHUB LOGO: the menu button shows the J-Hub picture (downloaded once, falls back to the old J bolt H if the executor cannot)
+do
+	local URL = "https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/claude/claudechud-8cord-executor-wclom3/executor/jhub_logo.png"
+	local FILE = "JHub_logo_v1.png"
+	task.spawn(function()
+		if type(getcustomasset) ~= "function" or type(writefile) ~= "function" then return end
+		local have = false
+		if type(isfile) == "function" then
+			local ok, r = pcall(isfile, FILE)
+			have = ok and r
+		end
+		if not have then
+			local ok, data = pcall(function() return game:HttpGet(URL) end)
+			if not ok or type(data) ~= "string" or #data < 1000 then return end
+			if not pcall(writefile, FILE, data) then return end
+		end
+		local ok, asset = pcall(getcustomasset, FILE)
+		if not ok or not asset or asset == "" then return end
+		local body = UI.LogoBody
+		if not body or not body.Parent then return end
+		local img = Instance.new("ImageLabel")
+		img.Name = "JHubLogo"
+		img.BackgroundTransparency = 1
+		img.Size = UDim2.fromScale(1, 1)
+		img.Image = asset
+		img.ScaleType = Enum.ScaleType.Fit
+		img.ZIndex = 3
+		img.Parent = body
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(0.2, 0)
+		c.Parent = img
+		for _, d in ipairs(body:GetChildren()) do
+			if d:IsA("GuiObject") and d ~= img then d.Visible = false end
+		end
+		for _, l in ipairs(UI.FloatLetters or {}) do pcall(function() l.Visible = false end) end
+	end)
 end
 UI.syncAuto()
 UI.applyTheme()
