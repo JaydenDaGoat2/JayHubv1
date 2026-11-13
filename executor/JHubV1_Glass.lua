@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.27 shot-line"
+local VERSION = "v1.28 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -130,7 +130,7 @@ Codes = "100M RELEASE 100KLIKES 500KMEMBERS SORRYFORBUGS", CodeRemotes = true,
 AutoGreen = true, AutoCalibrate = true, AutoTiming = true, ShotRelease = "Auto",
 HoldTime = 0.55, MaxHold = 1.6, CalSpeed = 0.6, CalStep = 0.02,
 ShotTimes = "", ShotRatio = 0, BarPath = "", BarProp = "", BarAt = 0, BarNudge = 0,
-ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, DetNotify = false, PerfectGreen = false, PerfectGreenPct = 100, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, Lightning = true, BoltCount = 6, BoltSpeed = 1, BoltThick = 2, BoltBright = 0.9, BoltColor = "White + Yellow", BgMove = true, BgGlow = 0.5, BgOrbs = true, AccentMode = "Gold", OutlineSpeed = 1, LogoStyle = "J bolt H", LogoBg = true, Preset = "Lightning Gold", PacketOn = true, PacketMul = 1,
+ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, UseShared = true, DetNotify = false, PerfectGreen = false, PerfectGreenPct = 100, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, Lightning = true, BoltCount = 6, BoltSpeed = 1, BoltThick = 2, BoltBright = 0.9, BoltColor = "White + Yellow", BgMove = true, BgGlow = 0.5, BgOrbs = true, AccentMode = "Gold", OutlineSpeed = 1, LogoStyle = "J bolt H", LogoBg = true, Preset = "Lightning Gold", PacketOn = true, PacketMul = 1,
 MovingOffset = 0, SprintOffset = 0, PingComp = 0, Humanize = 0, Nudge = 0, GreenSound = true,
 HookShootButton = true, ShootButtonPath = "", ReleaseMethod = "Both", FireClick = true,
 ManualAssist = true, ShootKey = "E", SprintKey = "LeftShift",
@@ -233,6 +233,7 @@ end
 if S.AutoCal == nil then S.AutoCal = true end
 if S.PerfectGreen == nil then S.PerfectGreen = false end
 if S.DetNotify == nil then S.DetNotify = false end
+if S.UseShared == nil then S.UseShared = true end
 if S.PerfectGreenPct == nil then S.PerfectGreenPct = 100 end
 if S.AutoTimes == nil then S.AutoTimes = "" end
 if S.SettingsVer < 14 then
@@ -1970,6 +1971,7 @@ Shot.statusT = now
 local a, b, c, d, e, f = Shot.statusLines()
 st.shot.Text, st.timing.Text, st.state.Text, st.last.Text, st.adj.Text = a, b, c, d, e
 if st.ping then st.ping.Text = f end
+if UI.sharedStat then UI.sharedStat.Text = Shot.sharedText() end
 local dt = UI.detStat
 if dt then
 pcall(Anim.detStep)
@@ -1989,6 +1991,57 @@ local p = Shot.pingNow()
 if not S.PerfectGreen then return 0, p end
 local comp = (p - Shot.PING_REF) * ((S.PerfectGreenPct or 100) / 100)
 return clamp(comp, -0.02, 0.2), p
+end
+Shot.SHARED_URL = "https://raw.githubusercontent.com/JaydenDaGoat2/JayHubv1/claude/claudechud-8cord-executor-wclom3/executor/timings.txt"
+Shot.shared = {}
+Shot.sharedN, Shot.sharedT, Shot.sharedState = 0, nil, "not loaded yet"
+function Shot.sharedParse(text)
+local out, n = {}, 0
+for key, val in string.gmatch(tostring(text or ""), "([%d%+]+)=([%d%.]+)") do
+local v = tonumber(val)
+if v and v >= 0.2 and v <= 0.7 and string.find(key, "^%d") and string.find(key, "%d$") then
+out[key] = v
+n = n + 1
+end
+end
+return out, n
+end
+function Shot.sharedFetch(manual)
+task.spawn(function()
+Shot.sharedState = "loading"
+local ok, body = pcall(Net.get, Shot.SHARED_URL .. "?t=" .. tostring(math.floor(tick())))
+if not ok or type(body) ~= "string" or body == "" then
+Shot.sharedState = "could not reach the list"
+if manual then pcall(notify, "Shared timings", "Could not reach the list", 3) end
+return
+end
+local list, n = Shot.sharedParse(body)
+Shot.shared, Shot.sharedN, Shot.sharedT, Shot.sharedState = list, n, tick(), "loaded"
+if manual then pcall(notify, "Shared timings", n .. " shot timing(s) loaded", 3) end
+end)
+end
+function Shot.sharedText()
+if Shot.sharedState == "loaded" then
+return string.format("%d loaded (%s)", Shot.sharedN, agoText(Shot.sharedT or tick()))
+end
+return Shot.sharedState
+end
+function Shot.sharedExport()
+Shot.autoLoad()
+local rows = {}
+for key, a in pairs(Shot.auto) do
+if a.locked then rows[#rows + 1] = { key = key, hold = a.hold } end
+end
+table.sort(rows, function(x, y) return x.key < y.key end)
+local out = { "# JHub learned timings (ping-free)" }
+for _, r in ipairs(rows) do
+out[#out + 1] = string.format("%s=%.3f  # %s", r.key, r.hold, Shot.nameFor(r.key))
+end
+local text = table.concat(out, "\n")
+if #rows == 0 then text = text .. "\n# (nothing locked yet)" end
+if type(setclipboard) == "function" then pcall(setclipboard, text) end
+pcall(notify, "Learned timings", #rows .. " locked timing(s) copied", 3)
+return text, #rows
 end
 Shot.AUTO_START = 0.34
 Shot.AUTO_SCAN = { 0.30, 0.32, 0.34, 0.36, 0.38, 0.31, 0.33, 0.35, 0.37, 0.29, 0.39, 0.40, 0.28 }
@@ -2017,6 +2070,7 @@ saveSoon()
 end
 function Shot.autoActive(key)
 if not S.AutoCal or Shot.FINAL[key] then return false end
+if S.UseShared ~= false and Shot.shared[key] then return false end
 if S.Sweep and Rec.shotOn then return false end
 if Shot.times["la:" .. key] or Shot.times["r:" .. key] then return false end
 return true
@@ -2085,6 +2139,21 @@ if fin then
 Shot.lastSweep = nil
 Shot.cur = { key = key, hold = fin, state = "Locked (built in)" }
 return clamp(fin, Shot.FLOOR, S.MaxHold), fin
+end
+if not (S.Sweep and Rec.shotOn) then
+Shot.autoLoad()
+local la = Shot.auto[key]
+if S.AutoCal and la and la.locked then
+Shot.lastSweep = nil
+Shot.cur = { key = key, hold = la.hold, state = "Locked (learned)" }
+return clamp(la.hold, Shot.FLOOR, S.MaxHold), la.hold
+end
+local sv = S.UseShared ~= false and Shot.shared[key]
+if sv then
+Shot.lastSweep = nil
+Shot.cur = { key = key, hold = sv, state = "Locked (shared)" }
+return clamp(sv, Shot.FLOOR, S.MaxHold), sv
+end
 end
 if Shot.autoActive(key) then
 Shot.autoLoad()
@@ -5946,6 +6015,12 @@ local dc = UI.Card(P, "Animation detector")
 UI.detStat = { now = UI.Stat(dc, "Animation now"), type = UI.Stat(dc, "Type"), list = UI.Note(dc, "Play a shot, layup, dunk or post move") }
 UI.Toggle(dc, "Pop up each new animation", "DetNotify")
 UI.Button(dc, "Copy animation list", Anim.detCopy)
+local sh = UI.Card(P, "Shared timings")
+UI.sharedStat = UI.Stat(sh, "Shared list")
+UI.Note(sh, "A list kept online. Every copy of the script reads it when it starts, so a timing added to it is a Perfect for everyone.")
+UI.Toggle(sh, "Use shared timings", "UseShared")
+UI.Button(sh, "Refresh shared timings", function() Shot.sharedFetch(true) end)
+UI.Button(sh, "Copy my learned timings", Shot.sharedExport)
 local sr = UI.Card(P, "Shot recorder")
 UI.Toggle(sr, "Record shots (turn off to copy everything)", "RecShots", function(v) if v then Rec.shotStart() else Rec.shotStop() end end)
 UI.Toggle(sr, "Sweep timings while recording", "Sweep")
@@ -6362,6 +6437,10 @@ task.wait(0.03)
 end
 end)
 task.spawn(function()
+task.wait(3)
+pcall(Shot.sharedFetch)
+end)
+task.spawn(function()
 while JH.Running do
 pcall(Feat.magnetStep)
 pcall(Shot.statusStep)
@@ -6452,7 +6531,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.27 shot-line"
+local VERSION = "v1.28 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -6542,7 +6621,7 @@ local S = {
 	AutoGreen = true, AutoCalibrate = true, AutoTiming = true, ShotRelease = "Auto",
 	HoldTime = 0.55, MaxHold = 1.6, CalSpeed = 0.6, CalStep = 0.02,
 	ShotTimes = "", ShotRatio = 0, BarPath = "", BarProp = "", BarAt = 0, BarNudge = 0,
-	ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, DetNotify = false, PerfectGreen = false, PerfectGreenPct = 100, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, Lightning = true, BoltCount = 6, BoltSpeed = 1, BoltThick = 2, BoltBright = 0.9, BoltColor = "White + Yellow", BgMove = true, BgGlow = 0.5, BgOrbs = true, AccentMode = "Gold", OutlineSpeed = 1, LogoStyle = "J bolt H", LogoBg = true, Preset = "Lightning Gold", PacketOn = true, PacketMul = 1,
+	ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, UseShared = true, DetNotify = false, PerfectGreen = false, PerfectGreenPct = 100, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, Lightning = true, BoltCount = 6, BoltSpeed = 1, BoltThick = 2, BoltBright = 0.9, BoltColor = "White + Yellow", BgMove = true, BgGlow = 0.5, BgOrbs = true, AccentMode = "Gold", OutlineSpeed = 1, LogoStyle = "J bolt H", LogoBg = true, Preset = "Lightning Gold", PacketOn = true, PacketMul = 1,
 	MovingOffset = 0, SprintOffset = 0, PingComp = 0, Humanize = 0, Nudge = 0, GreenSound = true,
 	HookShootButton = true, ShootButtonPath = "", ReleaseMethod = "Both", FireClick = true,
 	ManualAssist = true, ShootKey = "E", SprintKey = "LeftShift",
@@ -6652,6 +6731,7 @@ end
 if S.AutoCal == nil then S.AutoCal = true end
 if S.PerfectGreen == nil then S.PerfectGreen = false end
 if S.DetNotify == nil then S.DetNotify = false end
+if S.UseShared == nil then S.UseShared = true end
 if S.PerfectGreenPct == nil then S.PerfectGreenPct = 100 end
 if S.AutoTimes == nil then S.AutoTimes = "" end
 if S.SettingsVer < 14 then
@@ -8482,6 +8562,7 @@ function Shot.statusStep()
 	local a, b, c, d, e, f = Shot.statusLines()
 	st.shot.Text, st.timing.Text, st.state.Text, st.last.Text, st.adj.Text = a, b, c, d, e
 	if st.ping then st.ping.Text = f end
+	if UI.sharedStat then UI.sharedStat.Text = Shot.sharedText() end
 	local dt = UI.detStat
 	if dt then
 		pcall(Anim.detStep)
@@ -8501,6 +8582,60 @@ function Shot.pingComp()
 	if not S.PerfectGreen then return 0, p end
 	local comp = (p - Shot.PING_REF) * ((S.PerfectGreenPct or 100) / 100)
 	return clamp(comp, -0.02, 0.2), p
+end
+-- SHARED TIMINGS: a list kept online next to the script. Every copy of the script reads it at start, so a timing that is
+-- added to the list is a Perfect for everyone, with no script update.
+Shot.SHARED_URL = "https://raw.githubusercontent.com/JaydenDaGoat2/JayHubv1/claude/claudechud-8cord-executor-wclom3/executor/timings.txt"
+Shot.shared = {}
+Shot.sharedN, Shot.sharedT, Shot.sharedState = 0, nil, "not loaded yet"
+function Shot.sharedParse(text)
+	local out, n = {}, 0
+	for key, val in string.gmatch(tostring(text or ""), "([%d%+]+)=([%d%.]+)") do
+		local v = tonumber(val)
+		if v and v >= 0.2 and v <= 0.7 and string.find(key, "^%d") and string.find(key, "%d$") then
+			out[key] = v
+			n = n + 1
+		end
+	end
+	return out, n
+end
+function Shot.sharedFetch(manual)
+	task.spawn(function()
+		Shot.sharedState = "loading"
+		local ok, body = pcall(Net.get, Shot.SHARED_URL .. "?t=" .. tostring(math.floor(tick())))
+		if not ok or type(body) ~= "string" or body == "" then
+			Shot.sharedState = "could not reach the list"
+			if manual then pcall(notify, "Shared timings", "Could not reach the list", 3) end
+			return
+		end
+		local list, n = Shot.sharedParse(body)
+		Shot.shared, Shot.sharedN, Shot.sharedT, Shot.sharedState = list, n, tick(), "loaded"
+		if manual then pcall(notify, "Shared timings", n .. " shot timing(s) loaded", 3) end
+	end)
+end
+function Shot.sharedText()
+	if Shot.sharedState == "loaded" then
+		return string.format("%d loaded (%s)", Shot.sharedN, agoText(Shot.sharedT or tick()))
+	end
+	return Shot.sharedState
+end
+-- every shot this device has learned and locked, ready to paste into the shared list
+function Shot.sharedExport()
+	Shot.autoLoad()
+	local rows = {}
+	for key, a in pairs(Shot.auto) do
+		if a.locked then rows[#rows + 1] = { key = key, hold = a.hold } end
+	end
+	table.sort(rows, function(x, y) return x.key < y.key end)
+	local out = { "# JHub learned timings (ping-free)" }
+	for _, r in ipairs(rows) do
+		out[#out + 1] = string.format("%s=%.3f  # %s", r.key, r.hold, Shot.nameFor(r.key))
+	end
+	local text = table.concat(out, "\n")
+	if #rows == 0 then text = text .. "\n# (nothing locked yet)" end
+	if type(setclipboard) == "function" then pcall(setclipboard, text) end
+	pcall(notify, "Learned timings", #rows .. " locked timing(s) copied", 3)
+	return text, #rows
 end
 Shot.AUTO_START = 0.34
 Shot.AUTO_SCAN = { 0.30, 0.32, 0.34, 0.36, 0.38, 0.31, 0.33, 0.35, 0.37, 0.29, 0.39, 0.40, 0.28 }
@@ -8529,6 +8664,7 @@ function Shot.autoReset()
 end
 function Shot.autoActive(key)
 	if not S.AutoCal or Shot.FINAL[key] then return false end
+	if S.UseShared ~= false and Shot.shared[key] then return false end
 	if S.Sweep and Rec.shotOn then return false end
 	if Shot.times["la:" .. key] or Shot.times["r:" .. key] then return false end
 	return true
@@ -8598,6 +8734,21 @@ function Shot.remoteHold(key, pk)
 		Shot.lastSweep = nil
 		Shot.cur = { key = key, hold = fin, state = "Locked (built in)" }
 		return clamp(fin, Shot.FLOOR, S.MaxHold), fin
+	end
+	if not (S.Sweep and Rec.shotOn) then
+		Shot.autoLoad()
+		local la = Shot.auto[key]
+		if S.AutoCal and la and la.locked then
+			Shot.lastSweep = nil
+			Shot.cur = { key = key, hold = la.hold, state = "Locked (learned)" }
+			return clamp(la.hold, Shot.FLOOR, S.MaxHold), la.hold
+		end
+		local sv = S.UseShared ~= false and Shot.shared[key]
+		if sv then
+			Shot.lastSweep = nil
+			Shot.cur = { key = key, hold = sv, state = "Locked (shared)" }
+			return clamp(sv, Shot.FLOOR, S.MaxHold), sv
+		end
 	end
 	if Shot.autoActive(key) then
 		Shot.autoLoad()
@@ -12644,6 +12795,13 @@ do
 	UI.Toggle(dc, "Pop up each new animation", "DetNotify")
 	UI.Button(dc, "Copy animation list", Anim.detCopy)
 
+	local sh = UI.Card(P, "Shared timings")
+	UI.sharedStat = UI.Stat(sh, "Shared list")
+	UI.Note(sh, "A list kept online. Every copy of the script reads it when it starts, so a timing added to it is a Perfect for everyone.")
+	UI.Toggle(sh, "Use shared timings", "UseShared")
+	UI.Button(sh, "Refresh shared timings", function() Shot.sharedFetch(true) end)
+	UI.Button(sh, "Copy my learned timings", Shot.sharedExport)
+
 	local sr = UI.Card(P, "Shot recorder")
 	UI.Toggle(sr, "Record shots (turn off to copy everything)", "RecShots", function(v) if v then Rec.shotStart() else Rec.shotStop() end end)
 	UI.Toggle(sr, "Sweep timings while recording", "Sweep")
@@ -13126,6 +13284,10 @@ task.spawn(function()
 		end
 		task.wait(0.03)
 	end
+end)
+task.spawn(function()
+	task.wait(3)
+	pcall(Shot.sharedFetch)
 end)
 -- the ball magnet
 task.spawn(function()
