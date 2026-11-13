@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.4 shot-line"
+local VERSION = "v1.5 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -145,7 +145,7 @@ ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, St
 LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true,
+FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true,
 LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -6322,7 +6322,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.4  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.5  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -8050,6 +8050,7 @@ end)
 UI.Toggle(c, "Green every jumper (shared learning)", "AllJumpers")
 UI.Slider(c, "Fade and step back timing (later)", "FadeNudge", -30, 40, 1, 0, " ms")
 UI.Toggle(c, "Auto adapt: learn every shot from the first one", "AutoAdaptAll")
+UI.Toggle(c, "Instant green (works at low FPS and high ping)", "InstantGreen")
 UI.Buttons(c, { { "Copy my locked timings", function() local t = Shot.exportTimings() if setclipboard then setclipboard(t) end notify("Timings", t == "" and "Nothing locked yet" or "Copied to clipboard", 3) end } })
 UI.Input(c, "Import timings", "ImportTimes", nil, "paste copied timings, then rejoin")
 UI.Toggle(c, "Lag sync (follow my ping and FPS)", "LagSync")
@@ -8791,7 +8792,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.4"
+d.Text = "JHub V1.5"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -8991,6 +8992,40 @@ end)
 return true
 end
 end
+-- INSTANT GREEN: the release is timed with a wait that does not depend on frames, from the meter start and the shared meter speed
+do
+local prevLook = Shot.lookAhead
+function Shot.lookAhead()
+if S.InstantGreen then
+local dt = 1 / math.max(JH.FPS or 60, 1)
+return clamp(1.3 * dt, 0.03, 0.6)
+end
+return prevLook()
+end
+local prevFps = Shot.fpsComp
+function Shot.fpsComp()
+if S.InstantGreen then return 0 end
+return prevFps()
+end
+local prevSmart = Shot.peakFitSmart
+function Shot.peakFitSmart(samples, key)
+local tp = prevSmart(samples, key)
+if tp or not S.InstantGreen then return tp end
+-- too few meter readings (a very low frame rate): start from when the meter started
+local g = (Shot.gslope and Shot.gslope()) or 2.68
+return Shot.meterT + Shot.PEAK_Q / g
+end
+-- built in shots were tuned at a normal ping: a higher ping lets go that much earlier
+local prevHold = Shot.remoteHold
+function Shot.remoteHold(key, pk)
+local hold, base, mode = prevHold(key, pk)
+if S.InstantGreen and mode ~= "peak" and Shot.FINAL[key] and hold then
+local extra = clamp((Shot.effPing and Shot.effPing() or 0) - 0.035, 0, 0.5)
+if extra > 0 then hold = math.max(Shot.FLOOR, hold - extra) end
+end
+return hold, base, mode
+end
+end
 UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
@@ -9154,7 +9189,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.4", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.5", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -9235,7 +9270,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.4 shot-line"
+local VERSION = "v1.5 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -9341,7 +9376,7 @@ local S = {
 	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true,
+	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true,
 	LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 	AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -15858,7 +15893,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.4  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.5  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -17594,6 +17629,7 @@ do
 		UI.Toggle(c, "Green every jumper (shared learning)", "AllJumpers")
 		UI.Slider(c, "Fade and step back timing (later)", "FadeNudge", -30, 40, 1, 0, " ms")
 		UI.Toggle(c, "Auto adapt: learn every shot from the first one", "AutoAdaptAll")
+		UI.Toggle(c, "Instant green (works at low FPS and high ping)", "InstantGreen")
 		UI.Buttons(c, { { "Copy my locked timings", function() local t = Shot.exportTimings() if setclipboard then setclipboard(t) end notify("Timings", t == "" and "Nothing locked yet" or "Copied to clipboard", 3) end } })
 		UI.Input(c, "Import timings", "ImportTimes", nil, "paste copied timings, then rejoin")
 		UI.Toggle(c, "Lag sync (follow my ping and FPS)", "LagSync")
@@ -18335,7 +18371,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.4"
+				d.Text = "JHub V1.5"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -18533,6 +18569,40 @@ do
 			if JH.Running then pcall(innerGet, force) end
 		end)
 		return true
+	end
+end
+-- INSTANT GREEN: the release is timed with a wait that does not depend on frames, from the meter start and the shared meter speed
+do
+	local prevLook = Shot.lookAhead
+	function Shot.lookAhead()
+		if S.InstantGreen then
+			local dt = 1 / math.max(JH.FPS or 60, 1)
+			return clamp(1.3 * dt, 0.03, 0.6)
+		end
+		return prevLook()
+	end
+	local prevFps = Shot.fpsComp
+	function Shot.fpsComp()
+		if S.InstantGreen then return 0 end
+		return prevFps()
+	end
+	local prevSmart = Shot.peakFitSmart
+	function Shot.peakFitSmart(samples, key)
+		local tp = prevSmart(samples, key)
+		if tp or not S.InstantGreen then return tp end
+		-- too few meter readings (a very low frame rate): start from when the meter started
+		local g = (Shot.gslope and Shot.gslope()) or 2.68
+		return Shot.meterT + Shot.PEAK_Q / g
+	end
+	-- built in shots were tuned at a normal ping: a higher ping lets go that much earlier
+	local prevHold = Shot.remoteHold
+	function Shot.remoteHold(key, pk)
+		local hold, base, mode = prevHold(key, pk)
+		if S.InstantGreen and mode ~= "peak" and Shot.FINAL[key] and hold then
+			local extra = clamp((Shot.effPing and Shot.effPing() or 0) - 0.035, 0, 0.5)
+			if extra > 0 then hold = math.max(Shot.FLOOR, hold - extra) end
+		end
+		return hold, base, mode
 	end
 end
 UI.syncAuto()
