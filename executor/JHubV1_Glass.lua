@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.8 shot-line"
+local VERSION = "v1.9 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -145,7 +145,7 @@ ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, St
 LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true,
+FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "",
 LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -6322,7 +6322,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.8  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.9  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -8793,7 +8793,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.8"
+d.Text = "JHub V1.9"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -9218,6 +9218,209 @@ pcall(style)
 return r
 end
 end
+-- SHOT NAMES FROM THE GAME'S OWN ANIMATION LIST, AND TIMING SHARED INSIDE EACH SHOT FAMILY
+do
+local IDNAME = {
+["123897568594090"] = "Backstep1L",
+["127422207069035"] = "Backstep1R",
+["16145346328"] = "CloseFade1L",
+["16145343052"] = "CloseFade1R",
+["16143619816"] = "CloseShot1L",
+["16143612725"] = "CloseShot1R",
+["122465444344495"] = "ClutchShot1R",
+["105859087082844"] = "ClutchShot2R",
+["104766830277346"] = "Escape Retreat StepBack 1 L",
+["101763948381427"] = "Escape Retreat StepBack 1 R",
+["18490241160"] = "Eurostep1L",
+["18490760705"] = "Eurostep1R",
+["111704738351151"] = "Eurostep2L",
+["94525958298824"] = "Eurostep2R",
+["16247513358"] = "FadeAway1L",
+["16104888271"] = "FadeAway1R",
+["72457151419535"] = "FadeOffSpin",
+["73312396340408"] = "Floater1L",
+["18479327091"] = "Floater1R",
+["83560375675042"] = "Floater2L",
+["110801085144110"] = "Floater2R",
+["72125557808800"] = "Floater3L",
+["101591116880216"] = "Floater3R",
+["121266237142174"] = "Floater4L",
+["76935911753836"] = "Floater4R",
+["129529685206875"] = "HalfSpin 1 L",
+["116377271778907"] = "HalfSpin 1 R",
+["18562916903"] = "Hopstep1L",
+["18564813109"] = "Hopstep1R",
+["74708121013638"] = "Jumpshot10LBase",
+["89043189007783"] = "Jumpshot10LRelease",
+["93718423729481"] = "Jumpshot10RBase",
+["106368953335940"] = "Jumpshot10RRelease",
+["98057390970111"] = "Jumpshot11LBase",
+["139180517555346"] = "Jumpshot11LRelease",
+["108219916586130"] = "Jumpshot11RBase",
+["122616867439575"] = "Jumpshot11RRelease",
+["133292215102254"] = "Jumpshot12LBase",
+["109188880516100"] = "Jumpshot12LRelease",
+["85618824455884"] = "Jumpshot12RBase",
+["108356101205697"] = "Jumpshot12RRelease",
+["126439912802076"] = "Jumpshot13LBase",
+["122548714712371"] = "Jumpshot13LRelease",
+["92872377351550"] = "Jumpshot13RBase",
+["140052980856457"] = "Jumpshot13RRelease",
+["114941990966676"] = "Jumpshot14LBase",
+["108579262151957"] = "Jumpshot14LRelease",
+["81957659045162"] = "Jumpshot14RBase",
+["90495832697285"] = "Jumpshot14RRelease",
+["74979847696031"] = "Jumpshot15LBase",
+["110632271666784"] = "Jumpshot15LRelease",
+["84540244428238"] = "Jumpshot15RBase",
+["71664326786621"] = "Jumpshot15RRelease",
+["109811332443306"] = "Jumpshot16LBase",
+["132558433850380"] = "Jumpshot16LRelease",
+["71026149999012"] = "Jumpshot16RBase",
+["118631494115522"] = "Jumpshot16RRelease",
+["15852002207"] = "Jumpshot1LBase",
+["15852004111"] = "Jumpshot1LRelease",
+["15851912457"] = "Jumpshot1RBase",
+["15851919155"] = "Jumpshot1RRelease",
+["105701400634134"] = "Jumpshot2LBase",
+["109450934633536"] = "Jumpshot2LRelease",
+["72456843565147"] = "Jumpshot2RBase",
+["84289633045544"] = "Jumpshot2RRelease",
+["127398785869633"] = "Jumpshot3LBase",
+["112156144070038"] = "Jumpshot3LRelease",
+["103840440800065"] = "Jumpshot3RBase",
+["121374781838539"] = "Jumpshot3RRelease",
+["93579833800410"] = "Jumpshot4LBase",
+["118445199489350"] = "Jumpshot4LRelease",
+["107267506258170"] = "Jumpshot4RBase",
+["88476923576638"] = "Jumpshot4RRelease",
+["98433629221242"] = "Jumpshot5LBase",
+["136333410000989"] = "Jumpshot5LRelease",
+["78687270972169"] = "Jumpshot5RBase",
+["105872738506827"] = "Jumpshot5RRelease",
+["87425338536981"] = "Jumpshot6LBase",
+["119409927614003"] = "Jumpshot6LRelease",
+["94901854704297"] = "Jumpshot6RBase",
+["134827491525733"] = "Jumpshot6RRelease",
+["129361186598012"] = "Jumpshot7LBase",
+["136230260055859"] = "Jumpshot7LRelease",
+["106983388593429"] = "Jumpshot7RBase",
+["84934876114141"] = "Jumpshot7RRelease",
+["140548746406756"] = "Jumpshot8LBase",
+["101150492242995"] = "Jumpshot8LRelease",
+["130802304867577"] = "Jumpshot8RBase",
+["95617155918948"] = "Jumpshot8RRelease",
+["135680344718842"] = "Jumpshot9LBase",
+["121465657586926"] = "Jumpshot9LRelease",
+["94696336118150"] = "Jumpshot9RBase",
+["79176486779613"] = "Jumpshot9RRelease",
+["96144129758396"] = "JumpshotSmothered1L",
+["86178912276158"] = "JumpshotSmothered1R",
+["16247060979"] = "MovingShotLeft1L",
+["16205020756"] = "MovingShotLeft1R",
+["16247080711"] = "MovingShotRight1L",
+["16246923753"] = "MovingShotRight1R",
+["118903578746477"] = "PostFadeLeft1L",
+["89959998001439"] = "PostFadeLeft1R",
+["90675102495015"] = "PostFadeRight1L",
+["128777513307709"] = "PostFadeRight1R",
+["94918503601868"] = "PostHookLeft1L",
+["139165512882286"] = "PostHookRight1R",
+["71484695722621"] = "PostSpinGather1L",
+["77401448272074"] = "PostSpinGather1R",
+["18507584241"] = "SpinGather1L",
+["18507570562"] = "SpinGather1R",
+["95688876134046"] = "SpinHookLeft1L",
+["104966197366795"] = "SpinHookRight1R",
+["91053585299044"] = "StepBack 1 L",
+["100829976540057"] = "StepBack 1 R",
+["76796993769486"] = "StepBack 2 L",
+["94150114804496"] = "StepBack 2 R",
+["119260785892440"] = "StepPostFade1L",
+["111074210919383"] = "StepPostFade1R",
+["95782467897683"] = "UnderRimCloseShot1L",
+["107778200710432"] = "UnderRimCloseShot1R",
+}
+local function nameOfId(id) return IDNAME[tostring(id)] end
+local prevName = Shot.nameFor
+function Shot.nameFor(key, anim)
+local n = Shot.keyName[key] or Shot.NAMES[key]
+if n then return n end
+local parts, any = {}, false
+for id in string.gmatch(tostring(key), "%d+") do
+local nm = nameOfId(id)
+if nm then any = true end
+parts[#parts + 1] = nm or id
+end
+if any then return table.concat(parts, " + ") end
+return prevName(key, anim)
+end
+-- a shot family: every jumpshot, every fade, every step back and so on
+local FAMILIES = {
+{ "postfade", { "PostFade", "StepPostFade", "PostSpinGather" } },
+{ "stepback", { "StepBack", "Backstep", "Retreat" } },
+{ "fade", { "FadeAway", "CloseFade", "FadeOffSpin" } },
+{ "moving", { "MovingShot" } },
+{ "close", { "CloseShot", "UnderRim" } },
+{ "floater", { "Floater" } },
+{ "hook", { "Hook" } },
+{ "jumpshot", { "Jumpshot" } },
+}
+function Shot.familyOf(key)
+for id in string.gmatch(tostring(key), "%d+") do
+local nm = nameOfId(id)
+if nm then
+for _, fam in ipairs(FAMILIES) do
+for _, pat in ipairs(fam[2]) do
+if string.find(nm, pat, 1, true) then return fam[1] end
+end
+end
+end
+end
+return nil
+end
+local function readFam()
+local t = {}
+for fam, v, n in string.gmatch(S.FamLead or "", "(%a+)=([%d%.]+):(%d+)") do t[fam] = { tonumber(v), tonumber(n) } end
+return t
+end
+local function writeFam(t)
+local parts = {}
+for fam, d in pairs(t) do parts[#parts + 1] = string.format("%s=%.4f:%d", fam, d[1], d[2]) end
+table.sort(parts)
+S.FamLead = table.concat(parts, " ")
+saveSoon()
+end
+local prevSeed = Shot.seedLead
+function Shot.seedLead(key)
+local fam = Shot.familyOf(key)
+if fam and S.AutoAdaptAll then
+local d = readFam()[fam]
+if d and d[2] >= 2 then return clamp(d[1], 0, 0.1) end
+end
+return prevSeed(key)
+end
+local prevLearn = Shot.autoLearn
+function Shot.autoLearn(info, res, strength)
+if S.AutoAdaptAll and info and info.lead and not info.manual and not Shot.FINAL[info.key] then
+local fam = Shot.familyOf(info.key)
+local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+if fam and idx then
+local off = (idx == 5 and 0) or (idx == 4 and -1) or (idx - 5)
+if math.abs(off) <= 3 then
+local t = readFam()
+local d = t[fam] or { 0, 0 }
+local est = clamp(info.lead + off * (S.PeakBin or 0.014) * 0.8, 0, 0.1)
+if d[2] < 2 then d[1] = est else d[1] = d[1] * 0.8 + est * 0.2 end
+d[2] = math.min(d[2] + 1, 999)
+t[fam] = d
+writeFam(t)
+end
+end
+end
+return prevLearn(info, res, strength)
+end
+end
 UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
@@ -9381,7 +9584,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.8", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.9", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -9462,7 +9665,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.8 shot-line"
+local VERSION = "v1.9 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -9568,7 +9771,7 @@ local S = {
 	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true,
+	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "",
 	LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 	AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -16085,7 +16288,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.8  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.9  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -18564,7 +18767,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.8"
+				d.Text = "JHub V1.9"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -18987,6 +19190,209 @@ do
 		local r = prevApply(...)
 		pcall(style)
 		return r
+	end
+end
+-- SHOT NAMES FROM THE GAME'S OWN ANIMATION LIST, AND TIMING SHARED INSIDE EACH SHOT FAMILY
+do
+	local IDNAME = {
+		["123897568594090"] = "Backstep1L",
+		["127422207069035"] = "Backstep1R",
+		["16145346328"] = "CloseFade1L",
+		["16145343052"] = "CloseFade1R",
+		["16143619816"] = "CloseShot1L",
+		["16143612725"] = "CloseShot1R",
+		["122465444344495"] = "ClutchShot1R",
+		["105859087082844"] = "ClutchShot2R",
+		["104766830277346"] = "Escape Retreat StepBack 1 L",
+		["101763948381427"] = "Escape Retreat StepBack 1 R",
+		["18490241160"] = "Eurostep1L",
+		["18490760705"] = "Eurostep1R",
+		["111704738351151"] = "Eurostep2L",
+		["94525958298824"] = "Eurostep2R",
+		["16247513358"] = "FadeAway1L",
+		["16104888271"] = "FadeAway1R",
+		["72457151419535"] = "FadeOffSpin",
+		["73312396340408"] = "Floater1L",
+		["18479327091"] = "Floater1R",
+		["83560375675042"] = "Floater2L",
+		["110801085144110"] = "Floater2R",
+		["72125557808800"] = "Floater3L",
+		["101591116880216"] = "Floater3R",
+		["121266237142174"] = "Floater4L",
+		["76935911753836"] = "Floater4R",
+		["129529685206875"] = "HalfSpin 1 L",
+		["116377271778907"] = "HalfSpin 1 R",
+		["18562916903"] = "Hopstep1L",
+		["18564813109"] = "Hopstep1R",
+		["74708121013638"] = "Jumpshot10LBase",
+		["89043189007783"] = "Jumpshot10LRelease",
+		["93718423729481"] = "Jumpshot10RBase",
+		["106368953335940"] = "Jumpshot10RRelease",
+		["98057390970111"] = "Jumpshot11LBase",
+		["139180517555346"] = "Jumpshot11LRelease",
+		["108219916586130"] = "Jumpshot11RBase",
+		["122616867439575"] = "Jumpshot11RRelease",
+		["133292215102254"] = "Jumpshot12LBase",
+		["109188880516100"] = "Jumpshot12LRelease",
+		["85618824455884"] = "Jumpshot12RBase",
+		["108356101205697"] = "Jumpshot12RRelease",
+		["126439912802076"] = "Jumpshot13LBase",
+		["122548714712371"] = "Jumpshot13LRelease",
+		["92872377351550"] = "Jumpshot13RBase",
+		["140052980856457"] = "Jumpshot13RRelease",
+		["114941990966676"] = "Jumpshot14LBase",
+		["108579262151957"] = "Jumpshot14LRelease",
+		["81957659045162"] = "Jumpshot14RBase",
+		["90495832697285"] = "Jumpshot14RRelease",
+		["74979847696031"] = "Jumpshot15LBase",
+		["110632271666784"] = "Jumpshot15LRelease",
+		["84540244428238"] = "Jumpshot15RBase",
+		["71664326786621"] = "Jumpshot15RRelease",
+		["109811332443306"] = "Jumpshot16LBase",
+		["132558433850380"] = "Jumpshot16LRelease",
+		["71026149999012"] = "Jumpshot16RBase",
+		["118631494115522"] = "Jumpshot16RRelease",
+		["15852002207"] = "Jumpshot1LBase",
+		["15852004111"] = "Jumpshot1LRelease",
+		["15851912457"] = "Jumpshot1RBase",
+		["15851919155"] = "Jumpshot1RRelease",
+		["105701400634134"] = "Jumpshot2LBase",
+		["109450934633536"] = "Jumpshot2LRelease",
+		["72456843565147"] = "Jumpshot2RBase",
+		["84289633045544"] = "Jumpshot2RRelease",
+		["127398785869633"] = "Jumpshot3LBase",
+		["112156144070038"] = "Jumpshot3LRelease",
+		["103840440800065"] = "Jumpshot3RBase",
+		["121374781838539"] = "Jumpshot3RRelease",
+		["93579833800410"] = "Jumpshot4LBase",
+		["118445199489350"] = "Jumpshot4LRelease",
+		["107267506258170"] = "Jumpshot4RBase",
+		["88476923576638"] = "Jumpshot4RRelease",
+		["98433629221242"] = "Jumpshot5LBase",
+		["136333410000989"] = "Jumpshot5LRelease",
+		["78687270972169"] = "Jumpshot5RBase",
+		["105872738506827"] = "Jumpshot5RRelease",
+		["87425338536981"] = "Jumpshot6LBase",
+		["119409927614003"] = "Jumpshot6LRelease",
+		["94901854704297"] = "Jumpshot6RBase",
+		["134827491525733"] = "Jumpshot6RRelease",
+		["129361186598012"] = "Jumpshot7LBase",
+		["136230260055859"] = "Jumpshot7LRelease",
+		["106983388593429"] = "Jumpshot7RBase",
+		["84934876114141"] = "Jumpshot7RRelease",
+		["140548746406756"] = "Jumpshot8LBase",
+		["101150492242995"] = "Jumpshot8LRelease",
+		["130802304867577"] = "Jumpshot8RBase",
+		["95617155918948"] = "Jumpshot8RRelease",
+		["135680344718842"] = "Jumpshot9LBase",
+		["121465657586926"] = "Jumpshot9LRelease",
+		["94696336118150"] = "Jumpshot9RBase",
+		["79176486779613"] = "Jumpshot9RRelease",
+		["96144129758396"] = "JumpshotSmothered1L",
+		["86178912276158"] = "JumpshotSmothered1R",
+		["16247060979"] = "MovingShotLeft1L",
+		["16205020756"] = "MovingShotLeft1R",
+		["16247080711"] = "MovingShotRight1L",
+		["16246923753"] = "MovingShotRight1R",
+		["118903578746477"] = "PostFadeLeft1L",
+		["89959998001439"] = "PostFadeLeft1R",
+		["90675102495015"] = "PostFadeRight1L",
+		["128777513307709"] = "PostFadeRight1R",
+		["94918503601868"] = "PostHookLeft1L",
+		["139165512882286"] = "PostHookRight1R",
+		["71484695722621"] = "PostSpinGather1L",
+		["77401448272074"] = "PostSpinGather1R",
+		["18507584241"] = "SpinGather1L",
+		["18507570562"] = "SpinGather1R",
+		["95688876134046"] = "SpinHookLeft1L",
+		["104966197366795"] = "SpinHookRight1R",
+		["91053585299044"] = "StepBack 1 L",
+		["100829976540057"] = "StepBack 1 R",
+		["76796993769486"] = "StepBack 2 L",
+		["94150114804496"] = "StepBack 2 R",
+		["119260785892440"] = "StepPostFade1L",
+		["111074210919383"] = "StepPostFade1R",
+		["95782467897683"] = "UnderRimCloseShot1L",
+		["107778200710432"] = "UnderRimCloseShot1R",
+	}
+	local function nameOfId(id) return IDNAME[tostring(id)] end
+	local prevName = Shot.nameFor
+	function Shot.nameFor(key, anim)
+		local n = Shot.keyName[key] or Shot.NAMES[key]
+		if n then return n end
+		local parts, any = {}, false
+		for id in string.gmatch(tostring(key), "%d+") do
+			local nm = nameOfId(id)
+			if nm then any = true end
+			parts[#parts + 1] = nm or id
+		end
+		if any then return table.concat(parts, " + ") end
+		return prevName(key, anim)
+	end
+	-- a shot family: every jumpshot, every fade, every step back and so on
+	local FAMILIES = {
+		{ "postfade", { "PostFade", "StepPostFade", "PostSpinGather" } },
+		{ "stepback", { "StepBack", "Backstep", "Retreat" } },
+		{ "fade", { "FadeAway", "CloseFade", "FadeOffSpin" } },
+		{ "moving", { "MovingShot" } },
+		{ "close", { "CloseShot", "UnderRim" } },
+		{ "floater", { "Floater" } },
+		{ "hook", { "Hook" } },
+		{ "jumpshot", { "Jumpshot" } },
+	}
+	function Shot.familyOf(key)
+		for id in string.gmatch(tostring(key), "%d+") do
+			local nm = nameOfId(id)
+			if nm then
+				for _, fam in ipairs(FAMILIES) do
+					for _, pat in ipairs(fam[2]) do
+						if string.find(nm, pat, 1, true) then return fam[1] end
+					end
+				end
+			end
+		end
+		return nil
+	end
+	local function readFam()
+		local t = {}
+		for fam, v, n in string.gmatch(S.FamLead or "", "(%a+)=([%d%.]+):(%d+)") do t[fam] = { tonumber(v), tonumber(n) } end
+		return t
+	end
+	local function writeFam(t)
+		local parts = {}
+		for fam, d in pairs(t) do parts[#parts + 1] = string.format("%s=%.4f:%d", fam, d[1], d[2]) end
+		table.sort(parts)
+		S.FamLead = table.concat(parts, " ")
+		saveSoon()
+	end
+	local prevSeed = Shot.seedLead
+	function Shot.seedLead(key)
+		local fam = Shot.familyOf(key)
+		if fam and S.AutoAdaptAll then
+			local d = readFam()[fam]
+			if d and d[2] >= 2 then return clamp(d[1], 0, 0.1) end
+		end
+		return prevSeed(key)
+	end
+	local prevLearn = Shot.autoLearn
+	function Shot.autoLearn(info, res, strength)
+		if S.AutoAdaptAll and info and info.lead and not info.manual and not Shot.FINAL[info.key] then
+			local fam = Shot.familyOf(info.key)
+			local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+			if fam and idx then
+				local off = (idx == 5 and 0) or (idx == 4 and -1) or (idx - 5)
+				if math.abs(off) <= 3 then
+					local t = readFam()
+					local d = t[fam] or { 0, 0 }
+					local est = clamp(info.lead + off * (S.PeakBin or 0.014) * 0.8, 0, 0.1)
+					if d[2] < 2 then d[1] = est else d[1] = d[1] * 0.8 + est * 0.2 end
+					d[2] = math.min(d[2] + 1, 999)
+					t[fam] = d
+					writeFam(t)
+				end
+			end
+		end
+		return prevLearn(info, res, strength)
 	end
 end
 UI.syncAuto()
