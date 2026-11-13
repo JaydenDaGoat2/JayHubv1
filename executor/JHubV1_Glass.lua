@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.18 shot-line"
+local VERSION = "v1.19 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -6328,7 +6328,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.18  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.19  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -7458,7 +7458,7 @@ if dist <= S.ABRange and math.random(100) <= S.ABChance then
 Bot.blockT = now
 if S.ABChase then Bot.chaseUntil, Bot.chaseRoot = now + S.ABDelay + 0.35, o.root end
 task.delay(S.ABDelay, function()
-if JH.Running then Bot.press(S.ABKey, 0.18, { "block", "contest", "shield", "defend", "jump" }) end
+if JH.Running then Bot.doJump() end
 end)
 end
 end
@@ -8801,7 +8801,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.18"
+d.Text = "JHub V1.19"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -9964,7 +9964,7 @@ task.delay(S.ABDelay * (0.85 + math.random() * 0.3), function()
 if not JH.Running then return end
 -- a pump fake turns the shot into a gather: only jump if he is really still shooting
 if S.ABRecheck ~= false and c:GetAttribute("Action") ~= "Shooting" then return end
-Bot.press(S.ABKey, 0.18, { "block", "contest", "shield", "defend", "jump" })
+Bot.doJump()
 end)
 end
 end
@@ -10204,6 +10204,24 @@ c.frame.Visible = false
 end
 end
 end
+-- AUTO BLOCK JUMPS WITH THE GAME'S JUMP AND DUNK BUTTON (the trampoline button on mobile)
+do
+local Bot = JH.api.Bot
+function Bot.doJump()
+local btn = Bot.findBtn({ "jump", "dunk", "trampoline" })
+if btn then
+task.spawn(function()
+Input.fireGui(btn, true, true)
+task.wait(0.15)
+Input.fireGui(btn, false, true)
+end)
+else
+Bot.press(S.ABKey or "Space", 0.18)
+local h = hum()
+if h then pcall(function() h.Jump = true end) end
+end
+end
+end
 UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
@@ -10367,7 +10385,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.18", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.19", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -10448,7 +10466,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.18 shot-line"
+local VERSION = "v1.19 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -17077,7 +17095,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.18  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.19  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -18215,7 +18233,7 @@ do
 						Bot.blockT = now
 						if S.ABChase then Bot.chaseUntil, Bot.chaseRoot = now + S.ABDelay + 0.35, o.root end
 						task.delay(S.ABDelay, function()
-							if JH.Running then Bot.press(S.ABKey, 0.18, { "block", "contest", "shield", "defend", "jump" }) end
+							if JH.Running then Bot.doJump() end
 						end)
 					end
 				end
@@ -19558,7 +19576,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.18"
+				d.Text = "JHub V1.19"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -20721,7 +20739,7 @@ do
 							if not JH.Running then return end
 							-- a pump fake turns the shot into a gather: only jump if he is really still shooting
 							if S.ABRecheck ~= false and c:GetAttribute("Action") ~= "Shooting" then return end
-							Bot.press(S.ABKey, 0.18, { "block", "contest", "shield", "defend", "jump" })
+							Bot.doJump()
 						end)
 					end
 				end
@@ -20958,6 +20976,24 @@ do
 			UI.Note(c, "Turns on Auto Green, dribbles to get open, shoots open shots, takes layups and dunks, follows the shot for the rebound and guards when the other team has the ball. Touch the stick and it hands the game back to you.")
 			table.insert(UI.lockedTools, 2, c.frame)
 			c.frame.Visible = false
+		end
+	end
+end
+-- AUTO BLOCK JUMPS WITH THE GAME'S JUMP AND DUNK BUTTON (the trampoline button on mobile)
+do
+	local Bot = JH.api.Bot
+	function Bot.doJump()
+		local btn = Bot.findBtn({ "jump", "dunk", "trampoline" })
+		if btn then
+			task.spawn(function()
+				Input.fireGui(btn, true, true)
+				task.wait(0.15)
+				Input.fireGui(btn, false, true)
+			end)
+		else
+			Bot.press(S.ABKey or "Space", 0.18)
+			local h = hum()
+			if h then pcall(function() h.Jump = true end) end
 		end
 	end
 end
