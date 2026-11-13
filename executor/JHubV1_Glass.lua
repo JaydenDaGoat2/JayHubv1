@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.35 shot-line"
+local VERSION = "v1.37 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -143,6 +143,7 @@ GfxLow = false, GfxEffects = false, GfxTextures = false, GfxShadows = false, Gfx
 GfxCullDist = 250, GfxBoost = false, GfxFpsCap = 0, PingStab = false, PingWindow = 3, FinalAdj = "",
 ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
 LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014,
+LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
 AR = false, ARSpeed = 1.3, ARReact = 0.05, ARRange = 70, ARJump = true, ARMagnet = true, ARMagRange = 8, ARMarker = false,
@@ -244,6 +245,10 @@ S.AutoCal = S.AutoGreen ~= false
 S.Learn = S.AutoCal
 if S.PerfectGreen == nil then S.PerfectGreen = false end
 if S.PeakLead == nil then S.PeakLead = 0.027 end
+if S.LowFix == nil then S.LowFix = true end
+if S.LowBoostPct == nil then S.LowBoostPct = 25 end
+if S.LowGlidePct == nil then S.LowGlidePct = 60 end
+if S.LowLevel == nil then S.LowLevel = 3 end
 if S.PerfectGreenPct == nil then S.PerfectGreenPct = 100 end
 if S.AutoTimes == nil then S.AutoTimes = "" end
 if S.SettingsVer < 14 then
@@ -2435,7 +2440,7 @@ end
 end
 function Glide.start(kind, power, duration, dirOverride)
 local r, h = Mover.body(), hum()
-power = power * (S.GlideSpeed or 1)
+power = power * (S.GlideSpeed or 1) * Glide.lowScale()
 if not r or not h or power <= 0 or duration <= 0 then return end
 local now = tick()
 if now - (Glide.lastStart[kind] or 0) < duration * 0.6 then return end
@@ -2611,12 +2616,57 @@ end
 if S.SpeedOn then return "walk", S.SpeedAdd end
 return nil, 0
 end
+-- LOW SETTINGS: a device on low graphics (or a low frame rate) is pulled back by the server more often and loses most of its boost,
+-- so on low settings the boost is raised by a percentage and the glide is kept but weaker
+function Speed.graphicsLevel()
+local lvl
+pcall(function()
+local saved = UserSettings():GetService("UserGameSettings").SavedQualityLevel
+if saved and saved.Value and saved.Value >= 1 then lvl = saved.Value end
+end)
+if not lvl then
+pcall(function()
+local q = settings().Rendering.QualityLevel
+if q and q.Value and q.Value >= 1 then lvl = q.Value end
+end)
+end
+return lvl
+end
+-- 0 = normal settings, 1 = lowest, in between for a little low
+function Speed.lowFactor()
+if S.LowFix == false then return 0 end
+local f = 0
+local lvl = Speed.graphicsLevel()
+local top = S.LowLevel or 3
+if lvl then
+if lvl <= top then f = 1 elseif lvl <= top + 2 then f = 0.5 end
+end
+local fps = JH.FPS or 60
+if fps < 28 then f = math.max(f, 1) elseif fps < 40 then f = math.max(f, 0.5) end
+return f
+end
+function Glide.lowScale()
+local f = Speed.lowFactor()
+if f <= 0 then return 1 end
+local pct = clamp((S.LowGlidePct or 60) / 100, 0.1, 1)
+return 1 - (1 - pct) * f
+end
+function Speed.lowStatusText()
+local lvl = Speed.graphicsLevel()
+local f = Speed.lowFactor()
+local gtxt = lvl and ("graphics level " .. lvl) or "graphics level unknown"
+local state = (S.LowFix == false) and "fix off" or (f >= 1 and "LOW, fix on") or (f > 0 and "a little low, fix half on" or "normal, fix not needed")
+return string.format("%s, %d FPS - %s", gtxt, math.floor((JH.FPS or 0) + 0.5), state)
+end
 function Speed.extraNow()
 local kind, level = Speed.pick()
 Speed.kind = kind
 local extra = (kind and level > 0) and Speed.gameWS * (1.1 ^ level - 1) or 0
-extra = clamp(extra, 0, S.SpeedCap)
-if S.AntiRubber and Speed.level > 0 then extra = extra / (1 + Speed.level) end
+local f = Speed.lowFactor()
+local more = 1 + ((S.LowBoostPct or 25) / 100) * f
+extra = clamp(extra * more, 0, S.SpeedCap * more)
+local lv = Speed.level * (1 - f)
+if S.AntiRubber and lv > 0 then extra = extra / (1 + lv) end
 return extra
 end
 function Speed.noteRubber()
@@ -5996,9 +6046,16 @@ UI.Slider(rb, "Level (0 = normal, each level x1.1)", "RunAdd", 0, 15, 1, 0)
 local bb = UI.Card(P, "Ball speed boost (with the ball)")
 UI.Toggle(bb, "Ball speed boost", "BallSpeedOn", function(v) if v then Speed.resetAuto() end end)
 UI.Slider(bb, "Level (0 = normal, each level x1.1)", "BallAdd", 0, 15, 1, 0)
+local lw = UI.Card(P, "Low settings fix")
+UI.lowStat = UI.Stat(lw, "Your device")
+UI.Note(lw, "On low graphics or a low frame rate the speed boost and the dribble glide lose strength. This gives the boost a percentage more and keeps the glide, just weaker.")
+UI.Toggle(lw, "Low settings fix", "LowFix")
+UI.Slider(lw, "Extra speed boost on low settings", "LowBoostPct", 0, 100, 5, 0, "%")
+UI.Slider(lw, "Glide strength on low settings", "LowGlidePct", 10, 100, 5, 0, "%")
+UI.Slider(lw, "Count graphics up to this level as low", "LowLevel", 1, 8, 1, 0)
 local rs = UI.Card(P, "Restore")
 UI.Button(rs, "Restore to default", function()
-UI.restore({ "SpeedOn", "SpeedAdd", "RunOn", "RunAdd", "BallSpeedOn", "BallAdd" }, function() Speed.resetAuto() end)
+UI.restore({ "SpeedOn", "SpeedAdd", "RunOn", "RunAdd", "BallSpeedOn", "BallAdd", "LowFix", "LowBoostPct", "LowGlidePct", "LowLevel" }, function() Speed.resetAuto() end)
 end)
 end
 P = UI.Page("Ball Mags", "B")
@@ -6301,7 +6358,7 @@ end
 end
 function Glide.start(kind, power, duration, dirOverride)
 local r, h = Mover.body(), hum()
-power = power * (S.GlideSpeed or 1)
+power = power * (S.GlideSpeed or 1) * Glide.lowScale()
 if not r or not h or power <= 0 or duration <= 0 then return end
 local now = tick()
 if now - (Glide.lastStart[kind] or 0) < duration * 0.5 then return end
@@ -8136,6 +8193,10 @@ end)
 task.spawn(function()
 while JH.Running do
 pcall(Feat.magnetStep)
+if UI.lowStat and tick() - (Speed.lowStatT or 0) > 1 then
+Speed.lowStatT = tick()
+UI.lowStat.Text = Speed.lowStatusText()
+end
 pcall(Feat.V.step)
 task.wait(0.05)
 end
@@ -8223,7 +8284,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.35 shot-line"
+local VERSION = "v1.37 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -8327,6 +8388,7 @@ local S = {
 	GfxCullDist = 250, GfxBoost = false, GfxFpsCap = 0, PingStab = false, PingWindow = 3, FinalAdj = "",
 	ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
 	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014,
+	LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 	AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
 	AR = false, ARSpeed = 1.3, ARReact = 0.05, ARRange = 70, ARJump = true, ARMagnet = true, ARMagRange = 8, ARMarker = false,
@@ -8434,6 +8496,10 @@ S.AutoCal = S.AutoGreen ~= false
 S.Learn = S.AutoCal
 if S.PerfectGreen == nil then S.PerfectGreen = false end
 if S.PeakLead == nil then S.PeakLead = 0.027 end
+if S.LowFix == nil then S.LowFix = true end
+if S.LowBoostPct == nil then S.LowBoostPct = 25 end
+if S.LowGlidePct == nil then S.LowGlidePct = 60 end
+if S.LowLevel == nil then S.LowLevel = 3 end
 if S.PerfectGreenPct == nil then S.PerfectGreenPct = 100 end
 if S.AutoTimes == nil then S.AutoTimes = "" end
 if S.SettingsVer < 14 then
@@ -10750,7 +10816,7 @@ function Glide.judge(kind, method, startPos, dir, power, duration, fadeStart, ba
 end
 function Glide.start(kind, power, duration, dirOverride)
 	local r, h = Mover.body(), hum()
-	power = power * (S.GlideSpeed or 1)
+	power = power * (S.GlideSpeed or 1) * Glide.lowScale()
 	if not r or not h or power <= 0 or duration <= 0 then return end
 	local now = tick()
 	-- one move plays several animations at once, so repeat triggers during the slide are ignored
@@ -10942,12 +11008,57 @@ function Speed.pick()
 	if S.SpeedOn then return "walk", S.SpeedAdd end
 	return nil, 0
 end
+-- LOW SETTINGS: a device on low graphics (or a low frame rate) is pulled back by the server more often and loses most of its boost,
+-- so on low settings the boost is raised by a percentage and the glide is kept but weaker
+function Speed.graphicsLevel()
+local lvl
+pcall(function()
+local saved = UserSettings():GetService("UserGameSettings").SavedQualityLevel
+if saved and saved.Value and saved.Value >= 1 then lvl = saved.Value end
+end)
+if not lvl then
+pcall(function()
+local q = settings().Rendering.QualityLevel
+if q and q.Value and q.Value >= 1 then lvl = q.Value end
+end)
+end
+return lvl
+end
+-- 0 = normal settings, 1 = lowest, in between for a little low
+function Speed.lowFactor()
+if S.LowFix == false then return 0 end
+local f = 0
+local lvl = Speed.graphicsLevel()
+local top = S.LowLevel or 3
+if lvl then
+if lvl <= top then f = 1 elseif lvl <= top + 2 then f = 0.5 end
+end
+local fps = JH.FPS or 60
+if fps < 28 then f = math.max(f, 1) elseif fps < 40 then f = math.max(f, 0.5) end
+return f
+end
+function Glide.lowScale()
+local f = Speed.lowFactor()
+if f <= 0 then return 1 end
+local pct = clamp((S.LowGlidePct or 60) / 100, 0.1, 1)
+return 1 - (1 - pct) * f
+end
+function Speed.lowStatusText()
+local lvl = Speed.graphicsLevel()
+local f = Speed.lowFactor()
+local gtxt = lvl and ("graphics level " .. lvl) or "graphics level unknown"
+local state = (S.LowFix == false) and "fix off" or (f >= 1 and "LOW, fix on") or (f > 0 and "a little low, fix half on" or "normal, fix not needed")
+return string.format("%s, %d FPS - %s", gtxt, math.floor((JH.FPS or 0) + 0.5), state)
+end
 function Speed.extraNow()
 	local kind, level = Speed.pick()
 	Speed.kind = kind
 	local extra = (kind and level > 0) and Speed.gameWS * (1.1 ^ level - 1) or 0
-	extra = clamp(extra, 0, S.SpeedCap)
-	if S.AntiRubber and Speed.level > 0 then extra = extra / (1 + Speed.level) end
+	local f = Speed.lowFactor()
+	local more = 1 + ((S.LowBoostPct or 25) / 100) * f
+	extra = clamp(extra * more, 0, S.SpeedCap * more)
+	local lv = Speed.level * (1 - f)
+	if S.AntiRubber and lv > 0 then extra = extra / (1 + lv) end
 	return extra
 end
 -- the server keeps pulling you back: boost is cut automatically so you do not get flagged or stuck
@@ -14482,10 +14593,17 @@ do
 	local bb = UI.Card(P, "Ball speed boost (with the ball)")
 	UI.Toggle(bb, "Ball speed boost", "BallSpeedOn", function(v) if v then Speed.resetAuto() end end)
 	UI.Slider(bb, "Level (0 = normal, each level x1.1)", "BallAdd", 0, 15, 1, 0)
+	local lw = UI.Card(P, "Low settings fix")
+	UI.lowStat = UI.Stat(lw, "Your device")
+	UI.Note(lw, "On low graphics or a low frame rate the speed boost and the dribble glide lose strength. This gives the boost a percentage more and keeps the glide, just weaker.")
+	UI.Toggle(lw, "Low settings fix", "LowFix")
+	UI.Slider(lw, "Extra speed boost on low settings", "LowBoostPct", 0, 100, 5, 0, "%")
+	UI.Slider(lw, "Glide strength on low settings", "LowGlidePct", 10, 100, 5, 0, "%")
+	UI.Slider(lw, "Count graphics up to this level as low", "LowLevel", 1, 8, 1, 0)
 
 	local rs = UI.Card(P, "Restore")
 	UI.Button(rs, "Restore to default", function()
-		UI.restore({ "SpeedOn", "SpeedAdd", "RunOn", "RunAdd", "BallSpeedOn", "BallAdd" }, function() Speed.resetAuto() end)
+		UI.restore({ "SpeedOn", "SpeedAdd", "RunOn", "RunAdd", "BallSpeedOn", "BallAdd", "LowFix", "LowBoostPct", "LowGlidePct", "LowLevel" }, function() Speed.resetAuto() end)
 	end)
 end
 
@@ -14833,7 +14951,7 @@ function Glide.judge(kind, method, startPos, dir, expected, why)
 end
 function Glide.start(kind, power, duration, dirOverride)
 	local r, h = Mover.body(), hum()
-	power = power * (S.GlideSpeed or 1)
+	power = power * (S.GlideSpeed or 1) * Glide.lowScale()
 	if not r or not h or power <= 0 or duration <= 0 then return end
 	local now = tick()
 	if now - (Glide.lastStart[kind] or 0) < duration * 0.5 then return end
@@ -16675,6 +16793,10 @@ end)
 task.spawn(function()
 	while JH.Running do
 		pcall(Feat.magnetStep)
+		if UI.lowStat and tick() - (Speed.lowStatT or 0) > 1 then
+		Speed.lowStatT = tick()
+		UI.lowStat.Text = Speed.lowStatusText()
+		end
 		pcall(Feat.V.step)
 		task.wait(0.05)
 	end
