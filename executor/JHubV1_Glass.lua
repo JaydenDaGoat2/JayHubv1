@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.31 shot-line"
+local VERSION = "v1.32 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -1052,6 +1052,15 @@ local n = Anim.name(track)
 if track.Looped and matchAny(n, { "dribble", "ball", "handle" }) then Anim.loops[track] = true end
 Shot.noteTrack(track)
 pcall(Anim.fndTrack, track)
+if Rec.shotOn then
+pcall(function()
+if track.Looped or not Anim.isAction(track) then return end
+Rec.shotAdd(string.format("TRACK name=%s id=%s len=%.3f speed=%s priority=%s", tostring((track.Animation and track.Animation.Name) or track.Name or "?"), Anim.idOf(track), track.Length or 0, tostring(track.Speed), tostring(track.Priority.Value)))
+track.KeyframeReached:Connect(function(name)
+if Rec.shotOn then Rec.shotAdd(string.format("KEYFRAME id=%s name=%s at=%.3f", Anim.idOf(track), tostring(name), track.TimePosition or 0)) end
+end)
+end)
+end
 local kind, how = Anim.classify(track)
 if Rec.on then
 Rec.add("anim", string.format("%s id=%s len=%.2f prio=%s looped=%s speed=%s -> %s", (track.Name or "") ~= "" and track.Name or "?",
@@ -1972,8 +1981,16 @@ local id = Anim.idOf(tr)
 if id ~= "" then ids[#ids + 1] = string.gsub(id, "rbxassetid://", "") end
 end
 table.sort(ids)
-if #ids == 0 then return "sit:" .. sit end
-return table.concat(ids, "+")
+if #ids > 0 then return table.concat(ids, "+") end
+local sig = {}
+for _, tr in ipairs(cap.tracks) do
+local a = tr.Animation
+local nm = string.lower(tostring((a and a.Name) or tr.Name or ""))
+if nm ~= "" then sig[#sig + 1] = string.format("%s@%.2f", nm, tonumber(tr.Length) or 0) end
+end
+table.sort(sig)
+if #sig > 0 then return "tr:" .. table.concat(sig, "+") end
+return "sit:" .. sit
 end
 Shot.SWEEPSCALE = { ["71484695722621"] = 1, ["77401448272074"] = 1, ["128777513307709+77401448272074"] = 1 }
 Shot.SWEEPLIST = {
@@ -2010,7 +2027,7 @@ if d < 60 then return string.format("%ds ago", math.floor(d)) end
 return string.format("%dm ago", math.floor(d / 60))
 end
 function Shot.nameFor(key, anim)
-local n = Shot.keyName[key] or Shot.NAMES[key]
+local n = Shot.keyName[key] or Shot.NAMES[key] or Shot.NAMES[string.match(tostring(key), "^(.-)#") or ""]
 if n then return n end
 if anim and anim ~= "" then return tostring(anim) end
 return "Shot " .. string.sub(tostring(key), -6)
@@ -2032,11 +2049,12 @@ for i = 1, math.min(4, #Shot.adjLog) do
 local a = Shot.adjLog[i]
 lines[#lines + 1] = string.format("%s: %.3f -> %.3fs (%s)", agoText(a.t), a.from, a.to, a.why)
 end
+local profTxt = Shot.fpText(cur.fp)
 local comp, p = Shot.pingComp()
 local ptxt
 if S.PerfectGreen then ptxt = string.format("%.0f ms earlier (ping %.0f ms)", comp * 1000, p * 1000) else ptxt = string.format("off (ping %.0f ms)", p * 1000) end
 return Shot.nameFor(cur.key, cur.anim), (cur.mode == "peak") and string.format("%.0f ms before the peak", cur.hold * 1000) or string.format("%.3fs", cur.hold), cur.state or "-", last,
-(#lines > 0) and table.concat(lines, "\n") or "No change yet", ptxt
+(#lines > 0) and table.concat(lines, "\n") or "No change yet", ptxt, profTxt
 end
 function Shot.statusStep()
 local st = UI.autoStat
@@ -2044,9 +2062,10 @@ if not st then return end
 local now = tick()
 if Shot.statusT and now - Shot.statusT < 0.25 then return end
 Shot.statusT = now
-local a, b, c, d, e, f = Shot.statusLines()
+local a, b, c, d, e, f, g = Shot.statusLines()
 st.shot.Text, st.timing.Text, st.state.Text, st.last.Text, st.adj.Text = a, b, c, d, e
 if st.ping then st.ping.Text = f end
+if st.profile then st.profile.Text = g or "-" end
 local fd = UI.finder
 if fd then
 pcall(Anim.fndStep)
@@ -2073,6 +2092,80 @@ if not S.PerfectGreen then return 0, p end
 local comp = (p - Shot.PING_REF) * ((S.PerfectGreenPct or 100) / 100)
 return clamp(comp, -0.02, 0.2), p
 end
+Shot.baseSeen = {}
+Shot.profiles = {}
+function Shot.idSet(key)
+local set, n = {}, 0
+for id in string.gmatch(tostring(key or ""), "%d+") do
+if #id >= 6 then
+set[id] = true
+n = n + 1
+end
+end
+return set, n
+end
+function Shot.matchBase(base)
+local set, n = Shot.idSet(base)
+if n == 0 then return base end
+Shot.autoLoad()
+local known = {}
+for k in pairs(Shot.FINAL) do known[k] = true end
+for k in pairs(Shot.baseSeen) do known[k] = true end
+for k in pairs(Shot.auto) do known[string.match(k, "^(.-)#") or k] = true end
+if known[base] then return base end
+local best, bscore = nil, 0
+for k in pairs(known) do
+local s2, n2 = Shot.idSet(k)
+if n2 > 0 then
+local inter = 0
+for id in pairs(set) do
+if s2[id] then inter = inter + 1 end
+end
+local union = n + n2 - inter
+local score = inter / union
+if (inter == n or inter == n2) and inter > 0 then score = math.max(score, 0.7) end
+if score >= 0.6 and score > bscore then best, bscore = k, score end
+end
+end
+return best or base
+end
+function Shot.context()
+local c = char()
+local vel = c and c:GetAttribute("ServerVelocity")
+local spd = (typeof(vel) == "Vector3") and vel.Magnitude or 0
+local gather = c and c:GetAttribute("GatherType")
+if type(gather) ~= "string" or gather == "" then gather = "none" end
+local post = c and c:GetAttribute("InPost") == true
+local move = spd > 1.5 and "move" or "stand"
+return move .. (post and ".post" or "") .. ".g" .. gather, move, post, gather
+end
+function Shot.fingerprint(rawBase, cap)
+local base = Shot.matchBase(rawBase)
+local ctx, move, post, gather = Shot.context()
+local how = string.match(rawBase, "^(%a+):") or "ids"
+local _, nids = Shot.idSet(base)
+local legacy = Shot.FINAL[base] or Shot.auto[base] or Shot.times["la:" .. base] or Shot.times["r:" .. base]
+local plain = legacy or not S.AutoCal or (S.Sweep and Rec.shotOn)
+local pkey = plain and base or (base .. "#" .. ctx)
+local info = {}
+for _, tr in ipairs(cap and cap.tracks or {}) do
+local a = tr.Animation
+info[#info + 1] = string.format("%s len=%.2f speed=%.2f", tostring((a and a.Name) or tr.Name or "?"), tonumber(tr.Length) or 0, tonumber(tr.Speed) or 1)
+end
+local known = (Shot.auto[pkey] ~= nil) or (Shot.FINAL[pkey] ~= nil)
+Shot.baseSeen[base] = true
+return { raw = rawBase, base = base, ctx = ctx, move = move, post = post, gather = gather, how = how, nids = nids, profileKey = pkey,
+known = known, tracks = info }
+end
+function Shot.fpText(fp)
+if not fp then return "-" end
+local how = (fp.how == "ids") and (fp.nids .. " animation ID" .. (fp.nids == 1 and "" or "s")) or (fp.how == "tr" and "track names and lengths") or (fp.how == "sit" and "movement only") or fp.how
+local parts = { how, (fp.move == "move") and "moving" or "standing" }
+if fp.post then parts[#parts + 1] = "post" end
+if fp.gather ~= "none" then parts[#parts + 1] = "gather " .. fp.gather end
+parts[#parts + 1] = fp.known and "known" or "new profile"
+return table.concat(parts, " - ")
+end
 Shot.AUTO_START = 0.34
 Shot.AUTO_SCAN = { 0.30, 0.32, 0.34, 0.36, 0.38, 0.31, 0.33, 0.35, 0.37, 0.29, 0.39, 0.40, 0.28 }
 Shot.auto = {}
@@ -2081,13 +2174,18 @@ function Shot.autoLoad()
 if Shot.autoLoaded then return end
 Shot.autoLoaded = true
 Shot.auto = {}
-for kind, key, val in string.gmatch(S.AutoTimes or "", "(%a):(%S-)=([%d%.]+)") do
-Shot.auto[key] = { hold = tonumber(val), greens = {}, locked = (kind == "L" or kind == "l"), dir = 1, mode = (kind == "l" or kind == "p") and "peak" or nil }
+for kind, key, val, anc in string.gmatch(S.AutoTimes or "", "(%a):(%S-)=([%d%.]+)@?([%d%.]*)") do
+Shot.auto[key] = { hold = tonumber(val), greens = {}, locked = (kind == "L" or kind == "l"), dir = 1, mode = (kind == "l" or kind == "p") and "peak" or nil, anchor = tonumber(anc) }
 end
 end
 function Shot.autoSave()
 local parts = {}
-for key, a in pairs(Shot.auto) do parts[#parts + 1] = string.format("%s:%s=%.4f", a.mode == "peak" and (a.locked and "l" or "p") or (a.locked and "L" or "P"), key, a.hold) end
+for key, a in pairs(Shot.auto) do local kindc = a.mode == "peak" and (a.locked and "l" or "p") or (a.locked and "L" or "P")
+if a.anchor and a.locked then
+parts[#parts + 1] = string.format("%s:%s=%.4f@%.4f", kindc, key, a.hold, a.anchor)
+else
+parts[#parts + 1] = string.format("%s:%s=%.4f", kindc, key, a.hold)
+end end
 table.sort(parts)
 S.AutoTimes = table.concat(parts, " ")
 saveSoon()
@@ -2128,9 +2226,30 @@ if a < 1.2 or a > 5 then return nil end
 return t0 + (Shot.PEAK_Q - b) / a
 end
 function Shot.peakLearn(info, res, strength, a, key)
-if a.locked then return true end
 local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 if not idx then return true end
+a.hist = a.hist or {}
+a.hist[#a.hist + 1] = idx
+if #a.hist > 8 then table.remove(a.hist, 1) end
+a.shots = (a.shots or 0) + 1
+if idx == 5 then a.perfects = (a.perfects or 0) + 1 end
+if a.locked then
+if info.manual or #a.hist < 6 then return true end
+local late, early, perf = 0, 0, 0
+for _, v in ipairs(a.hist) do
+if v >= 6 then late = late + 1 elseif v <= 3 then early = early + 1 elseif v == 5 then perf = perf + 1 end
+end
+if perf == 0 and (late >= 5 or early >= 5) then
+a.anchor = a.anchor or a.hold
+local nl = clamp(a.hold + (late >= 5 and 0.004 or -0.004), a.anchor - 0.012, a.anchor + 0.012)
+if math.abs(nl - a.hold) > 0.0001 then
+Shot.noteAdjust(key, a.hold, nl, (late >= 5 and "mostly late" or "mostly early") .. ", small correction")
+a.hold, a.hist = nl, {}
+Shot.autoSave()
+end
+end
+return true
+end
 if info.manual and idx ~= 5 then return true end
 local lead = info.lead or a.hold
 if not info.manual and math.abs(lead - a.hold) > 0.05 then return true end
@@ -2181,8 +2300,8 @@ if not Shot.autoActive(key) then return false end
 Shot.autoLoad()
 local a = Shot.auto[key]
 if not a then return false end
-if a.locked then return true end
 if a.mode == "peak" then return Shot.peakLearn(info, res, strength, a, key) end
+if a.locked then return true end
 local held = (info.held or 0) + (info.comp or 0)
 local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 if not idx or not held then return true end
@@ -2243,7 +2362,23 @@ if Shot.autoActive(key) then
 Shot.autoLoad()
 local a = Shot.auto[key]
 if not a then
-a = { hold = S.PeakLead or 0.027, greens = {}, locked = false, dir = 1, mode = "peak" }
+local start, parent = S.PeakLead or 0.027, nil
+local pbase = string.match(key, "^(.-)#")
+if pbase then
+local pa = Shot.auto[pbase]
+if pa and pa.mode == "peak" then
+start, parent = pa.hold, pbase
+else
+local sum, cnt = 0, 0
+for k, v in pairs(Shot.auto) do
+if v.mode == "peak" and v.locked and string.sub(k, 1, #pbase + 1) == pbase .. "#" then
+sum, cnt = sum + v.hold, cnt + 1
+end
+end
+if cnt > 0 then start = sum / cnt end
+end
+end
+a = { hold = start, greens = {}, locked = false, dir = 1, mode = "peak", parent = parent }
 Shot.auto[key] = a
 end
 Shot.lastSweep = nil
@@ -2390,9 +2525,20 @@ local pw = tick() + 0.12
 while (Shot.packetT < m0 - 0.01 or #cap.tracks == 0) and tick() < pw do RunService.Heartbeat:Wait() end
 local pk = Shot.packetT >= m0 - 0.01 and Shot.packet or nil
 local sit = Shot.situation()
-local key = Shot.remoteKey(cap, sit)
+local fp = Shot.fingerprint(Shot.remoteKey(cap, sit), cap)
+local key = fp.profileKey
 Shot.cap = nil
+if Rec.shotOn then
+Rec.shotAdd(string.format("FINGERPRINT %s | base=%s | profile=%s | context=%s | tracks=%s", Shot.fpText(fp), fp.base, key, fp.ctx, table.concat(fp.tracks, "; ")))
+end
 local hold, base, mode = Shot.remoteHold(key, pk)
+if Shot.cur then Shot.cur.fp = fp end
+local prof = Shot.profiles[key]
+if not prof then
+prof = { base = fp.base, ctx = fp.ctx, first = tick(), count = 0 }
+Shot.profiles[key] = prof
+end
+prof.count, prof.last = prof.count + 1, tick()
 local comp, peakLead = 0, nil
 if mode == "peak" then
 peakLead = hold
@@ -2464,7 +2610,7 @@ Rec.shotAdd(string.format("RELEASE meter=%s target=%.3f predicted=%s samples=%d 
 Shot.lastRelease, tostring(S.ShotStyle), tostring(pcall(function() return LP:GetNetworkPing() end) and LP:GetNetworkPing() or "?"), comp, tostring(peakLead)))
 end
 task.spawn(Shot.evaluate, { snap = snap, since = since, sit = sit, key = key, base = base, held = held, manual = manual,
-pk = pk, remote = true, usedBar = false, usedMeter = usedMeter, qpred = qpred, comp = manual and 0 or comp, lead = peakLead })
+pk = pk, remote = true, usedBar = false, usedMeter = usedMeter, qpred = qpred, comp = manual and 0 or comp, lead = peakLead, baseKey = fp.base, ctx = fp.ctx })
 end
 function Shot.core(mode, ctx)
 if mode == "remote" then return Shot.remoteCore(ctx) end
@@ -4846,10 +4992,10 @@ local ctx = Rec.shotCtx or {}
 local gtype = string.match(tostring(Shot.fbText or ""), "Shot Type %- (%S+)")
 local function at(n) return c and tostring(c:GetAttribute(n)) or "?" end
 local n = #Rec.shotSummary + 1
-Rec.shotSummary[n] = string.format("SHOT %d | %s | game type=%s | anim=%s | ShotSpeed=%s | speed at start=%.1f | hand=%s | gather=%s | last dribble=%s | in air=%s | held=%.4f | verdict=%s idx=%s | message=%s | contest=%s | key=%s | start hold=%s | frozen meter=%s | sweep=%s",
+Rec.shotSummary[n] = string.format("SHOT %d | %s | game type=%s | anim=%s | ShotSpeed=%s | speed at start=%.1f | hand=%s | gather=%s | last dribble=%s | in air=%s | held=%.4f | verdict=%s idx=%s | message=%s | contest=%s | key=%s | start hold=%s | frozen meter=%s | sweep=%s | base=%s | context=%s",
 n, Rec.shotCategory(ctx, gtype), tostring(gtype), at("BaseAnimation"), at("ShotSpeed"), ctx.speed or 0, at("Hand"), at("GatherType"), at("LastDribblePackage"),
 tostring(ctx.air), info.held or 0, tostring(res), tostring(info.idx), tostring(text), tostring(string.match(tostring(Shot.fbText or ""), "Contest %- (%S+)")),
-tostring(info.key), tostring(info.base and string.format("%.3f", info.base)), at("meterOffset"), tostring(Shot.lastSweep))
+tostring(info.key), tostring(info.base and string.format("%.3f", info.base)), at("meterOffset"), tostring(Shot.lastSweep), tostring(info.baseKey), tostring(info.ctx))
 end
 function Rec.shotMeterStart(packet)
 if not Rec.shotOn then return end
@@ -6112,7 +6258,7 @@ R.rec = UI.Stat(rc, "Recorded")
 UI.Buttons(rc, { { "Copy recording", Rec.copy }, { "Clear", Rec.clear } })
 UI.Button(rc, "Copy remote spy (RSpy)", Rec.copySpy)
 local ag = UI.Card(P, "Auto Green status")
-UI.autoStat = { shot = UI.Stat(ag, "Jump shot"), timing = UI.Stat(ag, "Timing"), state = UI.Stat(ag, "State"), last = UI.Stat(ag, "Last shot"), ping = UI.Stat(ag, "Ping fix"),
+UI.autoStat = { shot = UI.Stat(ag, "Jump shot"), timing = UI.Stat(ag, "Timing"), state = UI.Stat(ag, "State"), last = UI.Stat(ag, "Last shot"), ping = UI.Stat(ag, "Ping fix"), profile = UI.Stat(ag, "Profile"),
 adj = UI.Note(ag, "No change yet") }
 local fc = UI.Card(P, "Shot finder")
 UI.finder = { now = UI.Stat(fc, "You are on"), type = UI.Stat(fc, "Type"), timing = UI.Stat(fc, "Auto Green"), last = nil }
@@ -6625,7 +6771,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.31 shot-line"
+local VERSION = "v1.32 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -7704,6 +7850,15 @@ function Anim.handle(track)
 	if track.Looped and matchAny(n, { "dribble", "ball", "handle" }) then Anim.loops[track] = true end
 	Shot.noteTrack(track)
 	pcall(Anim.fndTrack, track)
+	if Rec.shotOn then
+		pcall(function()
+			if track.Looped or not Anim.isAction(track) then return end
+			Rec.shotAdd(string.format("TRACK name=%s id=%s len=%.3f speed=%s priority=%s", tostring((track.Animation and track.Animation.Name) or track.Name or "?"), Anim.idOf(track), track.Length or 0, tostring(track.Speed), tostring(track.Priority.Value)))
+			track.KeyframeReached:Connect(function(name)
+				if Rec.shotOn then Rec.shotAdd(string.format("KEYFRAME id=%s name=%s at=%.3f", Anim.idOf(track), tostring(name), track.TimePosition or 0)) end
+			end)
+		end)
+	end
 	local kind, how = Anim.classify(track)
 	if Rec.on then
 		Rec.add("anim", string.format("%s id=%s len=%.2f prio=%s looped=%s speed=%s -> %s", (track.Name or "") ~= "" and track.Name or "?",
@@ -8660,8 +8815,17 @@ function Shot.remoteKey(cap, sit)
 		if id ~= "" then ids[#ids + 1] = string.gsub(id, "rbxassetid://", "") end
 	end
 	table.sort(ids)
-	if #ids == 0 then return "sit:" .. sit end
-	return table.concat(ids, "+")
+	if #ids > 0 then return table.concat(ids, "+") end
+	-- no animation IDs: the track names and lengths still tell shots apart
+	local sig = {}
+	for _, tr in ipairs(cap.tracks) do
+		local a = tr.Animation
+		local nm = string.lower(tostring((a and a.Name) or tr.Name or ""))
+		if nm ~= "" then sig[#sig + 1] = string.format("%s@%.2f", nm, tonumber(tr.Length) or 0) end
+	end
+	table.sort(sig)
+	if #sig > 0 then return "tr:" .. table.concat(sig, "+") end
+	return "sit:" .. sit
 end
 Shot.SWEEPSCALE = { ["71484695722621"] = 1, ["77401448272074"] = 1, ["128777513307709+77401448272074"] = 1 }
 Shot.SWEEPLIST = {
@@ -8698,7 +8862,7 @@ local function agoText(t)
 	return string.format("%dm ago", math.floor(d / 60))
 end
 function Shot.nameFor(key, anim)
-	local n = Shot.keyName[key] or Shot.NAMES[key]
+	local n = Shot.keyName[key] or Shot.NAMES[key] or Shot.NAMES[string.match(tostring(key), "^(.-)#") or ""]
 	if n then return n end
 	if anim and anim ~= "" then return tostring(anim) end
 	return "Shot " .. string.sub(tostring(key), -6)
@@ -8720,11 +8884,12 @@ function Shot.statusLines()
 		local a = Shot.adjLog[i]
 		lines[#lines + 1] = string.format("%s: %.3f -> %.3fs (%s)", agoText(a.t), a.from, a.to, a.why)
 	end
+	local profTxt = Shot.fpText(cur.fp)
 	local comp, p = Shot.pingComp()
 	local ptxt
 	if S.PerfectGreen then ptxt = string.format("%.0f ms earlier (ping %.0f ms)", comp * 1000, p * 1000) else ptxt = string.format("off (ping %.0f ms)", p * 1000) end
 	return Shot.nameFor(cur.key, cur.anim), (cur.mode == "peak") and string.format("%.0f ms before the peak", cur.hold * 1000) or string.format("%.3fs", cur.hold), cur.state or "-", last,
-		(#lines > 0) and table.concat(lines, "\n") or "No change yet", ptxt
+		(#lines > 0) and table.concat(lines, "\n") or "No change yet", ptxt, profTxt
 end
 function Shot.statusStep()
 	local st = UI.autoStat
@@ -8732,9 +8897,10 @@ function Shot.statusStep()
 	local now = tick()
 	if Shot.statusT and now - Shot.statusT < 0.25 then return end
 	Shot.statusT = now
-	local a, b, c, d, e, f = Shot.statusLines()
+	local a, b, c, d, e, f, g = Shot.statusLines()
 	st.shot.Text, st.timing.Text, st.state.Text, st.last.Text, st.adj.Text = a, b, c, d, e
 	if st.ping then st.ping.Text = f end
+	if st.profile then st.profile.Text = g or "-" end
 	local fd = UI.finder
 	if fd then
 		pcall(Anim.fndStep)
@@ -8761,6 +8927,86 @@ function Shot.pingComp()
 	local comp = (p - Shot.PING_REF) * ((S.PerfectGreenPct or 100) / 100)
 	return clamp(comp, -0.02, 0.2), p
 end
+-- ANIMATION FINGERPRINT: every shot is identified by what the game exposes, so a jump shot nobody has set up still gets its own profile.
+--   1. the animation IDs of the shot's tracks (what the game really plays)
+--   2. if the game gives no IDs: the track names and lengths, then the move the game writes on your character, then your movement
+--   3. the context: standing or moving, post, and the gather (none, fake, pump fake, backstep, spin), because the same shot animation
+--      is played after every one of those and each needs its own release point
+Shot.baseSeen = {}
+Shot.profiles = {}
+function Shot.idSet(key)
+	local set, n = {}, 0
+	for id in string.gmatch(tostring(key or ""), "%d+") do
+		if #id >= 6 then
+			set[id] = true
+			n = n + 1
+		end
+	end
+	return set, n
+end
+-- the same shot sometimes plays one extra animation (a different lead-in). A set that holds, or is held by, a known one is the same shot.
+function Shot.matchBase(base)
+	local set, n = Shot.idSet(base)
+	if n == 0 then return base end
+	Shot.autoLoad()
+	local known = {}
+	for k in pairs(Shot.FINAL) do known[k] = true end
+	for k in pairs(Shot.baseSeen) do known[k] = true end
+	for k in pairs(Shot.auto) do known[string.match(k, "^(.-)#") or k] = true end
+	if known[base] then return base end
+	local best, bscore = nil, 0
+	for k in pairs(known) do
+		local s2, n2 = Shot.idSet(k)
+		if n2 > 0 then
+			local inter = 0
+			for id in pairs(set) do
+				if s2[id] then inter = inter + 1 end
+			end
+			local union = n + n2 - inter
+			local score = inter / union
+			if (inter == n or inter == n2) and inter > 0 then score = math.max(score, 0.7) end
+			if score >= 0.6 and score > bscore then best, bscore = k, score end
+		end
+	end
+	return best or base
+end
+function Shot.context()
+	local c = char()
+	local vel = c and c:GetAttribute("ServerVelocity")
+	local spd = (typeof(vel) == "Vector3") and vel.Magnitude or 0
+	local gather = c and c:GetAttribute("GatherType")
+	if type(gather) ~= "string" or gather == "" then gather = "none" end
+	local post = c and c:GetAttribute("InPost") == true
+	local move = spd > 1.5 and "move" or "stand"
+	return move .. (post and ".post" or "") .. ".g" .. gather, move, post, gather
+end
+function Shot.fingerprint(rawBase, cap)
+	local base = Shot.matchBase(rawBase)
+	local ctx, move, post, gather = Shot.context()
+	local how = string.match(rawBase, "^(%a+):") or "ids"
+	local _, nids = Shot.idSet(base)
+	local legacy = Shot.FINAL[base] or Shot.auto[base] or Shot.times["la:" .. base] or Shot.times["r:" .. base]
+	local plain = legacy or not S.AutoCal or (S.Sweep and Rec.shotOn)
+	local pkey = plain and base or (base .. "#" .. ctx)
+	local info = {}
+	for _, tr in ipairs(cap and cap.tracks or {}) do
+		local a = tr.Animation
+		info[#info + 1] = string.format("%s len=%.2f speed=%.2f", tostring((a and a.Name) or tr.Name or "?"), tonumber(tr.Length) or 0, tonumber(tr.Speed) or 1)
+	end
+	local known = (Shot.auto[pkey] ~= nil) or (Shot.FINAL[pkey] ~= nil)
+	Shot.baseSeen[base] = true
+	return { raw = rawBase, base = base, ctx = ctx, move = move, post = post, gather = gather, how = how, nids = nids, profileKey = pkey,
+		known = known, tracks = info }
+end
+function Shot.fpText(fp)
+	if not fp then return "-" end
+	local how = (fp.how == "ids") and (fp.nids .. " animation ID" .. (fp.nids == 1 and "" or "s")) or (fp.how == "tr" and "track names and lengths") or (fp.how == "sit" and "movement only") or fp.how
+	local parts = { how, (fp.move == "move") and "moving" or "standing" }
+	if fp.post then parts[#parts + 1] = "post" end
+	if fp.gather ~= "none" then parts[#parts + 1] = "gather " .. fp.gather end
+	parts[#parts + 1] = fp.known and "known" or "new profile"
+	return table.concat(parts, " - ")
+end
 Shot.AUTO_START = 0.34
 Shot.AUTO_SCAN = { 0.30, 0.32, 0.34, 0.36, 0.38, 0.31, 0.33, 0.35, 0.37, 0.29, 0.39, 0.40, 0.28 }
 Shot.auto = {}
@@ -8769,13 +9015,18 @@ function Shot.autoLoad()
 	if Shot.autoLoaded then return end
 	Shot.autoLoaded = true
 	Shot.auto = {}
-	for kind, key, val in string.gmatch(S.AutoTimes or "", "(%a):(%S-)=([%d%.]+)") do
-		Shot.auto[key] = { hold = tonumber(val), greens = {}, locked = (kind == "L" or kind == "l"), dir = 1, mode = (kind == "l" or kind == "p") and "peak" or nil }
+	for kind, key, val, anc in string.gmatch(S.AutoTimes or "", "(%a):(%S-)=([%d%.]+)@?([%d%.]*)") do
+		Shot.auto[key] = { hold = tonumber(val), greens = {}, locked = (kind == "L" or kind == "l"), dir = 1, mode = (kind == "l" or kind == "p") and "peak" or nil, anchor = tonumber(anc) }
 	end
 end
 function Shot.autoSave()
 	local parts = {}
-	for key, a in pairs(Shot.auto) do parts[#parts + 1] = string.format("%s:%s=%.4f", a.mode == "peak" and (a.locked and "l" or "p") or (a.locked and "L" or "P"), key, a.hold) end
+	for key, a in pairs(Shot.auto) do local kindc = a.mode == "peak" and (a.locked and "l" or "p") or (a.locked and "L" or "P")
+		if a.anchor and a.locked then
+			parts[#parts + 1] = string.format("%s:%s=%.4f@%.4f", kindc, key, a.hold, a.anchor)
+		else
+			parts[#parts + 1] = string.format("%s:%s=%.4f", kindc, key, a.hold)
+		end end
 	table.sort(parts)
 	S.AutoTimes = table.concat(parts, " ")
 	saveSoon()
@@ -8818,9 +9069,33 @@ function Shot.peakFit(samples)
 	return t0 + (Shot.PEAK_Q - b) / a
 end
 function Shot.peakLearn(info, res, strength, a, key)
-	if a.locked then return true end
 	local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 	if not idx then return true end
+	-- the record of how this profile does, kept for every shot
+	a.hist = a.hist or {}
+	a.hist[#a.hist + 1] = idx
+	if #a.hist > 8 then table.remove(a.hist, 1) end
+	a.shots = (a.shots or 0) + 1
+	if idx == 5 then a.perfects = (a.perfects or 0) + 1 end
+	if a.locked then
+		-- a locked profile stays where it was locked. It only moves a hair, and only after most of its last shots missed the same
+		-- way with no Perfect between, and never further than 12 ms from where it was locked.
+		if info.manual or #a.hist < 6 then return true end
+		local late, early, perf = 0, 0, 0
+		for _, v in ipairs(a.hist) do
+			if v >= 6 then late = late + 1 elseif v <= 3 then early = early + 1 elseif v == 5 then perf = perf + 1 end
+		end
+		if perf == 0 and (late >= 5 or early >= 5) then
+			a.anchor = a.anchor or a.hold
+			local nl = clamp(a.hold + (late >= 5 and 0.004 or -0.004), a.anchor - 0.012, a.anchor + 0.012)
+			if math.abs(nl - a.hold) > 0.0001 then
+				Shot.noteAdjust(key, a.hold, nl, (late >= 5 and "mostly late" or "mostly early") .. ", small correction")
+				a.hold, a.hist = nl, {}
+				Shot.autoSave()
+			end
+		end
+		return true
+	end
 	if info.manual and idx ~= 5 then return true end
 	local lead = info.lead or a.hold
 	if not info.manual and math.abs(lead - a.hold) > 0.05 then return true end
@@ -8872,8 +9147,8 @@ function Shot.autoLearn(info, res, strength)
 	Shot.autoLoad()
 	local a = Shot.auto[key]
 	if not a then return false end
-	if a.locked then return true end
 	if a.mode == "peak" then return Shot.peakLearn(info, res, strength, a, key) end
+	if a.locked then return true end
 	local held = (info.held or 0) + (info.comp or 0)
 	local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 	if not idx or not held then return true end
@@ -8937,7 +9212,24 @@ function Shot.remoteHold(key, pk)
 		Shot.autoLoad()
 		local a = Shot.auto[key]
 		if not a then
-			a = { hold = S.PeakLead or 0.027, greens = {}, locked = false, dir = 1, mode = "peak" }
+			-- a brand new profile starts from the shot it belongs to, or from what the other contexts of it learned
+			local start, parent = S.PeakLead or 0.027, nil
+			local pbase = string.match(key, "^(.-)#")
+			if pbase then
+				local pa = Shot.auto[pbase]
+				if pa and pa.mode == "peak" then
+					start, parent = pa.hold, pbase
+				else
+					local sum, cnt = 0, 0
+					for k, v in pairs(Shot.auto) do
+						if v.mode == "peak" and v.locked and string.sub(k, 1, #pbase + 1) == pbase .. "#" then
+							sum, cnt = sum + v.hold, cnt + 1
+						end
+					end
+					if cnt > 0 then start = sum / cnt end
+				end
+			end
+			a = { hold = start, greens = {}, locked = false, dir = 1, mode = "peak", parent = parent }
 			Shot.auto[key] = a
 		end
 		Shot.lastSweep = nil
@@ -9097,9 +9389,20 @@ function Shot.remoteCore(ctx)
 	while (Shot.packetT < m0 - 0.01 or #cap.tracks == 0) and tick() < pw do RunService.Heartbeat:Wait() end
 	local pk = Shot.packetT >= m0 - 0.01 and Shot.packet or nil
 	local sit = Shot.situation()
-	local key = Shot.remoteKey(cap, sit)
+	local fp = Shot.fingerprint(Shot.remoteKey(cap, sit), cap)
+	local key = fp.profileKey
 	Shot.cap = nil
+	if Rec.shotOn then
+		Rec.shotAdd(string.format("FINGERPRINT %s | base=%s | profile=%s | context=%s | tracks=%s", Shot.fpText(fp), fp.base, key, fp.ctx, table.concat(fp.tracks, "; ")))
+	end
 	local hold, base, mode = Shot.remoteHold(key, pk)
+	if Shot.cur then Shot.cur.fp = fp end
+	local prof = Shot.profiles[key]
+	if not prof then
+		prof = { base = fp.base, ctx = fp.ctx, first = tick(), count = 0 }
+		Shot.profiles[key] = prof
+	end
+	prof.count, prof.last = prof.count + 1, tick()
 	local comp, peakLead = 0, nil
 	if mode == "peak" then
 		peakLead = hold
@@ -9175,7 +9478,7 @@ function Shot.remoteCore(ctx)
 			Shot.lastRelease, tostring(S.ShotStyle), tostring(pcall(function() return LP:GetNetworkPing() end) and LP:GetNetworkPing() or "?"), comp, tostring(peakLead)))
 	end
 	task.spawn(Shot.evaluate, { snap = snap, since = since, sit = sit, key = key, base = base, held = held, manual = manual,
-		pk = pk, remote = true, usedBar = false, usedMeter = usedMeter, qpred = qpred, comp = manual and 0 or comp, lead = peakLead })
+		pk = pk, remote = true, usedBar = false, usedMeter = usedMeter, qpred = qpred, comp = manual and 0 or comp, lead = peakLead, baseKey = fp.base, ctx = fp.ctx })
 end
 function Shot.core(mode, ctx)
 	if mode == "remote" then return Shot.remoteCore(ctx) end
@@ -11661,10 +11964,10 @@ function Rec.shotNote(info, res, text)
 	local gtype = string.match(tostring(Shot.fbText or ""), "Shot Type %- (%S+)")
 	local function at(n) return c and tostring(c:GetAttribute(n)) or "?" end
 	local n = #Rec.shotSummary + 1
-	Rec.shotSummary[n] = string.format("SHOT %d | %s | game type=%s | anim=%s | ShotSpeed=%s | speed at start=%.1f | hand=%s | gather=%s | last dribble=%s | in air=%s | held=%.4f | verdict=%s idx=%s | message=%s | contest=%s | key=%s | start hold=%s | frozen meter=%s | sweep=%s",
+	Rec.shotSummary[n] = string.format("SHOT %d | %s | game type=%s | anim=%s | ShotSpeed=%s | speed at start=%.1f | hand=%s | gather=%s | last dribble=%s | in air=%s | held=%.4f | verdict=%s idx=%s | message=%s | contest=%s | key=%s | start hold=%s | frozen meter=%s | sweep=%s | base=%s | context=%s",
 		n, Rec.shotCategory(ctx, gtype), tostring(gtype), at("BaseAnimation"), at("ShotSpeed"), ctx.speed or 0, at("Hand"), at("GatherType"), at("LastDribblePackage"),
 		tostring(ctx.air), info.held or 0, tostring(res), tostring(info.idx), tostring(text), tostring(string.match(tostring(Shot.fbText or ""), "Contest %- (%S+)")),
-		tostring(info.key), tostring(info.base and string.format("%.3f", info.base)), at("meterOffset"), tostring(Shot.lastSweep))
+		tostring(info.key), tostring(info.base and string.format("%.3f", info.base)), at("meterOffset"), tostring(Shot.lastSweep), tostring(info.baseKey), tostring(info.ctx))
 end
 function Rec.shotMeterStart(packet)
 	if not Rec.shotOn then return end
@@ -12990,7 +13293,7 @@ do
 	UI.Button(rc, "Copy remote spy (RSpy)", Rec.copySpy)
 
 	local ag = UI.Card(P, "Auto Green status")
-	UI.autoStat = { shot = UI.Stat(ag, "Jump shot"), timing = UI.Stat(ag, "Timing"), state = UI.Stat(ag, "State"), last = UI.Stat(ag, "Last shot"), ping = UI.Stat(ag, "Ping fix"),
+	UI.autoStat = { shot = UI.Stat(ag, "Jump shot"), timing = UI.Stat(ag, "Timing"), state = UI.Stat(ag, "State"), last = UI.Stat(ag, "Last shot"), ping = UI.Stat(ag, "Ping fix"), profile = UI.Stat(ag, "Profile"),
 		adj = UI.Note(ag, "No change yet") }
 
 	local fc = UI.Card(P, "Shot finder")
