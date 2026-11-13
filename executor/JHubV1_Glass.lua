@@ -144,7 +144,7 @@ GfxCullDist = 250, GfxBoost = false, GfxFpsCap = 0, PingStab = false, PingWindow
 ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
 LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
-AllJumpers = true, GLead = 0, GLeadN = 0,
+AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "",
 LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -8028,6 +8028,8 @@ UI.Toggle(c, "Auto Green MAX (best timing, all upgrades)", "GreenMax", function(
 for _, k in ipairs({ "LagSync", "PrecFit", "AdaptPlus" }) do UI.set(k, v, false) end
 end)
 UI.Toggle(c, "Green every jumper (shared learning)", "AllJumpers")
+UI.Buttons(c, { { "Copy my locked timings", function() local t = Shot.exportTimings() if setclipboard then setclipboard(t) end notify("Timings", t == "" and "Nothing locked yet" or "Copied to clipboard", 3) end } })
+UI.Input(c, "Import timings", "ImportTimes", nil, "paste copied timings, then rejoin")
 UI.Toggle(c, "Lag sync (follow my ping and FPS)", "LagSync")
 UI.Toggle(c, "Smoother meter reading", "PrecFit")
 UI.Toggle(c, "Faster jumper adapt (experimental)", "AdaptPlus")
@@ -8362,6 +8364,31 @@ end
 return prevLearn(info, res, strength)
 end
 end
+-- SHARED TIMINGS: timings baked into the script are what every user starts from; "Copy my timings" exports yours
+do
+Shot.SHARED = ""
+local origLoad = Shot.autoLoad
+function Shot.autoLoad()
+local first = not Shot.autoLoaded
+origLoad()
+if first then
+for kind, key, val in string.gmatch(Shot.SHARED .. " " .. (S.ImportTimes or ""), "(%a):(%S-)=([%d%.]+)") do
+if not Shot.auto[key] then
+Shot.auto[key] = { hold = tonumber(val), greens = {}, locked = (kind == "L" or kind == "l"), dir = 1, mode = (kind == "l" or kind == "p") and "peak" or nil }
+end
+end
+end
+end
+function Shot.exportTimings()
+Shot.autoLoad()
+local parts = {}
+for key, a in pairs(Shot.auto) do
+if a.locked then parts[#parts + 1] = string.format("%s:%s=%.4f", a.mode == "peak" and "l" or "L", key, a.hold) end
+end
+table.sort(parts)
+return table.concat(parts, " ")
+end
+end
 UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
@@ -8625,7 +8652,7 @@ local S = {
 	ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
 	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
-	AllJumpers = true, GLead = 0, GLeadN = 0,
+	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "",
 	LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 	AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -16857,6 +16884,8 @@ do
 		for _, k in ipairs({ "LagSync", "PrecFit", "AdaptPlus" }) do UI.set(k, v, false) end
 		end)
 		UI.Toggle(c, "Green every jumper (shared learning)", "AllJumpers")
+		UI.Buttons(c, { { "Copy my locked timings", function() local t = Shot.exportTimings() if setclipboard then setclipboard(t) end notify("Timings", t == "" and "Nothing locked yet" or "Copied to clipboard", 3) end } })
+		UI.Input(c, "Import timings", "ImportTimes", nil, "paste copied timings, then rejoin")
 		UI.Toggle(c, "Lag sync (follow my ping and FPS)", "LagSync")
 		UI.Toggle(c, "Smoother meter reading", "PrecFit")
 		UI.Toggle(c, "Faster jumper adapt (experimental)", "AdaptPlus")
@@ -17189,6 +17218,31 @@ do
 			end
 		end
 		return prevLearn(info, res, strength)
+	end
+end
+-- SHARED TIMINGS: timings baked into the script are what every user starts from; "Copy my timings" exports yours
+do
+	Shot.SHARED = ""
+	local origLoad = Shot.autoLoad
+	function Shot.autoLoad()
+		local first = not Shot.autoLoaded
+		origLoad()
+		if first then
+			for kind, key, val in string.gmatch(Shot.SHARED .. " " .. (S.ImportTimes or ""), "(%a):(%S-)=([%d%.]+)") do
+				if not Shot.auto[key] then
+					Shot.auto[key] = { hold = tonumber(val), greens = {}, locked = (kind == "L" or kind == "l"), dir = 1, mode = (kind == "l" or kind == "p") and "peak" or nil }
+				end
+			end
+		end
+	end
+	function Shot.exportTimings()
+		Shot.autoLoad()
+		local parts = {}
+		for key, a in pairs(Shot.auto) do
+			if a.locked then parts[#parts + 1] = string.format("%s:%s=%.4f", a.mode == "peak" and "l" or "L", key, a.hold) end
+		end
+		table.sort(parts)
+		return table.concat(parts, " ")
 	end
 end
 UI.syncAuto()
