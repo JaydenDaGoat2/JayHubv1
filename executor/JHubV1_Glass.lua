@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.5 shot-line"
+local VERSION = "v1.6 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -145,7 +145,7 @@ ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, St
 LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true,
+FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true,
 LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -6322,7 +6322,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.5  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.6  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -8051,6 +8051,7 @@ UI.Toggle(c, "Green every jumper (shared learning)", "AllJumpers")
 UI.Slider(c, "Fade and step back timing (later)", "FadeNudge", -30, 40, 1, 0, " ms")
 UI.Toggle(c, "Auto adapt: learn every shot from the first one", "AutoAdaptAll")
 UI.Toggle(c, "Instant green (works at low FPS and high ping)", "InstantGreen")
+UI.Toggle(c, "Keep glides away from my shot", "GlideShotSafe")
 UI.Buttons(c, { { "Copy my locked timings", function() local t = Shot.exportTimings() if setclipboard then setclipboard(t) end notify("Timings", t == "" and "Nothing locked yet" or "Copied to clipboard", 3) end } })
 UI.Input(c, "Import timings", "ImportTimes", nil, "paste copied timings, then rejoin")
 UI.Toggle(c, "Lag sync (follow my ping and FPS)", "LagSync")
@@ -8792,7 +8793,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.5"
+d.Text = "JHub V1.6"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -9026,6 +9027,45 @@ end
 return hold, base, mode
 end
 end
+-- GLIDES STAY OUT OF THE SHOT: nothing pushes you while the shoot button is held, and the shot glide waits until the release has gone out
+do
+local baseShoot = Shot.onShootCall
+function Shot.onShootCall(args)
+local d = args[1]
+if S.GlideShotSafe and type(d) == "table" then
+if d.Shoot == true then
+Mover.shotDownT = tick()
+pcall(Glide.cancel)
+elseif d.Shoot == false then
+Mover.shotUpT = tick()
+end
+end
+return baseShoot(args)
+end
+local function holding()
+return (Mover.shotDownT or 0) > (Mover.shotUpT or 0)
+end
+local baseFire = Glide.fire
+function Glide.fire(kind, why, dir)
+if S.GlideShotSafe then
+local now = tick()
+local c = char()
+local act = c and c:GetAttribute("Action")
+if kind ~= "shot" and (holding() or now - (Mover.shotUpT or 0) < 0.35 or act == "Shooting") then return end
+if kind == "shot" and now - (Mover.shotUpT or 0) < 0.12 then
+task.delay(0.12, function() if JH.Running then pcall(baseFire, kind, why, dir) end end)
+return
+end
+end
+return baseFire(kind, why, dir)
+end
+-- the speed boost also waits while the shoot button is held
+local baseStep = Speed.step
+function Speed.step(dt)
+if S.GlideShotSafe and holding() then return end
+return baseStep(dt)
+end
+end
 UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
@@ -9189,7 +9229,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.5", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.6", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -9270,7 +9310,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.5 shot-line"
+local VERSION = "v1.6 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -9376,7 +9416,7 @@ local S = {
 	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true,
+	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true,
 	LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 	AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -15893,7 +15933,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.5  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.6  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -17630,6 +17670,7 @@ do
 		UI.Slider(c, "Fade and step back timing (later)", "FadeNudge", -30, 40, 1, 0, " ms")
 		UI.Toggle(c, "Auto adapt: learn every shot from the first one", "AutoAdaptAll")
 		UI.Toggle(c, "Instant green (works at low FPS and high ping)", "InstantGreen")
+		UI.Toggle(c, "Keep glides away from my shot", "GlideShotSafe")
 		UI.Buttons(c, { { "Copy my locked timings", function() local t = Shot.exportTimings() if setclipboard then setclipboard(t) end notify("Timings", t == "" and "Nothing locked yet" or "Copied to clipboard", 3) end } })
 		UI.Input(c, "Import timings", "ImportTimes", nil, "paste copied timings, then rejoin")
 		UI.Toggle(c, "Lag sync (follow my ping and FPS)", "LagSync")
@@ -18371,7 +18412,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.5"
+				d.Text = "JHub V1.6"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -18603,6 +18644,45 @@ do
 			if extra > 0 then hold = math.max(Shot.FLOOR, hold - extra) end
 		end
 		return hold, base, mode
+	end
+end
+-- GLIDES STAY OUT OF THE SHOT: nothing pushes you while the shoot button is held, and the shot glide waits until the release has gone out
+do
+	local baseShoot = Shot.onShootCall
+	function Shot.onShootCall(args)
+		local d = args[1]
+		if S.GlideShotSafe and type(d) == "table" then
+			if d.Shoot == true then
+				Mover.shotDownT = tick()
+				pcall(Glide.cancel)
+			elseif d.Shoot == false then
+				Mover.shotUpT = tick()
+			end
+		end
+		return baseShoot(args)
+	end
+	local function holding()
+		return (Mover.shotDownT or 0) > (Mover.shotUpT or 0)
+	end
+	local baseFire = Glide.fire
+	function Glide.fire(kind, why, dir)
+		if S.GlideShotSafe then
+			local now = tick()
+			local c = char()
+			local act = c and c:GetAttribute("Action")
+			if kind ~= "shot" and (holding() or now - (Mover.shotUpT or 0) < 0.35 or act == "Shooting") then return end
+			if kind == "shot" and now - (Mover.shotUpT or 0) < 0.12 then
+				task.delay(0.12, function() if JH.Running then pcall(baseFire, kind, why, dir) end end)
+				return
+			end
+		end
+		return baseFire(kind, why, dir)
+	end
+	-- the speed boost also waits while the shoot button is held
+	local baseStep = Speed.step
+	function Speed.step(dt)
+		if S.GlideShotSafe and holding() then return end
+		return baseStep(dt)
 	end
 end
 UI.syncAuto()
