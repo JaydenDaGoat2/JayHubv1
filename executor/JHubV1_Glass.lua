@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1 shot-line"
+local VERSION = "v1.1 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -277,8 +277,14 @@ if S.SettingsVer < 31 then S.LagSync, S.PrecFit, S.AdaptPlus = false, false, fal
 if S.SettingsVer < 32 then S.LagSync, S.PrecFit, S.AdaptPlus, S.GreenMax, S.Sweep = true, true, true, true, false end
 if S.SettingsVer < 33 then S.FirstShot = false end
 if S.SettingsVer < 34 then S.CardTrans = 0.4 end
-S.SettingsVer = 34
-DEFAULTS.SettingsVer = 34
+if S.SettingsVer < 35 then
+S.AutoTimes = string.gsub(S.AutoTimes or "", "(%a):(%S-)=([%d%.]+)", function(kind, key, val)
+if kind == "l" or kind == "p" then return string.format("%s:%s=%.4f", kind, key, math.max(0, (tonumber(val) or 0) - 0.008)) end
+return kind .. ":" .. key .. "=" .. val
+end)
+end
+S.SettingsVer = 35
+DEFAULTS.SettingsVer = 35
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 S.ShotTimes = S.ShotTimes
 S.RecOn = false
@@ -1801,10 +1807,10 @@ Shot.SWEEPLIST = {
 Shot.FINAL = {
 ["15851912457+15851919155"] = 0.357,
 ["15851912457+15851919155+17285155256"] = 0.357,
-["111074210919383"] = 0.357,
-["71484695722621"] = 0.311,
-["77401448272074"] = 0.329,
-["128777513307709+77401448272074"] = 0.329,
+["111074210919383"] = 0.367,
+["71484695722621"] = 0.321,
+["77401448272074"] = 0.339,
+["128777513307709+77401448272074"] = 0.339,
 }
 Shot.VERDICT = { "Very early", "Early", "Slightly early", "Good", "Perfect", "Slightly late", "Late", "Very late" }
 Shot.NAMES = {
@@ -6310,7 +6316,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.1  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -6582,7 +6588,7 @@ local a = Shot.auto and Shot.auto[info.key]
 if S.AdaptPlus and a and a.locked and a.mode == "peak" and not info.manual and Shot.autoActive(info.key) then
 local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 if idx then
-local off = (idx == 5 and 0) or (idx == 4 and -0.6) or (idx - 5)
+local off = (idx == 5 and 0) or (idx == 4 and -1) or (idx - 5)
 a.bin = a.bin or S.PeakBin or 0.014
 local before = a.hold
 a.b = (a.b or 0) * 0.7 + off * 0.3
@@ -8145,7 +8151,7 @@ pcall(notify, "Auto Green", string.format("Learned this shot: %.0f ms before the
 why = "Perfect, locked"
 else
 local off = idx - 5
-if idx == 4 then off = -0.6 end
+if idx == 4 then off = -1 end
 a.hold = clamp(lead + off * a.bin * 0.85, 0, 0.1)
 S.PeakLead = clamp(S.PeakLead + (a.hold - lead) * 0.25, 0, 0.08)
 why = (Shot.VERDICT[idx] or "?") .. (off > 0 and ", letting go earlier" or ", letting go later")
@@ -8191,7 +8197,7 @@ local idx = verdictIdx(info, res, strength)
 if not idx then return end
 Shot.finalLoad()
 local key = info.key
-local off = (idx == 5 and 0) or (idx == 4 and -0.6) or (idx - 5)
+local off = (idx == 5 and 0) or (idx == 4 and -1) or (idx - 5)
 local st = Shot.finalSt[key]
 if not st then
 st = { b = 0 }
@@ -8359,7 +8365,7 @@ function Shot.autoLearn(info, res, strength)
 if S.AllJumpers and info and info.lead and not info.manual and info.remote ~= false then
 local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 if idx and (S.LagSync and (Shot.lastShotEx or 0) >= 0.015) == false then
-local off = (idx == 5 and 0) or (idx == 4 and -0.6) or (idx - 5)
+local off = (idx == 5 and 0) or (idx == 4 and -1) or (idx - 5)
 if math.abs(off) <= 3 then
 local est = clamp(info.lead + off * (S.PeakBin or 0.014) * 0.8, 0, 0.1)
 local n = S.GLeadN or 0
@@ -8519,7 +8525,7 @@ local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res 
 if not idx then return end
 load()
 local key = info.key
-local off = (idx == 5 and 0) or (idx == 4 and -0.6) or (idx - 5)
+local off = (idx == 5 and 0) or (idx == 4 and -1) or (idx - 5)
 local s = st[key] or { b = 0 }
 st[key] = s
 local bin, old = 0.014, Shot.finalAdj[key] or 0
@@ -8558,7 +8564,7 @@ function Shot.autoLearn(info, res, strength)
 if info and info.lead and not info.manual and not Shot.FINAL[info.key] and isFade(info.key) then
 local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 if idx then
-local off = (idx == 5 and 0) or (idx == 4 and -0.6) or (idx - 5)
+local off = (idx == 5 and 0) or (idx == 4 and -1) or (idx - 5)
 if math.abs(off) <= 3 then
 local est = clamp(info.lead + off * (S.PeakBin or 0.014) * 0.8, 0, 0.1)
 local n = S.PFLeadN or 0
@@ -8775,7 +8781,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1"
+d.Text = "JHub V1.1"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -8973,7 +8979,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1", 22, 14, 28, Color3.fromRGB(255, 244, 244))
+		label("JHub V1.1", 22, 14, 28, Color3.fromRGB(255, 244, 244))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(217, 163, 166))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 96, 106))
@@ -9054,7 +9060,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1 shot-line"
+local VERSION = "v1.1 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -9298,8 +9304,14 @@ if S.SettingsVer < 31 then S.LagSync, S.PrecFit, S.AdaptPlus = false, false, fal
 if S.SettingsVer < 32 then S.LagSync, S.PrecFit, S.AdaptPlus, S.GreenMax, S.Sweep = true, true, true, true, false end
 if S.SettingsVer < 33 then S.FirstShot = false end
 if S.SettingsVer < 34 then S.CardTrans = 0.4 end
-S.SettingsVer = 34
-DEFAULTS.SettingsVer = 34
+if S.SettingsVer < 35 then
+S.AutoTimes = string.gsub(S.AutoTimes or "", "(%a):(%S-)=([%d%.]+)", function(kind, key, val)
+if kind == "l" or kind == "p" then return string.format("%s:%s=%.4f", kind, key, math.max(0, (tonumber(val) or 0) - 0.008)) end
+return kind .. ":" .. key .. "=" .. val
+end)
+end
+S.SettingsVer = 35
+DEFAULTS.SettingsVer = 35
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 S.ShotTimes = S.ShotTimes
 S.RecOn = false
@@ -10912,10 +10924,10 @@ Shot.SWEEPLIST = {
 Shot.FINAL = {
 	["15851912457+15851919155"] = 0.357,
 	["15851912457+15851919155+17285155256"] = 0.357,
-	["111074210919383"] = 0.357,
-	["71484695722621"] = 0.311,
-	["77401448272074"] = 0.329,
-	["128777513307709+77401448272074"] = 0.329,
+	["111074210919383"] = 0.367,
+	["71484695722621"] = 0.321,
+	["77401448272074"] = 0.339,
+	["128777513307709+77401448272074"] = 0.339,
 }
 Shot.VERDICT = { "Very early", "Early", "Slightly early", "Good", "Perfect", "Slightly late", "Late", "Very late" }
 Shot.NAMES = {
@@ -15665,7 +15677,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.1  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -15945,7 +15957,7 @@ do
 	if S.AdaptPlus and a and a.locked and a.mode == "peak" and not info.manual and Shot.autoActive(info.key) then
 	local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 	if idx then
-	local off = (idx == 5 and 0) or (idx == 4 and -0.6) or (idx - 5)
+	local off = (idx == 5 and 0) or (idx == 4 and -1) or (idx - 5)
 	a.bin = a.bin or S.PeakBin or 0.014
 	local before = a.hold
 	a.b = (a.b or 0) * 0.7 + off * 0.3
@@ -17508,7 +17520,7 @@ pcall(notify, "Auto Green", string.format("Learned this shot: %.0f ms before the
 why = "Perfect, locked"
 else
 local off = idx - 5
-if idx == 4 then off = -0.6 end
+if idx == 4 then off = -1 end
 a.hold = clamp(lead + off * a.bin * 0.85, 0, 0.1)
 S.PeakLead = clamp(S.PeakLead + (a.hold - lead) * 0.25, 0, 0.08)
 why = (Shot.VERDICT[idx] or "?") .. (off > 0 and ", letting go earlier" or ", letting go later")
@@ -17554,7 +17566,7 @@ do
 		if not idx then return end
 		Shot.finalLoad()
 		local key = info.key
-		local off = (idx == 5 and 0) or (idx == 4 and -0.6) or (idx - 5)
+		local off = (idx == 5 and 0) or (idx == 4 and -1) or (idx - 5)
 		local st = Shot.finalSt[key]
 		if not st then
 			st = { b = 0 }
@@ -17722,7 +17734,7 @@ do
 		if S.AllJumpers and info and info.lead and not info.manual and info.remote ~= false then
 			local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 			if idx and (S.LagSync and (Shot.lastShotEx or 0) >= 0.015) == false then
-				local off = (idx == 5 and 0) or (idx == 4 and -0.6) or (idx - 5)
+				local off = (idx == 5 and 0) or (idx == 4 and -1) or (idx - 5)
 				if math.abs(off) <= 3 then
 					local est = clamp(info.lead + off * (S.PeakBin or 0.014) * 0.8, 0, 0.1)
 					local n = S.GLeadN or 0
@@ -17882,7 +17894,7 @@ do
 		if not idx then return end
 		load()
 		local key = info.key
-		local off = (idx == 5 and 0) or (idx == 4 and -0.6) or (idx - 5)
+		local off = (idx == 5 and 0) or (idx == 4 and -1) or (idx - 5)
 		local s = st[key] or { b = 0 }
 		st[key] = s
 		local bin, old = 0.014, Shot.finalAdj[key] or 0
@@ -17921,7 +17933,7 @@ do
 		if info and info.lead and not info.manual and not Shot.FINAL[info.key] and isFade(info.key) then
 			local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 			if idx then
-				local off = (idx == 5 and 0) or (idx == 4 and -0.6) or (idx - 5)
+				local off = (idx == 5 and 0) or (idx == 4 and -1) or (idx - 5)
 				if math.abs(off) <= 3 then
 					local est = clamp(info.lead + off * (S.PeakBin or 0.014) * 0.8, 0, 0.1)
 					local n = S.PFLeadN or 0
@@ -18138,7 +18150,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1"
+				d.Text = "JHub V1.1"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
