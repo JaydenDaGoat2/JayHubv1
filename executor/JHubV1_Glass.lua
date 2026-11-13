@@ -144,7 +144,7 @@ GfxCullDist = 250, GfxBoost = false, GfxFpsCap = 0, PingStab = false, PingWindow
 ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
 LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
-AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0,
+AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Red",
 LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -276,8 +276,9 @@ if S.SettingsVer < 29 then S.Codes = DEFAULTS.Codes end
 if S.SettingsVer < 31 then S.LagSync, S.PrecFit, S.AdaptPlus = false, false, false end
 if S.SettingsVer < 32 then S.LagSync, S.PrecFit, S.AdaptPlus, S.GreenMax, S.Sweep = true, true, true, true, false end
 if S.SettingsVer < 33 then S.FirstShot = false end
-S.SettingsVer = 33
-DEFAULTS.SettingsVer = 33
+if S.SettingsVer < 34 then S.CardTrans = 0.4 end
+S.SettingsVer = 34
+DEFAULTS.SettingsVer = 34
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 S.ShotTimes = S.ShotTimes
 S.RecOn = false
@@ -8703,6 +8704,112 @@ art.Parent = Main
 artOn = true
 end)
 end
+-- J-HUB RED: one red theme everywhere, the old blue glass, lightning and logo backing are gone
+do
+local TONES = {
+Red = { Color3.fromRGB(255, 40, 40), Color3.fromRGB(255, 90, 90), Color3.fromRGB(225, 20, 30) },
+Crimson = { Color3.fromRGB(210, 0, 70), Color3.fromRGB(255, 70, 120), Color3.fromRGB(170, 0, 50) },
+Orange = { Color3.fromRGB(255, 130, 30), Color3.fromRGB(255, 175, 90), Color3.fromRGB(230, 90, 10) },
+White = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 255, 255), Color3.fromRGB(200, 200, 200) },
+}
+computeTheme = function()
+local t = TONES[S.AccentTone] or TONES.Red
+Theme.Glass = Color3.fromRGB(8, 0, 2)
+Theme.Sheen = Color3.fromRGB(60, 0, 8)
+Theme.Card = Color3.fromRGB(14, 2, 4)
+Theme.Elem = Color3.fromRGB(30, 4, 8)
+Theme.Stroke = Color3.fromRGB(40, 0, 0)
+Theme.Text = Color3.fromRGB(255, 244, 244)
+Theme.Sub = Color3.fromRGB(225, 170, 170)
+Theme.Outline = t[1]
+Theme.AccentA = t[2]
+Theme.AccentB = t[3]
+end
+computeTheme()
+
+-- the old moving background, lightning and glass sheen are removed
+pcall(function() Main:FindFirstChild("Storm"):Destroy() end)
+pcall(function() Sheen:Destroy() end)
+UI.paintStorm = function() end
+UI.applyFx = function() end
+MainStroke.Transparency = 1
+
+-- the logo button: only the picture, no gold ring, glow, sparks or backing behind it
+do
+local body = UI.LogoBody
+for _, d in ipairs(body:GetChildren()) do
+if d:IsA("UIStroke") or d:IsA("UIGradient") then d:Destroy() end
+end
+body.BackgroundTransparency = 1
+body:GetPropertyChangedSignal("BackgroundTransparency"):Connect(function()
+if body.BackgroundTransparency < 1 then body.BackgroundTransparency = 1 end
+end)
+pcall(function() LogoGlow:Destroy() end)
+pcall(function() Spark1:Destroy() end)
+pcall(function() Spark2:Destroy() end)
+pcall(function() UI.LogoRoot.Size = UDim2.fromOffset(math.max(S.LogoSize, 56), math.max(S.LogoSize, 56)) end)
+end
+
+-- the artwork already draws the minimise and close buttons, the real ones sit invisibly on top of them
+for _, b in ipairs({ CollapseBtn, CloseBtn }) do
+for _, d in ipairs(b:GetChildren()) do
+if d:IsA("UIStroke") or d:IsA("TextLabel") or d:IsA("UICorner") then d:Destroy() end
+end
+b.BackgroundTransparency = 1
+b:GetPropertyChangedSignal("BackgroundTransparency"):Connect(function()
+if b.BackgroundTransparency < 1 then b.BackgroundTransparency = 1 end
+end)
+end
+CollapseBtn.Position = UDim2.new(1, -40, 0.5, 0)
+CloseBtn.Position = UDim2.new(1, -6, 0.5, 0)
+pcall(function() HeadLine.Visible = false end)
+
+local function restyle()
+Rail.Position, Rail.Size = UDim2.fromScale(0.042, 0.385), UDim2.fromScale(0.205, 0.565)
+for _, d in ipairs(Rail:GetChildren()) do
+if d:IsA("TextButton") then d.Size = UDim2.new(1, 0, 0, 34) end
+if d:IsA("UIPadding") then
+d.PaddingLeft, d.PaddingRight, d.PaddingTop = UDim.new(0, 0), UDim.new(0, 0), UDim.new(0, 1)
+end
+if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
+end
+for _, d in ipairs(Header:GetChildren()) do
+if d:IsA("TextLabel") then
+d.Text = "JHub V1"
+d.TextSize = 20
+d.Position = UDim2.new(0, 14, 0.5, -11)
+d.Size = UDim2.new(0, 200, 0, 22)
+end
+end
+end
+restyle()
+local prevApply = UI.applyWindow
+function UI.applyWindow(...)
+local r = prevApply(...)
+restyle()
+return r
+end
+
+-- UI customizations that fit the new menu
+for _, p in ipairs(UI.pages) do
+if p.name == "UI" then
+local old = { ["Glass look"] = true, ["Outline"] = true, ["Presets"] = true, ["Lightning"] = true, ["Moving background"] = true, ["Header logo"] = true }
+for _, f in ipairs(p.frame:GetChildren()) do
+if f:IsA("Frame") then
+for _, d in ipairs(f:GetDescendants()) do
+if d:IsA("TextLabel") and old[d.Text] then f:Destroy() break end
+end
+end
+end
+local c = UI.Card(p, "Colors")
+UI.Dropdown(c, "Menu color", "AccentTone", { "Red", "Crimson", "Orange", "White" }, function() UI.applyTheme() end)
+UI.Slider(c, "Card darkness", "CardTrans", 0.1, 0.9, 0.01, 2, nil, function() UI.applyTheme() end)
+c.frame.LayoutOrder = -1
+c.frame.Size = UDim2.new(0.5, -4, 0, 0)
+end
+end
+UI.applyTheme()
+end
 UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
@@ -8966,7 +9073,7 @@ local S = {
 	ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
 	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
-	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0,
+	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Red",
 	LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 	AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -9104,8 +9211,9 @@ if S.SettingsVer < 29 then S.Codes = DEFAULTS.Codes end
 if S.SettingsVer < 31 then S.LagSync, S.PrecFit, S.AdaptPlus = false, false, false end
 if S.SettingsVer < 32 then S.LagSync, S.PrecFit, S.AdaptPlus, S.GreenMax, S.Sweep = true, true, true, true, false end
 if S.SettingsVer < 33 then S.FirstShot = false end
-S.SettingsVer = 33
-DEFAULTS.SettingsVer = 33
+if S.SettingsVer < 34 then S.CardTrans = 0.4 end
+S.SettingsVer = 34
+DEFAULTS.SettingsVer = 34
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 S.ShotTimes = S.ShotTimes
 S.RecOn = false
@@ -17872,6 +17980,112 @@ do
 		art.Parent = Main
 		artOn = true
 	end)
+end
+-- J-HUB RED: one red theme everywhere, the old blue glass, lightning and logo backing are gone
+do
+	local TONES = {
+		Red = { Color3.fromRGB(255, 40, 40), Color3.fromRGB(255, 90, 90), Color3.fromRGB(225, 20, 30) },
+		Crimson = { Color3.fromRGB(210, 0, 70), Color3.fromRGB(255, 70, 120), Color3.fromRGB(170, 0, 50) },
+		Orange = { Color3.fromRGB(255, 130, 30), Color3.fromRGB(255, 175, 90), Color3.fromRGB(230, 90, 10) },
+		White = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 255, 255), Color3.fromRGB(200, 200, 200) },
+	}
+	computeTheme = function()
+		local t = TONES[S.AccentTone] or TONES.Red
+		Theme.Glass = Color3.fromRGB(8, 0, 2)
+		Theme.Sheen = Color3.fromRGB(60, 0, 8)
+		Theme.Card = Color3.fromRGB(14, 2, 4)
+		Theme.Elem = Color3.fromRGB(30, 4, 8)
+		Theme.Stroke = Color3.fromRGB(40, 0, 0)
+		Theme.Text = Color3.fromRGB(255, 244, 244)
+		Theme.Sub = Color3.fromRGB(225, 170, 170)
+		Theme.Outline = t[1]
+		Theme.AccentA = t[2]
+		Theme.AccentB = t[3]
+	end
+	computeTheme()
+
+	-- the old moving background, lightning and glass sheen are removed
+	pcall(function() Main:FindFirstChild("Storm"):Destroy() end)
+	pcall(function() Sheen:Destroy() end)
+	UI.paintStorm = function() end
+	UI.applyFx = function() end
+	MainStroke.Transparency = 1
+
+	-- the logo button: only the picture, no gold ring, glow, sparks or backing behind it
+	do
+		local body = UI.LogoBody
+		for _, d in ipairs(body:GetChildren()) do
+			if d:IsA("UIStroke") or d:IsA("UIGradient") then d:Destroy() end
+		end
+		body.BackgroundTransparency = 1
+		body:GetPropertyChangedSignal("BackgroundTransparency"):Connect(function()
+			if body.BackgroundTransparency < 1 then body.BackgroundTransparency = 1 end
+		end)
+		pcall(function() LogoGlow:Destroy() end)
+		pcall(function() Spark1:Destroy() end)
+		pcall(function() Spark2:Destroy() end)
+		pcall(function() UI.LogoRoot.Size = UDim2.fromOffset(math.max(S.LogoSize, 56), math.max(S.LogoSize, 56)) end)
+	end
+
+	-- the artwork already draws the minimise and close buttons, the real ones sit invisibly on top of them
+	for _, b in ipairs({ CollapseBtn, CloseBtn }) do
+		for _, d in ipairs(b:GetChildren()) do
+			if d:IsA("UIStroke") or d:IsA("TextLabel") or d:IsA("UICorner") then d:Destroy() end
+		end
+		b.BackgroundTransparency = 1
+		b:GetPropertyChangedSignal("BackgroundTransparency"):Connect(function()
+			if b.BackgroundTransparency < 1 then b.BackgroundTransparency = 1 end
+		end)
+	end
+	CollapseBtn.Position = UDim2.new(1, -40, 0.5, 0)
+	CloseBtn.Position = UDim2.new(1, -6, 0.5, 0)
+	pcall(function() HeadLine.Visible = false end)
+
+	local function restyle()
+		Rail.Position, Rail.Size = UDim2.fromScale(0.042, 0.385), UDim2.fromScale(0.205, 0.565)
+		for _, d in ipairs(Rail:GetChildren()) do
+			if d:IsA("TextButton") then d.Size = UDim2.new(1, 0, 0, 34) end
+			if d:IsA("UIPadding") then
+				d.PaddingLeft, d.PaddingRight, d.PaddingTop = UDim.new(0, 0), UDim.new(0, 0), UDim.new(0, 1)
+			end
+			if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
+		end
+		for _, d in ipairs(Header:GetChildren()) do
+			if d:IsA("TextLabel") then
+				d.Text = "JHub V1"
+				d.TextSize = 20
+				d.Position = UDim2.new(0, 14, 0.5, -11)
+				d.Size = UDim2.new(0, 200, 0, 22)
+			end
+		end
+	end
+	restyle()
+	local prevApply = UI.applyWindow
+	function UI.applyWindow(...)
+		local r = prevApply(...)
+		restyle()
+		return r
+	end
+
+	-- UI customizations that fit the new menu
+	for _, p in ipairs(UI.pages) do
+		if p.name == "UI" then
+			local old = { ["Glass look"] = true, ["Outline"] = true, ["Presets"] = true, ["Lightning"] = true, ["Moving background"] = true, ["Header logo"] = true }
+			for _, f in ipairs(p.frame:GetChildren()) do
+				if f:IsA("Frame") then
+					for _, d in ipairs(f:GetDescendants()) do
+						if d:IsA("TextLabel") and old[d.Text] then f:Destroy() break end
+					end
+				end
+			end
+			local c = UI.Card(p, "Colors")
+			UI.Dropdown(c, "Menu color", "AccentTone", { "Red", "Crimson", "Orange", "White" }, function() UI.applyTheme() end)
+			UI.Slider(c, "Card darkness", "CardTrans", 0.1, 0.9, 0.01, 2, nil, function() UI.applyTheme() end)
+			c.frame.LayoutOrder = -1
+			c.frame.Size = UDim2.new(0.5, -4, 0, 0)
+		end
+	end
+	UI.applyTheme()
 end
 UI.syncAuto()
 UI.applyTheme()
