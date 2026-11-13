@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.7 shot-line"
+local VERSION = "v1.8 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -6322,7 +6322,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.7  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.8  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -8793,7 +8793,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.7"
+d.Text = "JHub V1.8"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -9190,6 +9190,34 @@ if S.LabOn and info then pcall(Lab.add, info, res, strength) end
 return prevLR(info, res, strength)
 end
 end
+-- LOGO LETTERS: the menu title and the top bar use a brush marker font with a black outline and the blue, yellow and purple colors
+do
+local FONT = Enum.Font.PermanentMarker
+local function style()
+for _, d in ipairs(Header:GetChildren()) do
+if d:IsA("TextLabel") then
+d.Font = FONT
+d.TextSize = 28
+d.TextColor3 = Color3.new(1, 1, 1)
+d.TextStrokeColor3 = Color3.new(0, 0, 0)
+d.TextStrokeTransparency = 0.05
+d.Size = UDim2.new(0, 280, 0, 30)
+d.Position = UDim2.new(0, 14, 0.5, -15)
+if not d:FindFirstChildOfClass("UIGradient") then UI.grad(d) end
+end
+end
+InfoText.Font = FONT
+InfoText.TextStrokeColor3 = Color3.new(0, 0, 0)
+InfoText.TextStrokeTransparency = 0.2
+end
+pcall(style)
+local prevApply = UI.applyWindow
+function UI.applyWindow(...)
+local r = prevApply(...)
+pcall(style)
+return r
+end
+end
 UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
@@ -9353,7 +9381,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.7", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.8", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -9434,7 +9462,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.7 shot-line"
+local VERSION = "v1.8 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -16057,7 +16085,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.7  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.8  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -18536,7 +18564,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.7"
+				d.Text = "JHub V1.8"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -18931,6 +18959,34 @@ do
 	function Shot.learnRemote(info, res, strength)
 		if S.LabOn and info then pcall(Lab.add, info, res, strength) end
 		return prevLR(info, res, strength)
+	end
+end
+-- LOGO LETTERS: the menu title and the top bar use a brush marker font with a black outline and the blue, yellow and purple colors
+do
+	local FONT = Enum.Font.PermanentMarker
+	local function style()
+		for _, d in ipairs(Header:GetChildren()) do
+			if d:IsA("TextLabel") then
+				d.Font = FONT
+				d.TextSize = 28
+				d.TextColor3 = Color3.new(1, 1, 1)
+				d.TextStrokeColor3 = Color3.new(0, 0, 0)
+				d.TextStrokeTransparency = 0.05
+				d.Size = UDim2.new(0, 280, 0, 30)
+				d.Position = UDim2.new(0, 14, 0.5, -15)
+				if not d:FindFirstChildOfClass("UIGradient") then UI.grad(d) end
+			end
+		end
+		InfoText.Font = FONT
+		InfoText.TextStrokeColor3 = Color3.new(0, 0, 0)
+		InfoText.TextStrokeTransparency = 0.2
+	end
+	pcall(style)
+	local prevApply = UI.applyWindow
+	function UI.applyWindow(...)
+		local r = prevApply(...)
+		pcall(style)
+		return r
 	end
 end
 UI.syncAuto()
