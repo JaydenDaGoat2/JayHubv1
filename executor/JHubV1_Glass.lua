@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.6 shot-line"
+local VERSION = "v1.7 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -145,7 +145,7 @@ ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, St
 LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true,
+FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true,
 LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -6322,7 +6322,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.6  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.7  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -8793,7 +8793,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.6"
+d.Text = "JHub V1.7"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -9066,6 +9066,130 @@ if S.GlideShotSafe and holding() then return end
 return baseStep(dt)
 end
 end
+-- SHOT LAB: records every shot you take with everything around it, gives live feedback, lists the game's shot animations, and copies a report
+do
+local Lab = { rows = {}, stats = {} }
+Shot.lab = Lab
+local WORDS = { "shot", "shoot", "jump", "fade", "step", "layup", "dunk", "hook", "post", "spin", "float", "finger", "gather", "euro", "hop" }
+local function idxOf(info, res, strength)
+return info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+end
+function Lab.add(info, res, strength)
+local idx = idxOf(info, res, strength)
+local key = tostring(info.key or "?")
+local ch = char()
+local anim = ch and ch:GetAttribute("BaseAnimation") or nil
+local mode = Shot.FINAL[key] and "built-in" or (info.lead and "learned" or "fixed")
+local row = {
+t = os.date("%H:%M:%S"), key = key, name = Shot.nameFor(key, anim), mode = mode,
+held = info.held or 0, lead = info.lead, verdict = (idx and Shot.VERDICT[idx]) or tostring(res or "?"), idx = idx,
+ping = math.floor((Shot.pingNow and Shot.pingNow() or 0) * 1000 + 0.5), fps = math.floor((JH.FPS or 0) + 0.5),
+sit = Shot.situation(), manual = info.manual == true, nudge = Shot.lastNudge,
+}
+Lab.rows[#Lab.rows + 1] = row
+if #Lab.rows > 400 then table.remove(Lab.rows, 1) end
+local s = Lab.stats[key]
+if not s then
+s = { name = row.name, mode = mode, n = 0, perfect = 0, good = 0, early = 0, late = 0, offSum = 0, heldSum = 0 }
+Lab.stats[key] = s
+end
+s.n = s.n + 1
+s.heldSum = s.heldSum + row.held
+if idx then
+if idx == 5 then s.perfect = s.perfect + 1
+elseif idx == 4 then s.good = s.good + 1
+elseif idx < 4 then s.early = s.early + 1
+else s.late = s.late + 1 end
+s.offSum = s.offSum + ((idx == 4) and -1 or (idx - 5))
+end
+if Lab.stat then
+local tip = ""
+local mean = s.n > 0 and s.offSum / s.n or 0
+if s.n >= 3 and mean < -0.5 then tip = "  (keeps releasing early)" elseif s.n >= 3 and mean > 0.5 then tip = "  (keeps releasing late)" end
+Lab.stat.Text = string.format("%s: %s  |  %d ms  %d FPS%s", row.name, row.verdict, row.ping, row.fps, tip)
+end
+if Lab.count then Lab.count.Text = tostring(#Lab.rows) .. " shots" end
+end
+function Lab.animations()
+local out, n = {}, 0
+for _, d in ipairs(game:GetDescendants()) do
+if d:IsA("Animation") and tostring(d.AnimationId) ~= "" then
+local nm = string.lower(d.Name)
+for _, w in ipairs(WORDS) do
+if string.find(nm, w, 1, true) then
+out[#out + 1] = d.Name .. " = " .. string.gsub(tostring(d.AnimationId), "rbxassetid://", "") .. "  (" .. d.Parent.Name .. ")"
+n = n + 1
+break
+end
+end
+end
+if n >= 500 then break end
+end
+table.sort(out)
+return out
+end
+function Lab.report()
+local lines = { "== JHub Shot Lab report ==", "version " .. tostring(VERSION) .. " | place " .. tostring(game.PlaceId) .. " | " .. tostring(JH.execName) .. " | " .. os.date("%Y-%m-%d %H:%M:%S") }
+local keep = { "LagSync", "InstantGreen", "AutoAdaptAll", "FadeNudge", "AdaptPlus", "PrecFit", "GreenMax", "AutoCal", "AutoCalibrate", "CalSpeed", "PeakBin", "GlideShotSafe", "ShotGlideWhen", "ShotGlideMethod", "Sweep" }
+local st = {}
+for _, k in ipairs(keep) do st[#st + 1] = k .. "=" .. tostring(S[k]) end
+lines[#lines + 1] = "settings: " .. table.concat(st, " ")
+lines[#lines + 1] = ""
+lines[#lines + 1] = "-- per shot type: name | key | mode | shots | perfect good early late | average miss (-early +late) | advice --"
+local keys = {}
+for k in pairs(Lab.stats) do keys[#keys + 1] = k end
+table.sort(keys)
+for _, k in ipairs(keys) do
+local s = Lab.stats[k]
+local mean = s.n > 0 and s.offSum / s.n or 0
+local advice = "fine"
+if s.n >= 3 and mean < -0.4 then advice = string.format("release about %.0f ms later", math.abs(mean) * 14)
+elseif s.n >= 3 and mean > 0.4 then advice = string.format("release about %.0f ms earlier", math.abs(mean) * 14)
+elseif s.n < 3 then advice = "need more shots" end
+lines[#lines + 1] = string.format("%s | %s | %s | %d | %d %d %d %d | %+.2f | %s", s.name, k, s.mode, s.n, s.perfect, s.good, s.early, s.late, mean, advice)
+end
+lines[#lines + 1] = ""
+lines[#lines + 1] = "-- last shots: time | name | key | mode | held | lead | result | ping ms | FPS | move | manual --"
+local from = math.max(1, #Lab.rows - 120)
+for i = from, #Lab.rows do
+local r = Lab.rows[i]
+lines[#lines + 1] = string.format("%s | %s | %s | %s | %.3f | %s | %s | %d | %d | %s | %s", r.t, r.name, r.key, r.mode, r.held, r.lead and string.format("%.3f", r.lead) or "-", r.verdict, r.ping, r.fps, r.sit, tostring(r.manual))
+end
+return table.concat(lines, "\n")
+end
+local function copy(text, what)
+if type(setclipboard) == "function" then
+pcall(setclipboard, text)
+notify("Shot Lab", what .. " copied", 3)
+else
+notify("Shot Lab", "This executor cannot copy to the clipboard", 4)
+end
+end
+local mainPage
+for _, p in ipairs(UI.pages) do
+if p.name == "Main" then mainPage = p end
+end
+if mainPage then
+local c = UI.Card(mainPage, "Shot Lab")
+UI.Toggle(c, "Record every shot", "LabOn")
+Lab.stat = UI.Stat(c, "Last shot")
+Lab.count = UI.Stat(c, "Recorded")
+UI.Buttons(c, {
+{ "Copy shot report", function() copy(Lab.report(), "Shot report") end },
+{ "Copy game shot animations", function() copy("== game shot animations ==\n" .. table.concat(Lab.animations(), "\n"), "Animation list") end },
+})
+UI.Button(c, "Clear recorded shots", function()
+Lab.rows, Lab.stats = {}, {}
+if Lab.count then Lab.count.Text = "0 shots" end
+end)
+UI.Note(c, "Shoot normally. After a few shots of each move, copy the report and send it. The animation list names the game's own shot animations.")
+end
+local prevLR = Shot.learnRemote
+function Shot.learnRemote(info, res, strength)
+if S.LabOn and info then pcall(Lab.add, info, res, strength) end
+return prevLR(info, res, strength)
+end
+end
 UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
@@ -9229,7 +9353,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.6", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.7", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -9310,7 +9434,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.6 shot-line"
+local VERSION = "v1.7 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -9416,7 +9540,7 @@ local S = {
 	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true,
+	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true,
 	LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 	AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -15933,7 +16057,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.6  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.7  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -18412,7 +18536,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.6"
+				d.Text = "JHub V1.7"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -18683,6 +18807,130 @@ do
 	function Speed.step(dt)
 		if S.GlideShotSafe and holding() then return end
 		return baseStep(dt)
+	end
+end
+-- SHOT LAB: records every shot you take with everything around it, gives live feedback, lists the game's shot animations, and copies a report
+do
+	local Lab = { rows = {}, stats = {} }
+	Shot.lab = Lab
+	local WORDS = { "shot", "shoot", "jump", "fade", "step", "layup", "dunk", "hook", "post", "spin", "float", "finger", "gather", "euro", "hop" }
+	local function idxOf(info, res, strength)
+		return info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+	end
+	function Lab.add(info, res, strength)
+		local idx = idxOf(info, res, strength)
+		local key = tostring(info.key or "?")
+		local ch = char()
+		local anim = ch and ch:GetAttribute("BaseAnimation") or nil
+		local mode = Shot.FINAL[key] and "built-in" or (info.lead and "learned" or "fixed")
+		local row = {
+			t = os.date("%H:%M:%S"), key = key, name = Shot.nameFor(key, anim), mode = mode,
+			held = info.held or 0, lead = info.lead, verdict = (idx and Shot.VERDICT[idx]) or tostring(res or "?"), idx = idx,
+			ping = math.floor((Shot.pingNow and Shot.pingNow() or 0) * 1000 + 0.5), fps = math.floor((JH.FPS or 0) + 0.5),
+			sit = Shot.situation(), manual = info.manual == true, nudge = Shot.lastNudge,
+		}
+		Lab.rows[#Lab.rows + 1] = row
+		if #Lab.rows > 400 then table.remove(Lab.rows, 1) end
+		local s = Lab.stats[key]
+		if not s then
+			s = { name = row.name, mode = mode, n = 0, perfect = 0, good = 0, early = 0, late = 0, offSum = 0, heldSum = 0 }
+			Lab.stats[key] = s
+		end
+		s.n = s.n + 1
+		s.heldSum = s.heldSum + row.held
+		if idx then
+			if idx == 5 then s.perfect = s.perfect + 1
+			elseif idx == 4 then s.good = s.good + 1
+			elseif idx < 4 then s.early = s.early + 1
+			else s.late = s.late + 1 end
+			s.offSum = s.offSum + ((idx == 4) and -1 or (idx - 5))
+		end
+		if Lab.stat then
+			local tip = ""
+			local mean = s.n > 0 and s.offSum / s.n or 0
+			if s.n >= 3 and mean < -0.5 then tip = "  (keeps releasing early)" elseif s.n >= 3 and mean > 0.5 then tip = "  (keeps releasing late)" end
+			Lab.stat.Text = string.format("%s: %s  |  %d ms  %d FPS%s", row.name, row.verdict, row.ping, row.fps, tip)
+		end
+		if Lab.count then Lab.count.Text = tostring(#Lab.rows) .. " shots" end
+	end
+	function Lab.animations()
+		local out, n = {}, 0
+		for _, d in ipairs(game:GetDescendants()) do
+			if d:IsA("Animation") and tostring(d.AnimationId) ~= "" then
+				local nm = string.lower(d.Name)
+				for _, w in ipairs(WORDS) do
+					if string.find(nm, w, 1, true) then
+						out[#out + 1] = d.Name .. " = " .. string.gsub(tostring(d.AnimationId), "rbxassetid://", "") .. "  (" .. d.Parent.Name .. ")"
+						n = n + 1
+						break
+					end
+				end
+			end
+			if n >= 500 then break end
+		end
+		table.sort(out)
+		return out
+	end
+	function Lab.report()
+		local lines = { "== JHub Shot Lab report ==", "version " .. tostring(VERSION) .. " | place " .. tostring(game.PlaceId) .. " | " .. tostring(JH.execName) .. " | " .. os.date("%Y-%m-%d %H:%M:%S") }
+		local keep = { "LagSync", "InstantGreen", "AutoAdaptAll", "FadeNudge", "AdaptPlus", "PrecFit", "GreenMax", "AutoCal", "AutoCalibrate", "CalSpeed", "PeakBin", "GlideShotSafe", "ShotGlideWhen", "ShotGlideMethod", "Sweep" }
+		local st = {}
+		for _, k in ipairs(keep) do st[#st + 1] = k .. "=" .. tostring(S[k]) end
+		lines[#lines + 1] = "settings: " .. table.concat(st, " ")
+		lines[#lines + 1] = ""
+		lines[#lines + 1] = "-- per shot type: name | key | mode | shots | perfect good early late | average miss (-early +late) | advice --"
+		local keys = {}
+		for k in pairs(Lab.stats) do keys[#keys + 1] = k end
+		table.sort(keys)
+		for _, k in ipairs(keys) do
+			local s = Lab.stats[k]
+			local mean = s.n > 0 and s.offSum / s.n or 0
+			local advice = "fine"
+			if s.n >= 3 and mean < -0.4 then advice = string.format("release about %.0f ms later", math.abs(mean) * 14)
+			elseif s.n >= 3 and mean > 0.4 then advice = string.format("release about %.0f ms earlier", math.abs(mean) * 14)
+			elseif s.n < 3 then advice = "need more shots" end
+			lines[#lines + 1] = string.format("%s | %s | %s | %d | %d %d %d %d | %+.2f | %s", s.name, k, s.mode, s.n, s.perfect, s.good, s.early, s.late, mean, advice)
+		end
+		lines[#lines + 1] = ""
+		lines[#lines + 1] = "-- last shots: time | name | key | mode | held | lead | result | ping ms | FPS | move | manual --"
+		local from = math.max(1, #Lab.rows - 120)
+		for i = from, #Lab.rows do
+			local r = Lab.rows[i]
+			lines[#lines + 1] = string.format("%s | %s | %s | %s | %.3f | %s | %s | %d | %d | %s | %s", r.t, r.name, r.key, r.mode, r.held, r.lead and string.format("%.3f", r.lead) or "-", r.verdict, r.ping, r.fps, r.sit, tostring(r.manual))
+		end
+		return table.concat(lines, "\n")
+	end
+	local function copy(text, what)
+		if type(setclipboard) == "function" then
+			pcall(setclipboard, text)
+			notify("Shot Lab", what .. " copied", 3)
+		else
+			notify("Shot Lab", "This executor cannot copy to the clipboard", 4)
+		end
+	end
+	local mainPage
+	for _, p in ipairs(UI.pages) do
+		if p.name == "Main" then mainPage = p end
+	end
+	if mainPage then
+		local c = UI.Card(mainPage, "Shot Lab")
+		UI.Toggle(c, "Record every shot", "LabOn")
+		Lab.stat = UI.Stat(c, "Last shot")
+		Lab.count = UI.Stat(c, "Recorded")
+		UI.Buttons(c, {
+			{ "Copy shot report", function() copy(Lab.report(), "Shot report") end },
+			{ "Copy game shot animations", function() copy("== game shot animations ==\n" .. table.concat(Lab.animations(), "\n"), "Animation list") end },
+		})
+		UI.Button(c, "Clear recorded shots", function()
+			Lab.rows, Lab.stats = {}, {}
+			if Lab.count then Lab.count.Text = "0 shots" end
+		end)
+		UI.Note(c, "Shoot normally. After a few shots of each move, copy the report and send it. The animation list names the game's own shot animations.")
+	end
+	local prevLR = Shot.learnRemote
+	function Shot.learnRemote(info, res, strength)
+		if S.LabOn and info then pcall(Lab.add, info, res, strength) end
+		return prevLR(info, res, strength)
 	end
 end
 UI.syncAuto()
