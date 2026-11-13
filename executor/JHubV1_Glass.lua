@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.42 shot-line"
+local VERSION = "v1.43 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -144,7 +144,7 @@ GfxCullDist = 250, GfxBoost = false, GfxFpsCap = 0, PingStab = false, PingWindow
 ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
 LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
-AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = true,
+AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false,
 LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -275,8 +275,9 @@ end
 if S.SettingsVer < 29 then S.Codes = DEFAULTS.Codes end
 if S.SettingsVer < 31 then S.LagSync, S.PrecFit, S.AdaptPlus = false, false, false end
 if S.SettingsVer < 32 then S.LagSync, S.PrecFit, S.AdaptPlus, S.GreenMax, S.Sweep = true, true, true, true, false end
-S.SettingsVer = 32
-DEFAULTS.SettingsVer = 32
+if S.SettingsVer < 33 then S.FirstShot = false end
+S.SettingsVer = 33
+DEFAULTS.SettingsVer = 33
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 S.ShotTimes = S.ShotTimes
 S.RecOn = false
@@ -8438,7 +8439,6 @@ end
 local prevSeed2 = Shot.seedLead
 function Shot.seedLead(key)
 local v = prevSeed2(key)
-if S.FirstShot and (S.GLeadN or 0) < 3 then v = clamp(v + 0.008, 0, 0.1) end
 return v
 end
 -- a very early or very late result moves a jumper that is still learning further and at once
@@ -8640,7 +8640,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.42 shot-line"
+local VERSION = "v1.43 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -8745,7 +8745,7 @@ local S = {
 	ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
 	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
-	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = true,
+	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false,
 	LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 	AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -8882,8 +8882,9 @@ end
 if S.SettingsVer < 29 then S.Codes = DEFAULTS.Codes end
 if S.SettingsVer < 31 then S.LagSync, S.PrecFit, S.AdaptPlus = false, false, false end
 if S.SettingsVer < 32 then S.LagSync, S.PrecFit, S.AdaptPlus, S.GreenMax, S.Sweep = true, true, true, true, false end
-S.SettingsVer = 32
-DEFAULTS.SettingsVer = 32
+if S.SettingsVer < 33 then S.FirstShot = false end
+S.SettingsVer = 33
+DEFAULTS.SettingsVer = 33
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 S.ShotTimes = S.ShotTimes
 S.RecOn = false
@@ -17387,7 +17388,6 @@ do
 	local prevSeed2 = Shot.seedLead
 	function Shot.seedLead(key)
 		local v = prevSeed2(key)
-		if S.FirstShot and (S.GLeadN or 0) < 3 then v = clamp(v + 0.008, 0, 0.1) end
 		return v
 	end
 	-- a very early or very late result moves a jumper that is still learning further and at once
