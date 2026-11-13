@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.26 shot-line"
+local VERSION = "v1.27 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -130,7 +130,7 @@ Codes = "100M RELEASE 100KLIKES 500KMEMBERS SORRYFORBUGS", CodeRemotes = true,
 AutoGreen = true, AutoCalibrate = true, AutoTiming = true, ShotRelease = "Auto",
 HoldTime = 0.55, MaxHold = 1.6, CalSpeed = 0.6, CalStep = 0.02,
 ShotTimes = "", ShotRatio = 0, BarPath = "", BarProp = "", BarAt = 0, BarNudge = 0,
-ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, PerfectGreen = false, PerfectGreenPct = 100, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, Lightning = true, BoltCount = 6, BoltSpeed = 1, BoltThick = 2, BoltBright = 0.9, BoltColor = "White + Yellow", BgMove = true, BgGlow = 0.5, BgOrbs = true, AccentMode = "Gold", OutlineSpeed = 1, LogoStyle = "J bolt H", LogoBg = true, Preset = "Lightning Gold", PacketOn = true, PacketMul = 1,
+ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, DetNotify = false, PerfectGreen = false, PerfectGreenPct = 100, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, Lightning = true, BoltCount = 6, BoltSpeed = 1, BoltThick = 2, BoltBright = 0.9, BoltColor = "White + Yellow", BgMove = true, BgGlow = 0.5, BgOrbs = true, AccentMode = "Gold", OutlineSpeed = 1, LogoStyle = "J bolt H", LogoBg = true, Preset = "Lightning Gold", PacketOn = true, PacketMul = 1,
 MovingOffset = 0, SprintOffset = 0, PingComp = 0, Humanize = 0, Nudge = 0, GreenSound = true,
 HookShootButton = true, ShootButtonPath = "", ReleaseMethod = "Both", FireClick = true,
 ManualAssist = true, ShootKey = "E", SprintKey = "LeftShift",
@@ -232,6 +232,7 @@ S.ShotTimes = table.concat(parts, " ")
 end
 if S.AutoCal == nil then S.AutoCal = true end
 if S.PerfectGreen == nil then S.PerfectGreen = false end
+if S.DetNotify == nil then S.DetNotify = false end
 if S.PerfectGreenPct == nil then S.PerfectGreenPct = 100 end
 if S.AutoTimes == nil then S.AutoTimes = "" end
 if S.SettingsVer < 14 then
@@ -1049,6 +1050,7 @@ function Anim.handle(track)
 local n = Anim.name(track)
 if track.Looped and matchAny(n, { "dribble", "ball", "handle" }) then Anim.loops[track] = true end
 Shot.noteTrack(track)
+pcall(Anim.detTrack, track)
 local kind, how = Anim.classify(track)
 if Rec.on then
 Rec.add("anim", string.format("%s id=%s len=%.2f prio=%s looped=%s speed=%s -> %s", (track.Name or "") ~= "" and track.Name or "?",
@@ -1080,6 +1082,134 @@ end
 for track in pairs(Anim.seen) do
 if not playing[track] then Anim.seen[track] = nil end
 end
+end
+Anim.det = { list = {}, index = {}, catByName = {}, nameById = {}, scanned = false, scanning = false, lastAttr = nil, lastAction = nil, cur = nil }
+Anim.DET_WORDS = {
+{ "Dunk", { "dunk", "slam", "tomahawk", "windmill", "rimgrazer", "alleyoop" } },
+{ "Layup", { "layup", "lay up", "scoop", "euro", "floater", "finger" } },
+{ "Post", { "post", "hook", "dropstep", "drop step" } },
+{ "Jump shot", { "jumpshot", "jump shot", "jumper", "pullup", "pull up", "stepback", "step back", "fadeaway", "shoot" } },
+}
+Anim.DET_PATHS = { { "Dunk", "dunk" }, { "Layup", "layup" }, { "Post", "post" }, { "Jump shot", "jumpshot" }, { "Jump shot", "jumper" } }
+function Anim.detScan()
+local d = Anim.det
+if d.scanned or d.scanning then return end
+d.scanning = true
+task.spawn(function()
+pcall(function()
+local n = 0
+for _, inst in ipairs(ReplicatedStorage:GetDescendants()) do
+n = n + 1
+if n % 1500 == 0 then task.wait() end
+local path, p = "", inst.Parent
+local guard = 0
+while p and p ~= ReplicatedStorage and guard < 30 do
+path = string.lower(p.Name) .. "/" .. path
+p = p.Parent
+guard = guard + 1
+end
+if inst:IsA("Animation") then
+d.nameById[string.lower(tostring(inst.AnimationId or ""))] = inst.Name
+end
+for _, e in ipairs(Anim.DET_PATHS) do
+if string.find(path, e[2], 1, true) then
+local l = string.lower(inst.Name)
+if not d.catByName[l] then d.catByName[l] = e[1] end
+break
+end
+end
+end
+end)
+d.scanned, d.scanning = true, false
+end)
+end
+function Anim.detCat(name)
+local l = string.lower(name)
+for _, e in ipairs(Anim.DET_WORDS) do
+for _, w in ipairs(e[2]) do
+if string.find(l, w, 1, true) then return e[1] end
+end
+end
+return Anim.det.catByName[l] or Anim.det.catByName[string.sub(l, 1, -2)]
+end
+function Anim.detAdd(name, id, cat)
+local d = Anim.det
+local key = string.lower(name)
+local e = d.index[key]
+if not e then
+e = { name = name, id = id or "", cat = cat, count = 0 }
+d.index[key] = e
+if S.DetNotify then pcall(notify, "Animation detected", tostring(cat) .. ": " .. name, 3) end
+end
+e.count = e.count + 1
+e.t = tick()
+e.cat = cat or e.cat
+if id and id ~= "" then e.id = id end
+d.cur = e
+for i, x in ipairs(d.list) do
+if x == e then table.remove(d.list, i) break end
+end
+table.insert(d.list, 1, e)
+while #d.list > 40 do
+local r = table.remove(d.list)
+d.index[string.lower(r.name)] = nil
+end
+end
+function Anim.detTrack(track)
+Anim.detScan()
+local a = track.Animation
+local id = a and tostring(a.AnimationId or "") or ""
+local nm = a and a.Name or ""
+if nm == "" or nm == "Animation" then nm = Anim.det.nameById[string.lower(id)] or track.Name or "" end
+if nm == "" then return end
+local cat = Anim.detCat(nm)
+if cat then Anim.detAdd(nm, id, cat) end
+end
+function Anim.detStep()
+local d = Anim.det
+local c = char()
+if not c then return end
+local v = c:GetAttribute("BaseAnimation")
+local act = c:GetAttribute("Action")
+if d.lastAttr == nil then
+d.lastAttr = (type(v) == "string") and v or ""
+d.lastAction = act
+return
+end
+local changed = type(v) == "string" and v ~= "" and v ~= d.lastAttr
+local started = act == "Shooting" and d.lastAction ~= "Shooting" and type(v) == "string" and v ~= ""
+if changed or started then
+if type(v) == "string" then d.lastAttr = v end
+Anim.detAdd(v, "", Anim.detCat(v) or "Shot")
+end
+d.lastAction = act
+end
+function Anim.detText()
+local d = Anim.det
+local cur = d.cur
+local nowName, nowType = "-", "-"
+if cur then
+local ago = math.max(0, tick() - (cur.t or tick()))
+nowName = cur.name
+nowType = string.format("%s  (%ds ago)", tostring(cur.cat), math.floor(ago))
+end
+local lines = {}
+for i = 1, math.min(8, #d.list) do
+local e = d.list[i]
+lines[#lines + 1] = string.format("%s: %s  x%d", tostring(e.cat), e.name, math.floor(e.count))
+end
+return nowName, nowType, (#lines > 0) and table.concat(lines, "\n") or "Play a shot, layup, dunk or post move"
+end
+function Anim.detCopy()
+local d = Anim.det
+local out = { "== animations detected " .. VERSION }
+for _, e in ipairs(d.list) do
+out[#out + 1] = string.format("%s | %s | %s | seen %d", tostring(e.cat), e.name, e.id ~= "" and e.id or "(from the character)", math.floor(e.count))
+end
+local text = table.concat(out, "\n")
+if type(setclipboard) == "function" then pcall(setclipboard, text) end
+notify("Animations", #d.list .. " animation(s) copied", 3)
+return text
 end
 function Anim.hookChar(c)
 task.spawn(function()
@@ -1799,8 +1929,8 @@ while #Shot.adjLog > 6 do table.remove(Shot.adjLog) end
 end
 local function agoText(t)
 local d = math.max(0, tick() - t)
-if d < 60 then return string.format("%ds ago", d) end
-return string.format("%dm ago", d / 60)
+if d < 60 then return string.format("%ds ago", math.floor(d)) end
+return string.format("%dm ago", math.floor(d / 60))
 end
 function Shot.nameFor(key, anim)
 local n = Shot.NAMES[key]
@@ -1840,6 +1970,12 @@ Shot.statusT = now
 local a, b, c, d, e, f = Shot.statusLines()
 st.shot.Text, st.timing.Text, st.state.Text, st.last.Text, st.adj.Text = a, b, c, d, e
 if st.ping then st.ping.Text = f end
+local dt = UI.detStat
+if dt then
+pcall(Anim.detStep)
+local n1, n2, n3 = Anim.detText()
+dt.now.Text, dt.type.Text, dt.list.Text = n1, n2, n3
+end
 end
 Shot.PING_REF = 0.022
 function Shot.pingNow()
@@ -1896,13 +2032,14 @@ local held = (info.held or 0) + (info.comp or 0)
 local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 if not idx or not held then return true end
 if info.manual and idx ~= 5 then return true end
-if not info.manual and math.abs(held - a.hold) > 0.06 and not a.scan then return true end
+if not info.manual and math.abs(held - a.hold) > 0.06 then return true end
 a.n = (a.n or 0) + 1
 local before, wasLocked = a.hold, a.locked
+local step = true
 if idx == 5 then
+step = false
 a.greens[#a.greens + 1] = held
 a.miss = 0
-a.scan = false
 local sum = 0
 for _, g in ipairs(a.greens) do sum = sum + g end
 a.hold = sum / #a.greens
@@ -1912,29 +2049,29 @@ pcall(notify, "Auto Green", string.format("Learned a new shot: %.3fs", a.hold), 
 end
 elseif #a.greens >= 1 then
 a.miss = (a.miss or 0) + 1
-if a.miss >= 6 then
+if a.miss >= 3 then
 a.greens = {}
 a.miss = 0
-a.n = 0
+else
+step = false
 end
-elseif a.n >= 2 then
-a.scan = true
-local list = Shot.AUTO_SCAN
-a.hold = list[(a.n - 2) % #list + 1]
-elseif idx == 4 then
-a.hold = held + 0.007 * a.dir
+end
+if step then
+if idx == 4 then
+a.hold = held + 0.006 * a.dir
 elseif idx <= 3 then
 a.dir = 1
-a.hold = held + (idx == 3 and 0.012 or (idx == 2 and 0.024 or 0.04))
+a.hold = held + (idx == 3 and 0.010 or (idx == 2 and 0.020 or 0.035))
 else
 a.dir = -1
-a.hold = held - (idx == 6 and 0.012 or (idx == 7 and 0.024 or 0.04))
+a.hold = held - (idx == 6 and 0.010 or (idx == 7 and 0.020 or 0.035))
+end
 end
 a.hold = clamp(a.hold, Shot.FLOOR, S.MaxHold)
 if a.locked and not wasLocked then
 Shot.noteAdjust(key, before, a.hold, "Perfect x2, locked")
 elseif math.abs(a.hold - before) > 0.0005 then
-Shot.noteAdjust(key, before, a.hold, a.scan and "scanning" or Shot.VERDICT[idx] or "?")
+Shot.noteAdjust(key, before, a.hold, (Shot.VERDICT[idx] or "?") .. ((a.dir or 1) > 0 and ", going later" or ", going earlier"))
 end
 Shot.autoSave()
 if Rec.shotOn then
@@ -1957,7 +2094,7 @@ a = { hold = Shot.times[key] or Shot.AUTO_START, greens = {}, locked = false, di
 Shot.auto[key] = a
 end
 Shot.lastSweep = nil
-local state = a.locked and "Locked (learned)" or (a.scan and "Scanning for green") or (#a.greens >= 1 and string.format("Learning (%d of 2 Perfects)", #a.greens)) or "Learning"
+local state = a.locked and "Locked (learned)" or (#a.greens >= 1 and string.format("Learning (%d of 2 Perfects)", #a.greens)) or ((a.n or 0) > 0 and ((a.dir or 1) > 0 and "Learning, trying later" or "Learning, trying earlier")) or "Learning"
 Shot.cur = { key = key, hold = a.hold, state = state }
 return clamp(a.hold, Shot.FLOOR, S.MaxHold), a.hold
 end
@@ -5805,6 +5942,10 @@ UI.Button(rc, "Copy remote spy (RSpy)", Rec.copySpy)
 local ag = UI.Card(P, "Auto Green status")
 UI.autoStat = { shot = UI.Stat(ag, "Jump shot"), timing = UI.Stat(ag, "Timing"), state = UI.Stat(ag, "State"), last = UI.Stat(ag, "Last shot"), ping = UI.Stat(ag, "Ping fix"),
 adj = UI.Note(ag, "No change yet") }
+local dc = UI.Card(P, "Animation detector")
+UI.detStat = { now = UI.Stat(dc, "Animation now"), type = UI.Stat(dc, "Type"), list = UI.Note(dc, "Play a shot, layup, dunk or post move") }
+UI.Toggle(dc, "Pop up each new animation", "DetNotify")
+UI.Button(dc, "Copy animation list", Anim.detCopy)
 local sr = UI.Card(P, "Shot recorder")
 UI.Toggle(sr, "Record shots (turn off to copy everything)", "RecShots", function(v) if v then Rec.shotStart() else Rec.shotStop() end end)
 UI.Toggle(sr, "Sweep timings while recording", "Sweep")
@@ -6311,7 +6452,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.26 shot-line"
+local VERSION = "v1.27 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -6401,7 +6542,7 @@ local S = {
 	AutoGreen = true, AutoCalibrate = true, AutoTiming = true, ShotRelease = "Auto",
 	HoldTime = 0.55, MaxHold = 1.6, CalSpeed = 0.6, CalStep = 0.02,
 	ShotTimes = "", ShotRatio = 0, BarPath = "", BarProp = "", BarAt = 0, BarNudge = 0,
-	ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, PerfectGreen = false, PerfectGreenPct = 100, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, Lightning = true, BoltCount = 6, BoltSpeed = 1, BoltThick = 2, BoltBright = 0.9, BoltColor = "White + Yellow", BgMove = true, BgGlow = 0.5, BgOrbs = true, AccentMode = "Gold", OutlineSpeed = 1, LogoStyle = "J bolt H", LogoBg = true, Preset = "Lightning Gold", PacketOn = true, PacketMul = 1,
+	ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, DetNotify = false, PerfectGreen = false, PerfectGreenPct = 100, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, Lightning = true, BoltCount = 6, BoltSpeed = 1, BoltThick = 2, BoltBright = 0.9, BoltColor = "White + Yellow", BgMove = true, BgGlow = 0.5, BgOrbs = true, AccentMode = "Gold", OutlineSpeed = 1, LogoStyle = "J bolt H", LogoBg = true, Preset = "Lightning Gold", PacketOn = true, PacketMul = 1,
 	MovingOffset = 0, SprintOffset = 0, PingComp = 0, Humanize = 0, Nudge = 0, GreenSound = true,
 	HookShootButton = true, ShootButtonPath = "", ReleaseMethod = "Both", FireClick = true,
 	ManualAssist = true, ShootKey = "E", SprintKey = "LeftShift",
@@ -6510,6 +6651,7 @@ if S.SettingsVer < 13 then
 end
 if S.AutoCal == nil then S.AutoCal = true end
 if S.PerfectGreen == nil then S.PerfectGreen = false end
+if S.DetNotify == nil then S.DetNotify = false end
 if S.PerfectGreenPct == nil then S.PerfectGreenPct = 100 end
 if S.AutoTimes == nil then S.AutoTimes = "" end
 if S.SettingsVer < 14 then
@@ -7387,6 +7529,7 @@ function Anim.handle(track)
 	local n = Anim.name(track)
 	if track.Looped and matchAny(n, { "dribble", "ball", "handle" }) then Anim.loops[track] = true end
 	Shot.noteTrack(track)
+	pcall(Anim.detTrack, track)
 	local kind, how = Anim.classify(track)
 	if Rec.on then
 		Rec.add("anim", string.format("%s id=%s len=%.2f prio=%s looped=%s speed=%s -> %s", (track.Name or "") ~= "" and track.Name or "?",
@@ -7419,6 +7562,137 @@ function Anim.poll()
 	for track in pairs(Anim.seen) do
 		if not playing[track] then Anim.seen[track] = nil end
 	end
+end
+-- ANIMATION DETECTOR: names the shot, layup, dunk and post animations the game plays (real names, not numbers)
+Anim.det = { list = {}, index = {}, catByName = {}, nameById = {}, scanned = false, scanning = false, lastAttr = nil, lastAction = nil, cur = nil }
+Anim.DET_WORDS = {
+	{ "Dunk", { "dunk", "slam", "tomahawk", "windmill", "rimgrazer", "alleyoop" } },
+	{ "Layup", { "layup", "lay up", "scoop", "euro", "floater", "finger" } },
+	{ "Post", { "post", "hook", "dropstep", "drop step" } },
+	{ "Jump shot", { "jumpshot", "jump shot", "jumper", "pullup", "pull up", "stepback", "step back", "fadeaway", "shoot" } },
+}
+Anim.DET_PATHS = { { "Dunk", "dunk" }, { "Layup", "layup" }, { "Post", "post" }, { "Jump shot", "jumpshot" }, { "Jump shot", "jumper" } }
+-- the game's own folders say which animation is which kind (its dunk list, layup list, post list)
+function Anim.detScan()
+	local d = Anim.det
+	if d.scanned or d.scanning then return end
+	d.scanning = true
+	task.spawn(function()
+		pcall(function()
+			local n = 0
+			for _, inst in ipairs(ReplicatedStorage:GetDescendants()) do
+				n = n + 1
+				if n % 1500 == 0 then task.wait() end
+				local path, p = "", inst.Parent
+				local guard = 0
+				while p and p ~= ReplicatedStorage and guard < 30 do
+					path = string.lower(p.Name) .. "/" .. path
+					p = p.Parent
+					guard = guard + 1
+				end
+				if inst:IsA("Animation") then
+					d.nameById[string.lower(tostring(inst.AnimationId or ""))] = inst.Name
+				end
+				for _, e in ipairs(Anim.DET_PATHS) do
+					if string.find(path, e[2], 1, true) then
+						local l = string.lower(inst.Name)
+						if not d.catByName[l] then d.catByName[l] = e[1] end
+						break
+					end
+				end
+			end
+		end)
+		d.scanned, d.scanning = true, false
+	end)
+end
+function Anim.detCat(name)
+	local l = string.lower(name)
+	for _, e in ipairs(Anim.DET_WORDS) do
+		for _, w in ipairs(e[2]) do
+			if string.find(l, w, 1, true) then return e[1] end
+		end
+	end
+	return Anim.det.catByName[l] or Anim.det.catByName[string.sub(l, 1, -2)]
+end
+function Anim.detAdd(name, id, cat)
+	local d = Anim.det
+	local key = string.lower(name)
+	local e = d.index[key]
+	if not e then
+		e = { name = name, id = id or "", cat = cat, count = 0 }
+		d.index[key] = e
+		if S.DetNotify then pcall(notify, "Animation detected", tostring(cat) .. ": " .. name, 3) end
+	end
+	e.count = e.count + 1
+	e.t = tick()
+	e.cat = cat or e.cat
+	if id and id ~= "" then e.id = id end
+	d.cur = e
+	for i, x in ipairs(d.list) do
+		if x == e then table.remove(d.list, i) break end
+	end
+	table.insert(d.list, 1, e)
+	while #d.list > 40 do
+		local r = table.remove(d.list)
+		d.index[string.lower(r.name)] = nil
+	end
+end
+function Anim.detTrack(track)
+	Anim.detScan()
+	local a = track.Animation
+	local id = a and tostring(a.AnimationId or "") or ""
+	local nm = a and a.Name or ""
+	if nm == "" or nm == "Animation" then nm = Anim.det.nameById[string.lower(id)] or track.Name or "" end
+	if nm == "" then return end
+	local cat = Anim.detCat(nm)
+	if cat then Anim.detAdd(nm, id, cat) end
+end
+-- the game also writes the move it is playing onto your character (BaseAnimation)
+function Anim.detStep()
+	local d = Anim.det
+	local c = char()
+	if not c then return end
+	local v = c:GetAttribute("BaseAnimation")
+	local act = c:GetAttribute("Action")
+	if d.lastAttr == nil then
+		d.lastAttr = (type(v) == "string") and v or ""
+		d.lastAction = act
+		return
+	end
+	local changed = type(v) == "string" and v ~= "" and v ~= d.lastAttr
+	local started = act == "Shooting" and d.lastAction ~= "Shooting" and type(v) == "string" and v ~= ""
+	if changed or started then
+		if type(v) == "string" then d.lastAttr = v end
+		Anim.detAdd(v, "", Anim.detCat(v) or "Shot")
+	end
+	d.lastAction = act
+end
+function Anim.detText()
+	local d = Anim.det
+	local cur = d.cur
+	local nowName, nowType = "-", "-"
+	if cur then
+		local ago = math.max(0, tick() - (cur.t or tick()))
+		nowName = cur.name
+		nowType = string.format("%s  (%ds ago)", tostring(cur.cat), math.floor(ago))
+	end
+	local lines = {}
+	for i = 1, math.min(8, #d.list) do
+		local e = d.list[i]
+		lines[#lines + 1] = string.format("%s: %s  x%d", tostring(e.cat), e.name, math.floor(e.count))
+	end
+	return nowName, nowType, (#lines > 0) and table.concat(lines, "\n") or "Play a shot, layup, dunk or post move"
+end
+function Anim.detCopy()
+	local d = Anim.det
+	local out = { "== animations detected " .. VERSION }
+	for _, e in ipairs(d.list) do
+		out[#out + 1] = string.format("%s | %s | %s | seen %d", tostring(e.cat), e.name, e.id ~= "" and e.id or "(from the character)", math.floor(e.count))
+	end
+	local text = table.concat(out, "\n")
+	if type(setclipboard) == "function" then pcall(setclipboard, text) end
+	notify("Animations", #d.list .. " animation(s) copied", 3)
+	return text
 end
 function Anim.hookChar(c)
 	task.spawn(function()
@@ -8167,8 +8441,8 @@ function Shot.noteAdjust(key, from, to, why)
 end
 local function agoText(t)
 	local d = math.max(0, tick() - t)
-	if d < 60 then return string.format("%ds ago", d) end
-	return string.format("%dm ago", d / 60)
+	if d < 60 then return string.format("%ds ago", math.floor(d)) end
+	return string.format("%dm ago", math.floor(d / 60))
 end
 function Shot.nameFor(key, anim)
 	local n = Shot.NAMES[key]
@@ -8208,6 +8482,12 @@ function Shot.statusStep()
 	local a, b, c, d, e, f = Shot.statusLines()
 	st.shot.Text, st.timing.Text, st.state.Text, st.last.Text, st.adj.Text = a, b, c, d, e
 	if st.ping then st.ping.Text = f end
+	local dt = UI.detStat
+	if dt then
+		pcall(Anim.detStep)
+		local n1, n2, n3 = Anim.detText()
+		dt.now.Text, dt.type.Text, dt.list.Text = n1, n2, n3
+	end
 end
 Shot.PING_REF = 0.022
 function Shot.pingNow()
@@ -8264,13 +8544,14 @@ function Shot.autoLearn(info, res, strength)
 	local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 	if not idx or not held then return true end
 	if info.manual and idx ~= 5 then return true end
-	if not info.manual and math.abs(held - a.hold) > 0.06 and not a.scan then return true end
+	if not info.manual and math.abs(held - a.hold) > 0.06 then return true end
 	a.n = (a.n or 0) + 1
 	local before, wasLocked = a.hold, a.locked
+	local step = true
 	if idx == 5 then
+		step = false
 		a.greens[#a.greens + 1] = held
 		a.miss = 0
-		a.scan = false
 		local sum = 0
 		for _, g in ipairs(a.greens) do sum = sum + g end
 		a.hold = sum / #a.greens
@@ -8280,29 +8561,30 @@ function Shot.autoLearn(info, res, strength)
 		end
 	elseif #a.greens >= 1 then
 		a.miss = (a.miss or 0) + 1
-		if a.miss >= 6 then
+		if a.miss >= 3 then
 			a.greens = {}
 			a.miss = 0
-			a.n = 0
+		else
+			step = false
 		end
-	elseif a.n >= 2 then
-		a.scan = true
-		local list = Shot.AUTO_SCAN
-		a.hold = list[(a.n - 2) % #list + 1]
-	elseif idx == 4 then
-		a.hold = held + 0.007 * a.dir
-	elseif idx <= 3 then
-		a.dir = 1
-		a.hold = held + (idx == 3 and 0.012 or (idx == 2 and 0.024 or 0.04))
-	else
-		a.dir = -1
-		a.hold = held - (idx == 6 and 0.012 or (idx == 7 and 0.024 or 0.04))
+	end
+	-- late: a little earlier, early: a little later, and the shot after that tells whether it helped
+	if step then
+		if idx == 4 then
+			a.hold = held + 0.006 * a.dir
+		elseif idx <= 3 then
+			a.dir = 1
+			a.hold = held + (idx == 3 and 0.010 or (idx == 2 and 0.020 or 0.035))
+		else
+			a.dir = -1
+			a.hold = held - (idx == 6 and 0.010 or (idx == 7 and 0.020 or 0.035))
+		end
 	end
 	a.hold = clamp(a.hold, Shot.FLOOR, S.MaxHold)
 	if a.locked and not wasLocked then
 		Shot.noteAdjust(key, before, a.hold, "Perfect x2, locked")
 	elseif math.abs(a.hold - before) > 0.0005 then
-		Shot.noteAdjust(key, before, a.hold, a.scan and "scanning" or Shot.VERDICT[idx] or "?")
+		Shot.noteAdjust(key, before, a.hold, (Shot.VERDICT[idx] or "?") .. ((a.dir or 1) > 0 and ", going later" or ", going earlier"))
 	end
 	Shot.autoSave()
 	if Rec.shotOn then
@@ -8325,7 +8607,7 @@ function Shot.remoteHold(key, pk)
 			Shot.auto[key] = a
 		end
 		Shot.lastSweep = nil
-		local state = a.locked and "Locked (learned)" or (a.scan and "Scanning for green") or (#a.greens >= 1 and string.format("Learning (%d of 2 Perfects)", #a.greens)) or "Learning"
+		local state = a.locked and "Locked (learned)" or (#a.greens >= 1 and string.format("Learning (%d of 2 Perfects)", #a.greens)) or ((a.n or 0) > 0 and ((a.dir or 1) > 0 and "Learning, trying later" or "Learning, trying earlier")) or "Learning"
 		Shot.cur = { key = key, hold = a.hold, state = state }
 		return clamp(a.hold, Shot.FLOOR, S.MaxHold), a.hold
 	end
@@ -12356,6 +12638,11 @@ do
 	local ag = UI.Card(P, "Auto Green status")
 	UI.autoStat = { shot = UI.Stat(ag, "Jump shot"), timing = UI.Stat(ag, "Timing"), state = UI.Stat(ag, "State"), last = UI.Stat(ag, "Last shot"), ping = UI.Stat(ag, "Ping fix"),
 		adj = UI.Note(ag, "No change yet") }
+
+	local dc = UI.Card(P, "Animation detector")
+	UI.detStat = { now = UI.Stat(dc, "Animation now"), type = UI.Stat(dc, "Type"), list = UI.Note(dc, "Play a shot, layup, dunk or post move") }
+	UI.Toggle(dc, "Pop up each new animation", "DetNotify")
+	UI.Button(dc, "Copy animation list", Anim.detCopy)
 
 	local sr = UI.Card(P, "Shot recorder")
 	UI.Toggle(sr, "Record shots (turn off to copy everything)", "RecShots", function(v) if v then Rec.shotStart() else Rec.shotStop() end end)
