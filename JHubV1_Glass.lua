@@ -1769,7 +1769,7 @@ if S.AutoGreen and now - Shot.releasedT < 2.5 then return true end
 end
 return false
 end
-Shot.FLOOR = 0.205
+Shot.FLOOR = 0.26
 Shot.brackets = {}
 function Shot.remoteKey(cap, sit)
 local ids = {}
@@ -2201,7 +2201,7 @@ local now = tick()
 local n = #samples
 if peakLead then
 local tp = Shot.peakFit(samples)
-if tp then
+if tp and tp - m0 > 0.25 and tp - m0 < 0.9 then
 hold = math.max(Shot.FLOOR, tp - (Shot.pingNow() + peakLead) - m0)
 peakAimed = true
 Shot.peakDur[key] = tp - m0
@@ -2316,7 +2316,8 @@ Shot.busy = true
 local ok, err = pcall(Shot.core, mode, ctx)
 if not ok then
 log("Shot error: " .. tostring(err))
-pcall(Shot.release, mode, ctx)
+notify("Auto Green error", tostring(err), 6)
+if mode ~= "remote" then pcall(Shot.release, mode, ctx) end
 end
 if mode == "remote" then
 if ctx then ctx.released = true end
@@ -6521,8 +6522,8 @@ lastq = sm.q
 if sm.q > 0.1 and sm.q < 0.93 then pts[#pts + 1] = sm end
 end
 local n = #pts
-if n < 4 or pts[n].q < 0.25 then return nil end
-if n < 6 and pts[n].t - pts[1].t < 0.06 then return nil end
+if n < 5 or pts[n].q < 0.3 then return nil end
+if n < 6 and pts[n].t - pts[1].t < 0.12 then return nil end
 if n > 16 then
 local cut = {}
 for i = n - 15, n do cut[#cut + 1] = pts[i] end
@@ -9910,7 +9911,7 @@ function Shot.onShootCall(args)
 	end
 	return false
 end
-Shot.FLOOR = 0.205
+Shot.FLOOR = 0.26
 Shot.brackets = {}
 -- a release sooner than this after the meter starts is a pump fake in this game
 function Shot.remoteKey(cap, sit)
@@ -10364,7 +10365,7 @@ function Shot.remoteCore(ctx)
 		if peakLead then
 			-- by the meter: let go one ping plus the lead before the meter reaches its peak
 			local tp = Shot.peakFit(samples)
-			if tp then
+			if tp and tp - m0 > 0.25 and tp - m0 < 0.9 then
 				hold = math.max(Shot.FLOOR, tp - (Shot.pingNow() + peakLead) - m0)
 				peakAimed = true
 				Shot.peakDur[key] = tp - m0
@@ -10482,7 +10483,8 @@ function Shot.run(mode, ctx)
 	local ok, err = pcall(Shot.core, mode, ctx)
 	if not ok then
 		log("Shot error: " .. tostring(err))
-		pcall(Shot.release, mode, ctx)
+		notify("Auto Green error", tostring(err), 6)
+		if mode ~= "remote" then pcall(Shot.release, mode, ctx) end
 	end
 	if mode == "remote" then
 		if ctx then ctx.released = true end
@@ -14915,8 +14917,8 @@ do
 			if sm.q > 0.1 and sm.q < 0.93 then pts[#pts + 1] = sm end
 		end
 		local n = #pts
-		if n < 4 or pts[n].q < 0.25 then return nil end
-		if n < 6 and pts[n].t - pts[1].t < 0.06 then return nil end
+		if n < 5 or pts[n].q < 0.3 then return nil end
+		if n < 6 and pts[n].t - pts[1].t < 0.12 then return nil end
 		if n > 16 then
 			local cut = {}
 			for i = n - 15, n do cut[#cut + 1] = pts[i] end
