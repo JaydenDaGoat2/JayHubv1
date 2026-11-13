@@ -8491,20 +8491,19 @@ end
 -- POST FADES: these built-in timings keep learning from the game's verdicts and settle on Perfect; every other built-in shot is left alone
 do
 local POST = {
-["111074210919383"] = true, ["71484695722621"] = true,
-["77401448272074"] = true, ["128777513307709+77401448272074"] = true,
+["__all"] = true,
 }
 local loaded, st = false, {}
 local function load()
 if loaded then return end
 loaded = true
 for key, val in string.gmatch(S.FinalAdj or "", "(%S-)=([%-%d%.]+)") do
-if POST[key] then Shot.finalAdj[key] = tonumber(val) end
+if Shot.FINAL[key] then Shot.finalAdj[key] = tonumber(val) end
 end
 end
 local function save()
 local parts = {}
-for key in pairs(POST) do
+for key in pairs(Shot.finalAdj) do
 if Shot.finalAdj[key] then parts[#parts + 1] = string.format("%s=%.4f", key, Shot.finalAdj[key]) end
 end
 table.sort(parts)
@@ -8513,7 +8512,7 @@ saveSoon()
 end
 function Shot.finalLoad() load() end
 function Shot.finalLearn(info, res, strength)
-if info.manual or not POST[info.key] then return end
+if info.manual or not Shot.FINAL[info.key] then return end
 local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 if not idx then return end
 load()
@@ -17495,20 +17494,19 @@ end
 -- POST FADES: these built-in timings keep learning from the game's verdicts and settle on Perfect; every other built-in shot is left alone
 do
 	local POST = {
-		["111074210919383"] = true, ["71484695722621"] = true,
-		["77401448272074"] = true, ["128777513307709+77401448272074"] = true,
+		["__all"] = true,
 	}
 	local loaded, st = false, {}
 	local function load()
 		if loaded then return end
 		loaded = true
 		for key, val in string.gmatch(S.FinalAdj or "", "(%S-)=([%-%d%.]+)") do
-			if POST[key] then Shot.finalAdj[key] = tonumber(val) end
+			if Shot.FINAL[key] then Shot.finalAdj[key] = tonumber(val) end
 		end
 	end
 	local function save()
 		local parts = {}
-		for key in pairs(POST) do
+		for key in pairs(Shot.finalAdj) do
 			if Shot.finalAdj[key] then parts[#parts + 1] = string.format("%s=%.4f", key, Shot.finalAdj[key]) end
 		end
 		table.sort(parts)
@@ -17517,7 +17515,7 @@ do
 	end
 	function Shot.finalLoad() load() end
 	function Shot.finalLearn(info, res, strength)
-		if info.manual or not POST[info.key] then return end
+		if info.manual or not Shot.FINAL[info.key] then return end
 		local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 		if not idx then return end
 		load()
