@@ -138,6 +138,7 @@ BackupButton = false, BackupMethod = "touch", BackupInset = false,
 DribbleGlide = false, DribbleGlidePower = 30, DribbleGlideTime = 0.45, GlideSpeed = 1,
 ShotGlide = false, ShotGlidePower = 22, ShotGlideTime = 0.45,
 GatherGlide = false, GatherGlidePower = 26, GatherGlideTime = 0.45,
+DribbleGlideSpeed = 1, ShotGlideSpeed = 1, GatherGlideSpeed = 1,
 GlideFade = 60, GlideSmart = true, GlideStopAtWalls = false, GlideNeedBall = true, GlideMethod = "Auto",
 DribbleKeys = "Z C X V", GatherKeys = "", DribbleBtnPaths = "", GatherBtnPaths = "",
 AnimDribble = "", AnimGather = "", AnimShot = "",
@@ -2593,7 +2594,7 @@ end
 function Speed.extraNow()
 local kind, level = Speed.pick()
 Speed.kind = kind
-local extra = kind and level * Speed.PER_LEVEL or 0
+local extra = (kind and level > 0) and Speed.gameWS * (1.1 ^ level - 1) or 0
 extra = clamp(extra, 0, S.SpeedCap)
 if S.AntiRubber and Speed.level > 0 then extra = extra / (1 + Speed.level) end
 return extra
@@ -5942,19 +5943,22 @@ P = UI.Page("Dribbling", "D")
 do
 local d = UI.Card(P, "Dribble Glide")
 UI.Toggle(d, "Dribble Glide", "DribbleGlide")
-UI.Slider(d, "Glide speed", "DribbleGlidePower", 1, 80, 1, 0)
+UI.Slider(d, "Glide power", "DribbleGlidePower", 1, 80, 1, 0)
+UI.Slider(d, "Glide speed", "DribbleGlideSpeed", 0.5, 3, 0.1, 1, "x")
 UI.Slider(d, "Time", "DribbleGlideTime", 0.05, 1, 0.01, 2, "s")
 local sg = UI.Card(P, "Shot Glide")
 UI.Toggle(sg, "Shot Glide", "ShotGlide")
-UI.Slider(sg, "Glide speed", "ShotGlidePower", 1, 80, 1, 0)
+UI.Slider(sg, "Glide power", "ShotGlidePower", 1, 80, 1, 0)
+UI.Slider(sg, "Glide speed", "ShotGlideSpeed", 0.5, 3, 0.1, 1, "x")
 UI.Slider(sg, "Time", "ShotGlideTime", 0.05, 1, 0.01, 2, "s")
 local gt = UI.Card(P, "Gather Step Glide")
 UI.Toggle(gt, "Gather Step Glide", "GatherGlide")
-UI.Slider(gt, "Glide speed", "GatherGlidePower", 1, 80, 1, 0)
+UI.Slider(gt, "Glide power", "GatherGlidePower", 1, 80, 1, 0)
+UI.Slider(gt, "Glide speed", "GatherGlideSpeed", 0.5, 3, 0.1, 1, "x")
 UI.Slider(gt, "Time", "GatherGlideTime", 0.05, 1, 0.01, 2, "s")
 local rs = UI.Card(P, "Restore")
 UI.Button(rs, "Restore to default", function()
-UI.restore({ "DribbleGlide", "DribbleGlidePower", "DribbleGlideTime", "ShotGlide", "ShotGlidePower", "ShotGlideTime", "GatherGlide",
+UI.restore({ "DribbleGlideSpeed", "ShotGlideSpeed", "GatherGlideSpeed", "DribbleGlide", "DribbleGlidePower", "DribbleGlideTime", "ShotGlide", "ShotGlidePower", "ShotGlideTime", "GatherGlide",
 "GatherGlidePower", "GatherGlideTime" })
 end)
 end
@@ -5962,13 +5966,13 @@ P = UI.Page("Players", "P")
 do
 local b = UI.Card(P, "Walk speed boost (walking, no ball)")
 UI.Toggle(b, "Walk speed boost", "SpeedOn", function(v) if v then Speed.resetAuto() end end)
-UI.Slider(b, "Level (0 = normal speed)", "SpeedAdd", 0, 15, 1, 0)
+UI.Slider(b, "Level (0 = normal, each level x1.1)", "SpeedAdd", 0, 15, 1, 0)
 local rb = UI.Card(P, "Run speed boost (running, no ball)")
 UI.Toggle(rb, "Run speed boost", "RunOn", function(v) if v then Speed.resetAuto() end end)
-UI.Slider(rb, "Level (0 = normal speed)", "RunAdd", 0, 15, 1, 0)
+UI.Slider(rb, "Level (0 = normal, each level x1.1)", "RunAdd", 0, 15, 1, 0)
 local bb = UI.Card(P, "Ball speed boost (with the ball)")
 UI.Toggle(bb, "Ball speed boost", "BallSpeedOn", function(v) if v then Speed.resetAuto() end end)
-UI.Slider(bb, "Level (0 = normal speed)", "BallAdd", 0, 15, 1, 0)
+UI.Slider(bb, "Level (0 = normal, each level x1.1)", "BallAdd", 0, 15, 1, 0)
 local rs = UI.Card(P, "Restore")
 UI.Button(rs, "Restore to default", function()
 UI.restore({ "SpeedOn", "SpeedAdd", "RunOn", "RunAdd", "BallSpeedOn", "BallAdd" }, function() Speed.resetAuto() end)
@@ -6292,7 +6296,7 @@ local token = Glide.token
 local startPos = r.Position
 local why = Glide.why
 local walk = flat(intent) * Speed.gameWS
-local total = power * duration * (2 / 3)
+local total = power * duration * 0.8
 local applied, finished, startedAt = 0, false, now
 if method == "Input" then
 Glide.input = { untilT = now + duration, scale = 1 + power / math.max(Speed.gameWS, 1), dir = dir, t0 = now, nextSend = 0 }
@@ -6325,7 +6329,7 @@ end
 local p = clamp((tick() - now) / duration, 0, 1)
 local over = token ~= Glide.token or not r.Parent or not JH.Running
 if method == "CFrame" and not over then
-local want = power * duration * (p - p * p * p / 3)
+local want = power * duration * 0.8 * (2 * p - p * p)
 local step = want - applied
 if step > 0 and not Glide.blocked(r, dir, step) then
 r.CFrame = r.CFrame + dir * step
@@ -6343,7 +6347,7 @@ end)
 end
 return "stop"
 end
-local factor = 1 - p * p
+local factor = 1.6 * (1 - p)
 if method == "Impulse" or method == "CFrame" then return nil end
 if method == "AttrBoost" then
 local c = char()
@@ -6414,6 +6418,52 @@ Glide.fire("gather", "step back move " .. name, dir)
 else
 Glide.fire("dribble", "dribble move " .. (name ~= "" and name or tostring(args[1])), dir)
 end
+end)
+end
+
+Glide.kinds = {
+dribble = { "DribbleGlide", "DribbleGlidePower", "DribbleGlideTime", "DribbleGlideSpeed" },
+gather = { "GatherGlide", "GatherGlidePower", "GatherGlideTime", "GatherGlideSpeed" },
+shot = { "ShotGlide", "ShotGlidePower", "ShotGlideTime", "ShotGlideSpeed" },
+}
+function Glide.fire(kind, why, dir)
+local k = Glide.kinds[kind]
+if not k or not S[k[1]] then return end
+if S.GlideNeedBall and kind ~= "shot" and not Ball.holding then
+log("Glide " .. kind .. " skipped: you do not hold the ball")
+return
+end
+local m = math.max(S[k[4]] or 1, 0.1)
+Glide.why = why or "?"
+Glide.start(kind, S[k[2]] * m, S[k[3]] / m, dir)
+end
+function Glide.test(kind)
+local k = Glide.kinds[kind]
+if not k then return end
+Glide.lastStart[kind] = 0
+Glide.why = "test button"
+local m = math.max(S[k[4]] or 1, 0.1)
+Glide.start(kind, S[k[2]] * m, S[k[3]] / m)
+end
+function Mover.watchShot(pressT)
+local h, r = hum(), Mover.body()
+local stick
+if h and r then
+local intent = Mover.intent(h, r)
+if intent.Magnitude > 0.1 then stick = flat(intent) end
+end
+task.spawn(function()
+local t0 = tick()
+while JH.Running and tick() - t0 < 0.35 and Shot.meterT < pressT - 0.05 do RunService.Heartbeat:Wait() end
+if not JH.Running or Shot.meterT < pressT - 0.05 then return end
+local c = char()
+local anim = string.lower(tostring(c and c:GetAttribute("BaseAnimation") or ""))
+local body = Mover.body()
+local dir = stick
+if not dir and body and matchAny(anim, { "fade", "stepback", "step back" }) then dir = -flat(body.CFrame.LookVector) end
+if not dir then dir = Mover.moveWhere(1.5) end
+if not dir and body then dir = flat(body.CFrame.LookVector) end
+Glide.fire("shot", "shot", dir)
 end)
 end
 UI.syncAuto()
@@ -6669,6 +6719,7 @@ local S = {
 	DribbleGlide = false, DribbleGlidePower = 30, DribbleGlideTime = 0.45, GlideSpeed = 1,
 	ShotGlide = false, ShotGlidePower = 22, ShotGlideTime = 0.45,
 	GatherGlide = false, GatherGlidePower = 26, GatherGlideTime = 0.45,
+	DribbleGlideSpeed = 1, ShotGlideSpeed = 1, GatherGlideSpeed = 1,
 	GlideFade = 60, GlideSmart = true, GlideStopAtWalls = false, GlideNeedBall = true, GlideMethod = "Auto",
 	DribbleKeys = "Z C X V", GatherKeys = "", DribbleBtnPaths = "", GatherBtnPaths = "",
 	AnimDribble = "", AnimGather = "", AnimShot = "",
@@ -9271,7 +9322,7 @@ end
 function Speed.extraNow()
 	local kind, level = Speed.pick()
 	Speed.kind = kind
-	local extra = kind and level * Speed.PER_LEVEL or 0
+	local extra = (kind and level > 0) and Speed.gameWS * (1.1 ^ level - 1) or 0
 	extra = clamp(extra, 0, S.SpeedCap)
 	if S.AntiRubber and Speed.level > 0 then extra = extra / (1 + Speed.level) end
 	return extra
@@ -12768,22 +12819,25 @@ P = UI.Page("Dribbling", "D")
 do
 	local d = UI.Card(P, "Dribble Glide")
 	UI.Toggle(d, "Dribble Glide", "DribbleGlide")
-	UI.Slider(d, "Glide speed", "DribbleGlidePower", 1, 80, 1, 0)
+	UI.Slider(d, "Glide power", "DribbleGlidePower", 1, 80, 1, 0)
+	UI.Slider(d, "Glide speed", "DribbleGlideSpeed", 0.5, 3, 0.1, 1, "x")
 	UI.Slider(d, "Time", "DribbleGlideTime", 0.05, 1, 0.01, 2, "s")
 
 	local sg = UI.Card(P, "Shot Glide")
 	UI.Toggle(sg, "Shot Glide", "ShotGlide")
-	UI.Slider(sg, "Glide speed", "ShotGlidePower", 1, 80, 1, 0)
+	UI.Slider(sg, "Glide power", "ShotGlidePower", 1, 80, 1, 0)
+	UI.Slider(sg, "Glide speed", "ShotGlideSpeed", 0.5, 3, 0.1, 1, "x")
 	UI.Slider(sg, "Time", "ShotGlideTime", 0.05, 1, 0.01, 2, "s")
 
 	local gt = UI.Card(P, "Gather Step Glide")
 	UI.Toggle(gt, "Gather Step Glide", "GatherGlide")
-	UI.Slider(gt, "Glide speed", "GatherGlidePower", 1, 80, 1, 0)
+	UI.Slider(gt, "Glide power", "GatherGlidePower", 1, 80, 1, 0)
+	UI.Slider(gt, "Glide speed", "GatherGlideSpeed", 0.5, 3, 0.1, 1, "x")
 	UI.Slider(gt, "Time", "GatherGlideTime", 0.05, 1, 0.01, 2, "s")
 
 	local rs = UI.Card(P, "Restore")
 	UI.Button(rs, "Restore to default", function()
-		UI.restore({ "DribbleGlide", "DribbleGlidePower", "DribbleGlideTime", "ShotGlide", "ShotGlidePower", "ShotGlideTime", "GatherGlide",
+		UI.restore({ "DribbleGlideSpeed", "ShotGlideSpeed", "GatherGlideSpeed", "DribbleGlide", "DribbleGlidePower", "DribbleGlideTime", "ShotGlide", "ShotGlidePower", "ShotGlideTime", "GatherGlide",
 			"GatherGlidePower", "GatherGlideTime" })
 	end)
 end
@@ -12793,15 +12847,15 @@ P = UI.Page("Players", "P")
 do
 	local b = UI.Card(P, "Walk speed boost (walking, no ball)")
 	UI.Toggle(b, "Walk speed boost", "SpeedOn", function(v) if v then Speed.resetAuto() end end)
-	UI.Slider(b, "Level (0 = normal speed)", "SpeedAdd", 0, 15, 1, 0)
+	UI.Slider(b, "Level (0 = normal, each level x1.1)", "SpeedAdd", 0, 15, 1, 0)
 
 	local rb = UI.Card(P, "Run speed boost (running, no ball)")
 	UI.Toggle(rb, "Run speed boost", "RunOn", function(v) if v then Speed.resetAuto() end end)
-	UI.Slider(rb, "Level (0 = normal speed)", "RunAdd", 0, 15, 1, 0)
+	UI.Slider(rb, "Level (0 = normal, each level x1.1)", "RunAdd", 0, 15, 1, 0)
 
 	local bb = UI.Card(P, "Ball speed boost (with the ball)")
 	UI.Toggle(bb, "Ball speed boost", "BallSpeedOn", function(v) if v then Speed.resetAuto() end end)
-	UI.Slider(bb, "Level (0 = normal speed)", "BallAdd", 0, 15, 1, 0)
+	UI.Slider(bb, "Level (0 = normal, each level x1.1)", "BallAdd", 0, 15, 1, 0)
 
 	local rs = UI.Card(P, "Restore")
 	UI.Button(rs, "Restore to default", function()
@@ -13171,7 +13225,7 @@ function Glide.start(kind, power, duration, dirOverride)
 	local startPos = r.Position
 	local why = Glide.why
 	local walk = flat(intent) * Speed.gameWS
-	local total = power * duration * (2 / 3)
+	local total = power * duration * 0.8
 	local applied, finished, startedAt = 0, false, now
 	if method == "Input" then
 		Glide.input = { untilT = now + duration, scale = 1 + power / math.max(Speed.gameWS, 1), dir = dir, t0 = now, nextSend = 0 }
@@ -13204,7 +13258,7 @@ function Glide.start(kind, power, duration, dirOverride)
 		local p = clamp((tick() - now) / duration, 0, 1)
 		local over = token ~= Glide.token or not r.Parent or not JH.Running
 		if method == "CFrame" and not over then
-			local want = power * duration * (p - p * p * p / 3)
+			local want = power * duration * 0.8 * (2 * p - p * p)
 			local step = want - applied
 			if step > 0 and not Glide.blocked(r, dir, step) then
 				r.CFrame = r.CFrame + dir * step
@@ -13222,7 +13276,7 @@ function Glide.start(kind, power, duration, dirOverride)
 			end
 			return "stop"
 		end
-		local factor = 1 - p * p
+		local factor = 1.6 * (1 - p)
 		if method == "Impulse" or method == "CFrame" then return nil end
 		if method == "AttrBoost" then
 			local c = char()
@@ -13293,6 +13347,52 @@ function Mover.onDribble(args)
 		else
 			Glide.fire("dribble", "dribble move " .. (name ~= "" and name or tostring(args[1])), dir)
 		end
+	end)
+end
+
+Glide.kinds = {
+	dribble = { "DribbleGlide", "DribbleGlidePower", "DribbleGlideTime", "DribbleGlideSpeed" },
+	gather = { "GatherGlide", "GatherGlidePower", "GatherGlideTime", "GatherGlideSpeed" },
+	shot = { "ShotGlide", "ShotGlidePower", "ShotGlideTime", "ShotGlideSpeed" },
+}
+function Glide.fire(kind, why, dir)
+	local k = Glide.kinds[kind]
+	if not k or not S[k[1]] then return end
+	if S.GlideNeedBall and kind ~= "shot" and not Ball.holding then
+		log("Glide " .. kind .. " skipped: you do not hold the ball")
+		return
+	end
+	local m = math.max(S[k[4]] or 1, 0.1)
+	Glide.why = why or "?"
+	Glide.start(kind, S[k[2]] * m, S[k[3]] / m, dir)
+end
+function Glide.test(kind)
+	local k = Glide.kinds[kind]
+	if not k then return end
+	Glide.lastStart[kind] = 0
+	Glide.why = "test button"
+	local m = math.max(S[k[4]] or 1, 0.1)
+	Glide.start(kind, S[k[2]] * m, S[k[3]] / m)
+end
+function Mover.watchShot(pressT)
+	local h, r = hum(), Mover.body()
+	local stick
+	if h and r then
+		local intent = Mover.intent(h, r)
+		if intent.Magnitude > 0.1 then stick = flat(intent) end
+	end
+	task.spawn(function()
+		local t0 = tick()
+		while JH.Running and tick() - t0 < 0.35 and Shot.meterT < pressT - 0.05 do RunService.Heartbeat:Wait() end
+		if not JH.Running or Shot.meterT < pressT - 0.05 then return end
+		local c = char()
+		local anim = string.lower(tostring(c and c:GetAttribute("BaseAnimation") or ""))
+		local body = Mover.body()
+		local dir = stick
+		if not dir and body and matchAny(anim, { "fade", "stepback", "step back" }) then dir = -flat(body.CFrame.LookVector) end
+		if not dir then dir = Mover.moveWhere(1.5) end
+		if not dir and body then dir = flat(body.CFrame.LookVector) end
+		Glide.fire("shot", "shot", dir)
 	end)
 end
 UI.syncAuto()
