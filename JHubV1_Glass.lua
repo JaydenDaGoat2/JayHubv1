@@ -265,7 +265,6 @@ table.sort(parts)
 S.ShotTimes = table.concat(parts, " ")
 end
 if S.SettingsVer < 29 then S.Codes = DEFAULTS.Codes end
-if S.SettingsVer < 30 then S.AutoTimes, S.FinalAdj, S.PeakLead = "", "", 0.027 end
 S.SettingsVer = 30
 DEFAULTS.SettingsVer = 30
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
@@ -1770,7 +1769,7 @@ if S.AutoGreen and now - Shot.releasedT < 2.5 then return true end
 end
 return false
 end
-Shot.FLOOR = 0.26
+Shot.FLOOR = 0.205
 Shot.brackets = {}
 function Shot.remoteKey(cap, sit)
 local ids = {}
@@ -1966,7 +1965,7 @@ if not Shot.autoActive(key) then return false end
 Shot.autoLoad()
 local a = Shot.auto[key]
 if not a then return false end
-if a.locked and a.mode ~= "peak" then return true end
+if a.locked then return true end
 if a.mode == "peak" then return Shot.peakLearn(info, res, strength, a, key) end
 local held = (info.held or 0) + (info.comp or 0)
 local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
@@ -2019,7 +2018,6 @@ return true
 end
 function Shot.remoteHold(key, pk)
 local fin = Shot.FINAL[key]
-if fin then Shot.finalLoad() fin = fin + (Shot.finalAdj[key] or 0) end
 if fin then
 Shot.lastSweep = nil
 Shot.cur = { key = key, hold = fin, state = "Locked (built in)" }
@@ -2073,7 +2071,7 @@ local ch = char()
 Shot.last = { t = tick(), held = info.held, idx = info.idx, res = res, key = info.key }
 if Shot.cur and Shot.cur.key == info.key and ch then Shot.cur.anim = ch:GetAttribute("BaseAnimation") end
 end
-if info and Shot.FINAL[info.key] then pcall(Shot.finalLearn, info, res, strength) return end
+if info and Shot.FINAL[info.key] then return end
 if info and Shot.autoLearn(info, res, strength) then return end
 if not S.Learn or (S.Sweep and Rec.shotOn) then return end
 local key, held = info.key, info.held + (info.comp or 0)
@@ -2181,7 +2179,7 @@ local hold, base, mode = Shot.remoteHold(key, pk)
 local comp, peakLead = 0, nil
 if mode == "peak" then
 peakLead = hold
-hold = Shot.peakDur[key] and math.max(Shot.FLOOR, Shot.peakDur[key] - (Shot.pingNow() + peakLead)) or Shot.AUTO_START
+hold = Shot.AUTO_START
 else
 comp = Shot.pingComp()
 if comp ~= 0 then hold = math.max(Shot.FLOOR, hold - comp) end
@@ -2192,7 +2190,7 @@ local usedMeter, qpred = false, nil
 local peakAimed = false
 local ok0, ping0 = pcall(function() return LP:GetNetworkPing() end)
 local lead = (ok0 and ping0 or 0.04) + 0.016 + S.Nudge / 1000
-local look = clamp(1.4 / math.max(JH.FPS or 60, 10), 0.02, 0.1)
+local look = clamp(1.3 / math.max(JH.FPS or 60, 10), 0.02, 0.05)
 while tick() - m0 < S.MaxHold do
 if ctx.ended then
 manual = true
@@ -2202,12 +2200,11 @@ local now = tick()
 local n = #samples
 if peakLead then
 local tp = Shot.peakFit(samples)
-if tp and tp - m0 > 0.25 and tp - m0 < 0.9 then
+if tp then
 hold = math.max(Shot.FLOOR, tp - (Shot.pingNow() + peakLead) - m0)
 peakAimed = true
-Shot.peakDur[key] = tp - m0
 end
-if now - m0 >= hold - look then break end
+if now - m0 >= hold - look and (peakAimed or now - m0 >= Shot.AUTO_START - look) then break end
 elseif S.MeterAim and n >= 3 and now - samples[n].t < 0.15 then
 local a, b = samples[math.max(1, n - 3)], samples[n]
 local dt = b.t - a.t
@@ -2318,7 +2315,7 @@ local ok, err = pcall(Shot.core, mode, ctx)
 if not ok then
 log("Shot error: " .. tostring(err))
 notify("Auto Green error", tostring(err), 6)
-if mode ~= "remote" then pcall(Shot.release, mode, ctx) end
+pcall(Shot.release, mode, ctx)
 end
 if mode == "remote" then
 if ctx then ctx.released = true end
@@ -6507,182 +6504,29 @@ end)
 end
 -- AUTO GREEN, GRAPHICS AND PING UPGRADE
 do
-Shot.PEAK_BIN = 0.014
-Shot.peakDur = Shot.peakDur or {}
-Shot.finalAdj = Shot.finalAdj or {}
-Shot.finalRun = {}
-Shot.finalLoaded = false
-
-local function verdictIdx(info, res, strength)
-return info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
-end
-
--- the meter line is fitted on the newest readings only, a stray reading is thrown out, and it works at low FPS too
-function Shot.peakFit(samples)
-local pts, lastq = {}, -1
-for _, sm in ipairs(samples) do
-if sm.q < lastq - 0.001 then break end
-lastq = sm.q
-if sm.q > 0.1 and sm.q < 0.93 then pts[#pts + 1] = sm end
-end
-local n = #pts
-if n < 5 or pts[n].q < 0.3 then return nil end
-if n < 6 and pts[n].t - pts[1].t < 0.12 then return nil end
-if n > 16 then
-local cut = {}
-for i = n - 15, n do cut[#cut + 1] = pts[i] end
-pts, n = cut, #cut
-end
-local function fit(list)
-local m = #list
-local t0 = list[1].t
-local st, sq, stt, stq = 0, 0, 0, 0
-for _, p in ipairs(list) do
-local x = p.t - t0
-st, sq, stt, stq = st + x, sq + p.q, stt + x * x, stq + x * p.q
-end
-local den = m * stt - st * st
-if den <= 1e-9 then return nil end
-local a = (m * stq - st * sq) / den
-return a, (sq - a * st) / m, t0
-end
-local a, b, t0 = fit(pts)
-if not a then return nil end
-if n >= 7 then
-local worst, wi = 0, nil
-for i, p in ipairs(pts) do
-local e = math.abs(p.q - (a * (p.t - t0) + b))
-if e > worst then worst, wi = e, i end
-end
-if worst > 0.03 then
-local cut = {}
-for i, p in ipairs(pts) do
-if i ~= wi then cut[#cut + 1] = p end
-end
-local a2, b2, t02 = fit(cut)
-if a2 then a, b, t0 = a2, b2, t02 end
-end
-end
-if a < 1.2 or a > 5 then return nil end
-return t0 + (Shot.PEAK_Q - b) / a
-end
-
--- the verdict scale runs early to late, so every verdict says which way and about how far the release was off
-function Shot.peakLearn(info, res, strength, a, key)
-local idx = verdictIdx(info, res, strength)
-if not idx then return true end
-if info.manual and idx ~= 5 then return true end
-local lead = info.lead or a.hold
-if not info.manual and math.abs(lead - a.hold) > 0.05 then return true end
+-- AUTO GREEN: the original learner, plus a small drift watch for shots that are already locked
+local origAutoLearn = Shot.autoLearn
+function Shot.autoLearn(info, res, strength)
+local a = Shot.auto and Shot.auto[info.key]
+if a and a.locked and a.mode == "peak" and not info.manual and Shot.autoActive(info.key) then
+local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+if idx then
+local side = (idx > 5 and 1) or (idx < 4 and -1) or 0
+if side == 0 then
+a.driftN, a.driftSide = 0, 0
+else
+if a.driftSide == side then a.driftN = (a.driftN or 0) + 1 else a.driftSide, a.driftN = side, 1 end
+if a.driftN >= 3 then
 local before = a.hold
-a.n = (a.n or 0) + 1
-a.bin = a.bin or Shot.PEAK_BIN
-a.hist = a.hist or {}
-a.hist[#a.hist + 1] = idx
-if #a.hist > 5 then table.remove(a.hist, 1) end
-local prev = a.prev
-if prev and idx ~= 5 and prev.idx ~= 5 and prev.idx ~= idx and math.abs(lead - prev.lead) > 0.002 then
-local est = -(lead - prev.lead) / (idx - prev.idx)
-if est > 0 then a.bin = clamp(a.bin * 0.5 + est * 0.5, 0.006, 0.04) end
-end
-a.prev = { idx = idx, lead = lead }
-local why
-if idx == 5 then
-a.greens = a.greens or {}
-a.greens[#a.greens + 1] = lead
-if #a.greens > 6 then table.remove(a.greens, 1) end
-local sum = 0
-for _, g in ipairs(a.greens) do sum = sum + g end
-a.hold = sum / #a.greens
-a.misses = 0
-if not a.locked then
-a.locked = true
-pcall(notify, "Auto Green", string.format("Learned this shot: %.0f ms before the peak", a.hold * 1000), 3)
-end
-S.PeakLead = clamp(S.PeakLead * 0.7 + a.hold * 0.3, 0, 0.15)
-why = "Perfect, locked"
-else
-local off = idx - 5
-if idx == 4 then
-local last = a.hist[#a.hist - 1]
-off = (last and last > 5) and 0.5 or -0.5
-end
-local same = 0
-for i = math.max(1, #a.hist - 2), #a.hist do
-local h = a.hist[i]
-if (off > 0 and h > 5) or (off < 0 and h < 5) then same = same + 1 end
-end
-local newLead = lead
-if a.locked then
-a.misses = (a.misses or 0) + 1
-if math.abs(off) >= 2 or same >= 2 then
-newLead = lead + off * a.bin * 0.7
-if same >= 2 then
-a.locked = false
-a.greens = {}
-end
-why = (Shot.VERDICT[idx] or "?") .. ", correcting the lock"
-else
-why = (Shot.VERDICT[idx] or "?") .. ", keeping the lock"
-end
-else
-newLead = lead + off * a.bin * 0.9
-why = (Shot.VERDICT[idx] or "?") .. (off > 0 and ", letting go earlier" or ", letting go later")
-end
-if newLead ~= lead then
-a.hold = clamp(newLead, 0, 0.15)
-S.PeakLead = clamp(S.PeakLead + (a.hold - lead) * 0.25, 0, 0.15)
-end
-end
-if math.abs(a.hold - before) > 0.0003 or idx == 5 then Shot.noteAdjust(key, before, a.hold, why) end
+a.hold = clamp(a.hold + side * 0.005, 0, 0.1)
+a.driftN = 0
+Shot.noteAdjust(info.key, before, a.hold, "Drifted " .. (side > 0 and "late" or "early") .. ", nudged")
 Shot.autoSave()
-if Rec.shotOn then
-Rec.shotAdd(string.format("AUTOCAL(meter) key=%s idx=%s lead=%.4f next=%.4f locked=%s bin=%.4f", key, tostring(idx), lead, a.hold, tostring(a.locked), a.bin))
-end
-return true
-end
-
--- the built in shots drift when your ping changes, so they now follow the verdicts too
-function Shot.finalLoad()
-if Shot.finalLoaded then return end
-Shot.finalLoaded = true
-for key, val in string.gmatch(S.FinalAdj or "", "(%S-)=([%-%d%.]+)") do
-Shot.finalAdj[key] = tonumber(val)
 end
 end
-function Shot.finalSave()
-local parts = {}
-for key, val in pairs(Shot.finalAdj) do parts[#parts + 1] = string.format("%s=%.4f", key, val) end
-table.sort(parts)
-S.FinalAdj = table.concat(parts, " ")
-saveSoon()
 end
-function Shot.finalLearn(info, res, strength)
-if info.manual then return end
-local idx = verdictIdx(info, res, strength)
-if not idx then return end
-Shot.finalLoad()
-local key = info.key
-local off = idx - 5
-if idx == 4 then off = -0.5 end
-local run = Shot.finalRun[key]
-if not run then
-run = { sign = 0, n = 0 }
-Shot.finalRun[key] = run
 end
-if off == 0 then
-run.sign, run.n = 0, 0
-return
-end
-local sign = off > 0 and 1 or -1
-if run.sign == sign then run.n = run.n + 1 else run.sign, run.n = sign, 1 end
-if run.n >= 2 or math.abs(off) >= 2 then
-local old = Shot.finalAdj[key] or 0
-local new = clamp(old - off * Shot.PEAK_BIN * 0.6, -0.05, 0.05)
-Shot.finalAdj[key] = new
-Shot.noteAdjust(key, (Shot.FINAL[key] or 0) + old, (Shot.FINAL[key] or 0) + new, Shot.VERDICT[idx] or "?")
-Shot.finalSave()
-end
+return origAutoLearn(info, res, strength)
 end
 
 ---------------------------------------------------------------------
@@ -7152,14 +6996,6 @@ end
 Glide.lastStart.shot = 0
 Glide.fire("shot", "shot", dir)
 end)
-end
-function Shot.autoReset()
-Shot.autoLoaded = true
-Shot.auto = {}
-Shot.finalAdj = {}
-Shot.peakDur = {}
-S.AutoTimes, S.FinalAdj, S.PeakLead = "", "", 0.027
-saveSoon()
 end
 
 ---------------------------------------------------------------------
@@ -8340,7 +8176,6 @@ if S.SettingsVer < 28 then
 	S.ShotTimes = table.concat(parts, " ")
 end
 if S.SettingsVer < 29 then S.Codes = DEFAULTS.Codes end
-if S.SettingsVer < 30 then S.AutoTimes, S.FinalAdj, S.PeakLead = "", "", 0.027 end
 S.SettingsVer = 30
 DEFAULTS.SettingsVer = 30
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
@@ -9934,7 +9769,7 @@ function Shot.onShootCall(args)
 	end
 	return false
 end
-Shot.FLOOR = 0.26
+Shot.FLOOR = 0.205
 Shot.brackets = {}
 -- a release sooner than this after the meter starts is a pump fake in this game
 function Shot.remoteKey(cap, sit)
@@ -10134,7 +9969,7 @@ function Shot.autoLearn(info, res, strength)
 	Shot.autoLoad()
 	local a = Shot.auto[key]
 	if not a then return false end
-	if a.locked and a.mode ~= "peak" then return true end
+	if a.locked then return true end
 	if a.mode == "peak" then return Shot.peakLearn(info, res, strength, a, key) end
 	local held = (info.held or 0) + (info.comp or 0)
 	local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
@@ -10190,7 +10025,6 @@ function Shot.autoLearn(info, res, strength)
 end
 function Shot.remoteHold(key, pk)
 	local fin = Shot.FINAL[key]
-	if fin then Shot.finalLoad() fin = fin + (Shot.finalAdj[key] or 0) end
 	if fin then
 		Shot.lastSweep = nil
 		Shot.cur = { key = key, hold = fin, state = "Locked (built in)" }
@@ -10249,7 +10083,7 @@ function Shot.learnRemote(info, res, strength)
 		Shot.last = { t = tick(), held = info.held, idx = info.idx, res = res, key = info.key }
 		if Shot.cur and Shot.cur.key == info.key and ch then Shot.cur.anim = ch:GetAttribute("BaseAnimation") end
 	end
-	if info and Shot.FINAL[info.key] then pcall(Shot.finalLearn, info, res, strength) return end
+	if info and Shot.FINAL[info.key] then return end
 	if info and Shot.autoLearn(info, res, strength) then return end
 	if not S.Learn or (S.Sweep and Rec.shotOn) then return end
 	local key, held = info.key, info.held + (info.comp or 0)
@@ -10365,7 +10199,7 @@ function Shot.remoteCore(ctx)
 	local comp, peakLead = 0, nil
 	if mode == "peak" then
 		peakLead = hold
-		hold = Shot.peakDur[key] and math.max(Shot.FLOOR, Shot.peakDur[key] - (Shot.pingNow() + peakLead)) or Shot.AUTO_START
+		hold = Shot.AUTO_START
 	else
 		comp = Shot.pingComp()
 		if comp ~= 0 then hold = math.max(Shot.FLOOR, hold - comp) end
@@ -10376,7 +10210,7 @@ function Shot.remoteCore(ctx)
 	local peakAimed = false
 	local ok0, ping0 = pcall(function() return LP:GetNetworkPing() end)
 	local lead = (ok0 and ping0 or 0.04) + 0.016 + S.Nudge / 1000
-	local look = clamp(1.4 / math.max(JH.FPS or 60, 10), 0.02, 0.1)
+	local look = clamp(1.3 / math.max(JH.FPS or 60, 10), 0.02, 0.05)
 	while tick() - m0 < S.MaxHold do
 		if ctx.ended then
 			manual = true
@@ -10388,12 +10222,11 @@ function Shot.remoteCore(ctx)
 		if peakLead then
 			-- by the meter: let go one ping plus the lead before the meter reaches its peak
 			local tp = Shot.peakFit(samples)
-			if tp and tp - m0 > 0.25 and tp - m0 < 0.9 then
+			if tp then
 				hold = math.max(Shot.FLOOR, tp - (Shot.pingNow() + peakLead) - m0)
 				peakAimed = true
-				Shot.peakDur[key] = tp - m0
 			end
-			if now - m0 >= hold - look then break end
+			if now - m0 >= hold - look and (peakAimed or now - m0 >= Shot.AUTO_START - look) then break end
 		elseif S.MeterAim and n >= 3 and now - samples[n].t < 0.15 then
 			local a, b = samples[math.max(1, n - 3)], samples[n]
 			local dt = b.t - a.t
@@ -10507,7 +10340,7 @@ function Shot.run(mode, ctx)
 	if not ok then
 		log("Shot error: " .. tostring(err))
 		notify("Auto Green error", tostring(err), 6)
-		if mode ~= "remote" then pcall(Shot.release, mode, ctx) end
+		pcall(Shot.release, mode, ctx)
 	end
 	if mode == "remote" then
 		if ctx then ctx.released = true end
@@ -14924,182 +14757,29 @@ function Mover.watchShot(pressT)
 end
 -- AUTO GREEN, GRAPHICS AND PING UPGRADE
 do
-	Shot.PEAK_BIN = 0.014
-	Shot.peakDur = Shot.peakDur or {}
-	Shot.finalAdj = Shot.finalAdj or {}
-	Shot.finalRun = {}
-	Shot.finalLoaded = false
-
-	local function verdictIdx(info, res, strength)
-		return info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+	-- AUTO GREEN: the original learner, plus a small drift watch for shots that are already locked
+	local origAutoLearn = Shot.autoLearn
+	function Shot.autoLearn(info, res, strength)
+	local a = Shot.auto and Shot.auto[info.key]
+	if a and a.locked and a.mode == "peak" and not info.manual and Shot.autoActive(info.key) then
+	local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+	if idx then
+	local side = (idx > 5 and 1) or (idx < 4 and -1) or 0
+	if side == 0 then
+	a.driftN, a.driftSide = 0, 0
+	else
+	if a.driftSide == side then a.driftN = (a.driftN or 0) + 1 else a.driftSide, a.driftN = side, 1 end
+	if a.driftN >= 3 then
+	local before = a.hold
+	a.hold = clamp(a.hold + side * 0.005, 0, 0.1)
+	a.driftN = 0
+	Shot.noteAdjust(info.key, before, a.hold, "Drifted " .. (side > 0 and "late" or "early") .. ", nudged")
+	Shot.autoSave()
 	end
-
-	-- the meter line is fitted on the newest readings only, a stray reading is thrown out, and it works at low FPS too
-	function Shot.peakFit(samples)
-		local pts, lastq = {}, -1
-		for _, sm in ipairs(samples) do
-			if sm.q < lastq - 0.001 then break end
-			lastq = sm.q
-			if sm.q > 0.1 and sm.q < 0.93 then pts[#pts + 1] = sm end
-		end
-		local n = #pts
-		if n < 5 or pts[n].q < 0.3 then return nil end
-		if n < 6 and pts[n].t - pts[1].t < 0.12 then return nil end
-		if n > 16 then
-			local cut = {}
-			for i = n - 15, n do cut[#cut + 1] = pts[i] end
-			pts, n = cut, #cut
-		end
-		local function fit(list)
-			local m = #list
-			local t0 = list[1].t
-			local st, sq, stt, stq = 0, 0, 0, 0
-			for _, p in ipairs(list) do
-				local x = p.t - t0
-				st, sq, stt, stq = st + x, sq + p.q, stt + x * x, stq + x * p.q
-			end
-			local den = m * stt - st * st
-			if den <= 1e-9 then return nil end
-			local a = (m * stq - st * sq) / den
-			return a, (sq - a * st) / m, t0
-		end
-		local a, b, t0 = fit(pts)
-		if not a then return nil end
-		if n >= 7 then
-			local worst, wi = 0, nil
-			for i, p in ipairs(pts) do
-				local e = math.abs(p.q - (a * (p.t - t0) + b))
-				if e > worst then worst, wi = e, i end
-			end
-			if worst > 0.03 then
-				local cut = {}
-				for i, p in ipairs(pts) do
-					if i ~= wi then cut[#cut + 1] = p end
-				end
-				local a2, b2, t02 = fit(cut)
-				if a2 then a, b, t0 = a2, b2, t02 end
-			end
-		end
-		if a < 1.2 or a > 5 then return nil end
-		return t0 + (Shot.PEAK_Q - b) / a
 	end
-
-	-- the verdict scale runs early to late, so every verdict says which way and about how far the release was off
-	function Shot.peakLearn(info, res, strength, a, key)
-		local idx = verdictIdx(info, res, strength)
-		if not idx then return true end
-		if info.manual and idx ~= 5 then return true end
-		local lead = info.lead or a.hold
-		if not info.manual and math.abs(lead - a.hold) > 0.05 then return true end
-		local before = a.hold
-		a.n = (a.n or 0) + 1
-		a.bin = a.bin or Shot.PEAK_BIN
-		a.hist = a.hist or {}
-		a.hist[#a.hist + 1] = idx
-		if #a.hist > 5 then table.remove(a.hist, 1) end
-		local prev = a.prev
-		if prev and idx ~= 5 and prev.idx ~= 5 and prev.idx ~= idx and math.abs(lead - prev.lead) > 0.002 then
-			local est = -(lead - prev.lead) / (idx - prev.idx)
-			if est > 0 then a.bin = clamp(a.bin * 0.5 + est * 0.5, 0.006, 0.04) end
-		end
-		a.prev = { idx = idx, lead = lead }
-		local why
-		if idx == 5 then
-			a.greens = a.greens or {}
-			a.greens[#a.greens + 1] = lead
-			if #a.greens > 6 then table.remove(a.greens, 1) end
-			local sum = 0
-			for _, g in ipairs(a.greens) do sum = sum + g end
-			a.hold = sum / #a.greens
-			a.misses = 0
-			if not a.locked then
-				a.locked = true
-				pcall(notify, "Auto Green", string.format("Learned this shot: %.0f ms before the peak", a.hold * 1000), 3)
-			end
-			S.PeakLead = clamp(S.PeakLead * 0.7 + a.hold * 0.3, 0, 0.15)
-			why = "Perfect, locked"
-		else
-			local off = idx - 5
-			if idx == 4 then
-				local last = a.hist[#a.hist - 1]
-				off = (last and last > 5) and 0.5 or -0.5
-			end
-			local same = 0
-			for i = math.max(1, #a.hist - 2), #a.hist do
-				local h = a.hist[i]
-				if (off > 0 and h > 5) or (off < 0 and h < 5) then same = same + 1 end
-			end
-			local newLead = lead
-			if a.locked then
-				a.misses = (a.misses or 0) + 1
-				if math.abs(off) >= 2 or same >= 2 then
-					newLead = lead + off * a.bin * 0.7
-					if same >= 2 then
-						a.locked = false
-						a.greens = {}
-					end
-					why = (Shot.VERDICT[idx] or "?") .. ", correcting the lock"
-				else
-					why = (Shot.VERDICT[idx] or "?") .. ", keeping the lock"
-				end
-			else
-				newLead = lead + off * a.bin * 0.9
-				why = (Shot.VERDICT[idx] or "?") .. (off > 0 and ", letting go earlier" or ", letting go later")
-			end
-			if newLead ~= lead then
-				a.hold = clamp(newLead, 0, 0.15)
-				S.PeakLead = clamp(S.PeakLead + (a.hold - lead) * 0.25, 0, 0.15)
-			end
-		end
-		if math.abs(a.hold - before) > 0.0003 or idx == 5 then Shot.noteAdjust(key, before, a.hold, why) end
-		Shot.autoSave()
-		if Rec.shotOn then
-			Rec.shotAdd(string.format("AUTOCAL(meter) key=%s idx=%s lead=%.4f next=%.4f locked=%s bin=%.4f", key, tostring(idx), lead, a.hold, tostring(a.locked), a.bin))
-		end
-		return true
 	end
-
-	-- the built in shots drift when your ping changes, so they now follow the verdicts too
-	function Shot.finalLoad()
-		if Shot.finalLoaded then return end
-		Shot.finalLoaded = true
-		for key, val in string.gmatch(S.FinalAdj or "", "(%S-)=([%-%d%.]+)") do
-			Shot.finalAdj[key] = tonumber(val)
-		end
 	end
-	function Shot.finalSave()
-		local parts = {}
-		for key, val in pairs(Shot.finalAdj) do parts[#parts + 1] = string.format("%s=%.4f", key, val) end
-		table.sort(parts)
-		S.FinalAdj = table.concat(parts, " ")
-		saveSoon()
-	end
-	function Shot.finalLearn(info, res, strength)
-		if info.manual then return end
-		local idx = verdictIdx(info, res, strength)
-		if not idx then return end
-		Shot.finalLoad()
-		local key = info.key
-		local off = idx - 5
-		if idx == 4 then off = -0.5 end
-		local run = Shot.finalRun[key]
-		if not run then
-			run = { sign = 0, n = 0 }
-			Shot.finalRun[key] = run
-		end
-		if off == 0 then
-			run.sign, run.n = 0, 0
-			return
-		end
-		local sign = off > 0 and 1 or -1
-		if run.sign == sign then run.n = run.n + 1 else run.sign, run.n = sign, 1 end
-		if run.n >= 2 or math.abs(off) >= 2 then
-			local old = Shot.finalAdj[key] or 0
-			local new = clamp(old - off * Shot.PEAK_BIN * 0.6, -0.05, 0.05)
-			Shot.finalAdj[key] = new
-			Shot.noteAdjust(key, (Shot.FINAL[key] or 0) + old, (Shot.FINAL[key] or 0) + new, Shot.VERDICT[idx] or "?")
-			Shot.finalSave()
-		end
+	return origAutoLearn(info, res, strength)
 	end
 
 	---------------------------------------------------------------------
@@ -15569,14 +15249,6 @@ do
 	Glide.lastStart.shot = 0
 	Glide.fire("shot", "shot", dir)
 	end)
-	end
-	function Shot.autoReset()
-	Shot.autoLoaded = true
-	Shot.auto = {}
-	Shot.finalAdj = {}
-	Shot.peakDur = {}
-	S.AutoTimes, S.FinalAdj, S.PeakLead = "", "", 0.027
-	saveSoon()
 	end
 
 	---------------------------------------------------------------------
