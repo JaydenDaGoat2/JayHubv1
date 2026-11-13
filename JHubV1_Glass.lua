@@ -141,7 +141,7 @@ GatherGlide = false, GatherGlidePower = 26, GatherGlideTime = 0.45,
 DribbleGlideSpeed = 1, ShotGlideSpeed = 1, GatherGlideSpeed = 1,
 GfxLow = false, GfxEffects = false, GfxTextures = false, GfxShadows = false, GfxPost = false, GfxHideOthers = false, GfxCull = false,
 GfxCullDist = 250, GfxBoost = false, GfxFpsCap = 0, PingStab = false, PingWindow = 3, FinalAdj = "",
-ShotGlideMethod = "GameVel", NoStun = false, StunIds = "", HoopMarks = "",
+ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
 AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
 AR = false, ARSpeed = 1.3, ARReact = 0.05, ARRange = 70, ARJump = true, ARMagnet = true, ARMagRange = 8, ARMarker = false,
@@ -265,8 +265,9 @@ table.sort(parts)
 S.ShotTimes = table.concat(parts, " ")
 end
 if S.SettingsVer < 29 then S.Codes = DEFAULTS.Codes end
-S.SettingsVer = 29
-DEFAULTS.SettingsVer = 29
+if S.SettingsVer < 30 then S.AutoTimes, S.FinalAdj, S.PeakLead = "", "", 0.027 end
+S.SettingsVer = 30
+DEFAULTS.SettingsVer = 30
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 S.ShotTimes = S.ShotTimes
 S.RecOn = false
@@ -2503,6 +2504,7 @@ local factor = math.sin(math.pi * clamp(p, 0, 1))
 if method == "AttrBoost" then
 local c = char()
 if c then
+Glide.attrOn = true
 c:SetAttribute("SpeedBoost", power * factor / math.max(Speed.gameWS, 1))
 c:SetAttribute("SpeedBoostTime", 0.25)
 c:SetAttribute("AccelerationBoost", 0.5)
@@ -5970,6 +5972,7 @@ UI.Toggle(sg, "Shot Glide", "ShotGlide")
 UI.Slider(sg, "Glide power", "ShotGlidePower", 1, 80, 1, 0)
 UI.Slider(sg, "Glide speed", "ShotGlideSpeed", 0.5, 3, 0.1, 1, "x")
 UI.Dropdown(sg, "Shot glide method", "ShotGlideMethod", { "GameVel", "CFrame", "Velocity", "Auto" })
+UI.Dropdown(sg, "Shot glide starts", "ShotGlideWhen", { "After release", "During shot" })
 UI.Slider(sg, "Time", "ShotGlideTime", 0.05, 1, 0.01, 2, "s")
 local gt = UI.Card(P, "Gather Step Glide")
 UI.Toggle(gt, "Gather Step Glide", "GatherGlide")
@@ -6387,6 +6390,7 @@ if method == "Impulse" or method == "CFrame" then return nil end
 if method == "AttrBoost" then
 local c = char()
 if c then
+Glide.attrOn = true
 c:SetAttribute("SpeedBoost", power * factor / math.max(Speed.gameWS, 1))
 c:SetAttribute("SpeedBoostTime", 0.25)
 c:SetAttribute("AccelerationBoost", 0.5)
@@ -7062,11 +7066,14 @@ local SHOT_MOVES = { "shot", "shoot", "jumper", "layup", "dunk", "fade", "floate
 function Glide.cancel()
 Glide.token = Glide.token + 1
 Glide.input = nil
+if Glide.attrOn then
+Glide.attrOn = false
 local c = char()
 if c then
 c:SetAttribute("SpeedBoost", 0)
 c:SetAttribute("SpeedBoostTime", 0)
 c:SetAttribute("AccelerationBoost", 0)
+end
 end
 end
 function Glide.gatherOk(c)
@@ -7114,7 +7121,10 @@ end
 local baseShoot = Shot.onShootCall
 function Shot.onShootCall(args)
 local d = args[1]
-if type(d) == "table" and d.Shoot == true then pcall(Glide.cancel) end
+if type(d) == "table" then
+if d.Shoot == true and (S.DribbleGlide or S.GatherGlide) then pcall(Glide.cancel) end
+if d.Shoot == false then Mover.shotUpT = tick() end
+end
 return baseShoot(args)
 end
 function Mover.watchShot(pressT)
@@ -7135,9 +7145,21 @@ local dir = stick
 if not dir and body and matchAny(anim, { "fade", "stepback", "step back" }) then dir = -flat(body.CFrame.LookVector) end
 if not dir then dir = Mover.moveWhere(1.5) end
 if not dir and body then dir = flat(body.CFrame.LookVector) end
+if S.ShotGlideWhen ~= "During shot" then
+local w0 = tick()
+while JH.Running and tick() - w0 < 1.6 and Shot.releasedT < pressT and (Mover.shotUpT or 0) < pressT do RunService.Heartbeat:Wait() end
+end
 Glide.lastStart.shot = 0
 Glide.fire("shot", "shot", dir)
 end)
+end
+function Shot.autoReset()
+Shot.autoLoaded = true
+Shot.auto = {}
+Shot.finalAdj = {}
+Shot.peakDur = {}
+S.AutoTimes, S.FinalAdj, S.PeakLead = "", "", 0.027
+saveSoon()
 end
 
 ---------------------------------------------------------------------
@@ -8188,7 +8210,7 @@ local S = {
 	DribbleGlideSpeed = 1, ShotGlideSpeed = 1, GatherGlideSpeed = 1,
 	GfxLow = false, GfxEffects = false, GfxTextures = false, GfxShadows = false, GfxPost = false, GfxHideOthers = false, GfxCull = false,
 	GfxCullDist = 250, GfxBoost = false, GfxFpsCap = 0, PingStab = false, PingWindow = 3, FinalAdj = "",
-	ShotGlideMethod = "GameVel", NoStun = false, StunIds = "", HoopMarks = "",
+	ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
 	AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
 	AR = false, ARSpeed = 1.3, ARReact = 0.05, ARRange = 70, ARJump = true, ARMagnet = true, ARMagRange = 8, ARMarker = false,
@@ -8318,8 +8340,9 @@ if S.SettingsVer < 28 then
 	S.ShotTimes = table.concat(parts, " ")
 end
 if S.SettingsVer < 29 then S.Codes = DEFAULTS.Codes end
-S.SettingsVer = 29
-DEFAULTS.SettingsVer = 29
+if S.SettingsVer < 30 then S.AutoTimes, S.FinalAdj, S.PeakLead = "", "", 0.027 end
+S.SettingsVer = 30
+DEFAULTS.SettingsVer = 30
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 S.ShotTimes = S.ShotTimes
 S.RecOn = false
@@ -10686,6 +10709,7 @@ function Glide.start(kind, power, duration, dirOverride)
 			-- the game's own boost values: the same ones the server sets during its dribble moves
 			local c = char()
 			if c then
+				Glide.attrOn = true
 				c:SetAttribute("SpeedBoost", power * factor / math.max(Speed.gameWS, 1))
 				c:SetAttribute("SpeedBoostTime", 0.25)
 				c:SetAttribute("AccelerationBoost", 0.5)
@@ -14313,6 +14337,7 @@ do
 	UI.Slider(sg, "Glide power", "ShotGlidePower", 1, 80, 1, 0)
 	UI.Slider(sg, "Glide speed", "ShotGlideSpeed", 0.5, 3, 0.1, 1, "x")
 	UI.Dropdown(sg, "Shot glide method", "ShotGlideMethod", { "GameVel", "CFrame", "Velocity", "Auto" })
+	UI.Dropdown(sg, "Shot glide starts", "ShotGlideWhen", { "After release", "During shot" })
 	UI.Slider(sg, "Time", "ShotGlideTime", 0.05, 1, 0.01, 2, "s")
 
 	local gt = UI.Card(P, "Gather Step Glide")
@@ -14782,6 +14807,7 @@ function Glide.start(kind, power, duration, dirOverride)
 		if method == "AttrBoost" then
 			local c = char()
 			if c then
+				Glide.attrOn = true
 				c:SetAttribute("SpeedBoost", power * factor / math.max(Speed.gameWS, 1))
 				c:SetAttribute("SpeedBoostTime", 0.25)
 				c:SetAttribute("AccelerationBoost", 0.5)
@@ -15455,14 +15481,17 @@ do
 	local SHOT_MOVES = { "shot", "shoot", "jumper", "layup", "dunk", "fade", "floater", "hook" }
 
 	function Glide.cancel()
-		Glide.token = Glide.token + 1
-		Glide.input = nil
-		local c = char()
-		if c then
-			c:SetAttribute("SpeedBoost", 0)
-			c:SetAttribute("SpeedBoostTime", 0)
-			c:SetAttribute("AccelerationBoost", 0)
-		end
+	Glide.token = Glide.token + 1
+	Glide.input = nil
+	if Glide.attrOn then
+	Glide.attrOn = false
+	local c = char()
+	if c then
+	c:SetAttribute("SpeedBoost", 0)
+	c:SetAttribute("SpeedBoostTime", 0)
+	c:SetAttribute("AccelerationBoost", 0)
+	end
+	end
 	end
 	function Glide.gatherOk(c)
 		local gt = string.lower(tostring(c:GetAttribute("GatherType") or ""))
@@ -15508,31 +15537,46 @@ do
 	-- a running dribble or gather glide stops the moment a shot starts, and the shot glide does its own thing
 	local baseShoot = Shot.onShootCall
 	function Shot.onShootCall(args)
-		local d = args[1]
-		if type(d) == "table" and d.Shoot == true then pcall(Glide.cancel) end
-		return baseShoot(args)
+	local d = args[1]
+	if type(d) == "table" then
+	if d.Shoot == true and (S.DribbleGlide or S.GatherGlide) then pcall(Glide.cancel) end
+	if d.Shoot == false then Mover.shotUpT = tick() end
+	end
+	return baseShoot(args)
 	end
 	function Mover.watchShot(pressT)
-		task.defer(function()
-			local h, r = hum(), Mover.body()
-			local stick
-			if h and r then
-				local okI, intent = pcall(Mover.intent, h, r)
-				if okI and intent and intent.Magnitude > 0.1 then stick = flat(intent) end
-			end
-			local t0 = tick()
-			while JH.Running and tick() - t0 < 0.35 and Shot.meterT < pressT - 0.05 do RunService.Heartbeat:Wait() end
-			if not JH.Running or Shot.meterT < pressT - 0.05 then return end
-			local c = char()
-			local anim = string.lower(tostring(c and c:GetAttribute("BaseAnimation") or ""))
-			local body = Mover.body()
-			local dir = stick
-			if not dir and body and matchAny(anim, { "fade", "stepback", "step back" }) then dir = -flat(body.CFrame.LookVector) end
-			if not dir then dir = Mover.moveWhere(1.5) end
-			if not dir and body then dir = flat(body.CFrame.LookVector) end
-			Glide.lastStart.shot = 0
-			Glide.fire("shot", "shot", dir)
-		end)
+	task.defer(function()
+	local h, r = hum(), Mover.body()
+	local stick
+	if h and r then
+	local okI, intent = pcall(Mover.intent, h, r)
+	if okI and intent and intent.Magnitude > 0.1 then stick = flat(intent) end
+	end
+	local t0 = tick()
+	while JH.Running and tick() - t0 < 0.35 and Shot.meterT < pressT - 0.05 do RunService.Heartbeat:Wait() end
+	if not JH.Running or Shot.meterT < pressT - 0.05 then return end
+	local c = char()
+	local anim = string.lower(tostring(c and c:GetAttribute("BaseAnimation") or ""))
+	local body = Mover.body()
+	local dir = stick
+	if not dir and body and matchAny(anim, { "fade", "stepback", "step back" }) then dir = -flat(body.CFrame.LookVector) end
+	if not dir then dir = Mover.moveWhere(1.5) end
+	if not dir and body then dir = flat(body.CFrame.LookVector) end
+	if S.ShotGlideWhen ~= "During shot" then
+	local w0 = tick()
+	while JH.Running and tick() - w0 < 1.6 and Shot.releasedT < pressT and (Mover.shotUpT or 0) < pressT do RunService.Heartbeat:Wait() end
+	end
+	Glide.lastStart.shot = 0
+	Glide.fire("shot", "shot", dir)
+	end)
+	end
+	function Shot.autoReset()
+	Shot.autoLoaded = true
+	Shot.auto = {}
+	Shot.finalAdj = {}
+	Shot.peakDur = {}
+	S.AutoTimes, S.FinalAdj, S.PeakLead = "", "", 0.027
+	saveSoon()
 	end
 
 	---------------------------------------------------------------------
