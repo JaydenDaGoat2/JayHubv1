@@ -144,6 +144,7 @@ GfxCullDist = 250, GfxBoost = false, GfxFpsCap = 0, PingStab = false, PingWindow
 ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
 LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
+AllJumpers = true, GLead = 0, GLeadN = 0,
 LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -8026,6 +8027,7 @@ local c = UI.Card(shootPage, "Lag sync")
 UI.Toggle(c, "Auto Green MAX (best timing, all upgrades)", "GreenMax", function(v)
 for _, k in ipairs({ "LagSync", "PrecFit", "AdaptPlus" }) do UI.set(k, v, false) end
 end)
+UI.Toggle(c, "Green every jumper (shared learning)", "AllJumpers")
 UI.Toggle(c, "Lag sync (follow my ping and FPS)", "LagSync")
 UI.Toggle(c, "Smoother meter reading", "PrecFit")
 UI.Toggle(c, "Faster jumper adapt (experimental)", "AdaptPlus")
@@ -8324,6 +8326,42 @@ UI.Input(lg, "Image ID for the logo picked above", { get = function() return V.c
 UI.Note(lg, "Paste the number from the creator's real logo image link and it replaces the badge above your head.")
 end
 end
+-- GREEN EVERY JUMPER: one shared lead learned from every verdict, used by every jumper, new or old
+do
+local origActive = Shot.autoActive
+function Shot.autoActive(key)
+if S.AllJumpers and S.AutoCal and not Shot.FINAL[key] and not (S.Sweep and Rec.shotOn) then return true end
+return origActive(key)
+end
+local prevSeed = Shot.seedLead
+function Shot.seedLead(key)
+if S.AllJumpers and (S.GLeadN or 0) >= 3 and (S.GLead or 0) > 0 then
+local v = prevSeed(key)
+-- a related locked jumper is trusted first, else the shared lead
+local mine = Shot.auto and Shot.auto[key]
+if v == (S.PeakLead or 0.027) or not S.AdaptPlus then return clamp(S.GLead, 0, 0.1) end
+return v
+end
+return prevSeed(key)
+end
+local prevLearn = Shot.autoLearn
+function Shot.autoLearn(info, res, strength)
+if S.AllJumpers and info and info.lead and not info.manual and info.remote ~= false then
+local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+if idx and (S.LagSync and (Shot.lastShotEx or 0) >= 0.015) == false then
+local off = (idx == 5 and 0) or (idx == 4 and -0.6) or (idx - 5)
+if math.abs(off) <= 3 then
+local est = clamp(info.lead + off * (S.PeakBin or 0.014) * 0.8, 0, 0.1)
+local n = S.GLeadN or 0
+if n < 3 or (S.GLead or 0) <= 0 then S.GLead = est else S.GLead = S.GLead * 0.85 + est * 0.15 end
+S.GLeadN = math.min(n + 1, 999)
+saveSoon()
+end
+end
+end
+return prevLearn(info, res, strength)
+end
+end
 UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
@@ -8587,6 +8625,7 @@ local S = {
 	ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
 	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
+	AllJumpers = true, GLead = 0, GLeadN = 0,
 	LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 	AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -16817,6 +16856,7 @@ do
 		UI.Toggle(c, "Auto Green MAX (best timing, all upgrades)", "GreenMax", function(v)
 		for _, k in ipairs({ "LagSync", "PrecFit", "AdaptPlus" }) do UI.set(k, v, false) end
 		end)
+		UI.Toggle(c, "Green every jumper (shared learning)", "AllJumpers")
 		UI.Toggle(c, "Lag sync (follow my ping and FPS)", "LagSync")
 		UI.Toggle(c, "Smoother meter reading", "PrecFit")
 		UI.Toggle(c, "Faster jumper adapt (experimental)", "AdaptPlus")
@@ -17113,6 +17153,42 @@ do
 		local lg = UI.Card(fp, "Custom logo image")
 		UI.Input(lg, "Image ID for the logo picked above", { get = function() return V.customId(S.Logo) or "" end, set = function(v) V.setCustomId(S.Logo, v) end }, nil, "number from the image link")
 		UI.Note(lg, "Paste the number from the creator's real logo image link and it replaces the badge above your head.")
+	end
+end
+-- GREEN EVERY JUMPER: one shared lead learned from every verdict, used by every jumper, new or old
+do
+	local origActive = Shot.autoActive
+	function Shot.autoActive(key)
+		if S.AllJumpers and S.AutoCal and not Shot.FINAL[key] and not (S.Sweep and Rec.shotOn) then return true end
+		return origActive(key)
+	end
+	local prevSeed = Shot.seedLead
+	function Shot.seedLead(key)
+		if S.AllJumpers and (S.GLeadN or 0) >= 3 and (S.GLead or 0) > 0 then
+			local v = prevSeed(key)
+			-- a related locked jumper is trusted first, else the shared lead
+			local mine = Shot.auto and Shot.auto[key]
+			if v == (S.PeakLead or 0.027) or not S.AdaptPlus then return clamp(S.GLead, 0, 0.1) end
+			return v
+		end
+		return prevSeed(key)
+	end
+	local prevLearn = Shot.autoLearn
+	function Shot.autoLearn(info, res, strength)
+		if S.AllJumpers and info and info.lead and not info.manual and info.remote ~= false then
+			local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+			if idx and (S.LagSync and (Shot.lastShotEx or 0) >= 0.015) == false then
+				local off = (idx == 5 and 0) or (idx == 4 and -0.6) or (idx - 5)
+				if math.abs(off) <= 3 then
+					local est = clamp(info.lead + off * (S.PeakBin or 0.014) * 0.8, 0, 0.1)
+					local n = S.GLeadN or 0
+					if n < 3 or (S.GLead or 0) <= 0 then S.GLead = est else S.GLead = S.GLead * 0.85 + est * 0.15 end
+					S.GLeadN = math.min(n + 1, 999)
+					saveSoon()
+				end
+			end
+		end
+		return prevLearn(info, res, strength)
 	end
 end
 UI.syncAuto()
