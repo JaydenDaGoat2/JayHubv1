@@ -142,7 +142,7 @@ DribbleGlideSpeed = 1, ShotGlideSpeed = 1, GatherGlideSpeed = 1,
 GfxLow = false, GfxEffects = false, GfxTextures = false, GfxShadows = false, GfxPost = false, GfxHideOthers = false, GfxCull = false,
 GfxCullDist = 250, GfxBoost = false, GfxFpsCap = 0, PingStab = false, PingWindow = 3, FinalAdj = "",
 ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
-LagSync = true, LagK = 2,
+LagSync = true, LagK = 2, PrecFit = true,
 AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
 AR = false, ARSpeed = 1.3, ARReact = 0.05, ARRange = 70, ARJump = true, ARMagnet = true, ARMagRange = 8, ARMarker = false,
@@ -2223,6 +2223,7 @@ end
 RunService.Heartbeat:Wait()
 end
 if mconn then pcall(function() mconn:Disconnect() end) end
+pcall(Shot.slopeCommit, samples, key)
 local last, stuck = tick(), 0
 while not usedMeter and not manual and not ctx.ended and tick() - m0 < hold do
 local n = tick()
@@ -6506,25 +6507,24 @@ end)
 end
 -- AUTO GREEN, GRAPHICS AND PING UPGRADE
 do
--- AUTO GREEN: the original learner, plus a small drift watch for shots that are already locked
+-- AUTO GREEN: the original learner, plus a drift watch for shots that are already locked
 local origAutoLearn = Shot.autoLearn
 function Shot.autoLearn(info, res, strength)
 local a = Shot.auto and Shot.auto[info.key]
 if a and a.locked and a.mode == "peak" and not info.manual and Shot.autoActive(info.key) then
 local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 if idx then
-local side = (idx > 5 and 1) or (idx < 4 and -1) or 0
-if side == 0 then
-a.driftN, a.driftSide = 0, 0
-else
-if a.driftSide == side then a.driftN = (a.driftN or 0) + 1 else a.driftSide, a.driftN = side, 1 end
-if a.driftN >= 3 then
+a.win = a.win or {}
+a.win[#a.win + 1] = (idx > 5 and 1) or (idx < 4 and -1) or 0
+if #a.win > 6 then table.remove(a.win, 1) end
+local sum = 0
+for _, v in ipairs(a.win) do sum = sum + v end
+if math.abs(sum) >= 3 then
 local before = a.hold
-a.hold = clamp(a.hold + side * 0.005, 0, 0.1)
-a.driftN = 0
-Shot.noteAdjust(info.key, before, a.hold, "Drifted " .. (side > 0 and "late" or "early") .. ", nudged")
+a.hold = clamp(a.hold + (sum > 0 and 1 or -1) * 0.004, 0, 0.1)
+a.win = {}
+Shot.noteAdjust(info.key, before, a.hold, "Drifted " .. (sum > 0 and "late" or "early") .. ", nudged")
 Shot.autoSave()
-end
 end
 end
 end
@@ -7890,14 +7890,12 @@ if sm.q > 0.12 and sm.q < 0.93 then pts[#pts + 1] = sm end
 end
 local n = #pts
 if n < 2 then return base end
-local a = n >= 8 and ls(pts) or nil
-local known = Shot.slopes[key]
 local fps = JH.FPS or 60
-if a and a >= 1.2 and a <= 5 and fps >= 40 then
-known = known and (known * 0.8 + a * 0.2) or a
-Shot.slopes[key] = known
-end
-if known and (fps < 45 or n < 7) and pts[n].q > 0.25 then
+local known = Shot.slopes[key]
+local a = n >= 6 and ls(pts) or nil
+if a and (a < 1.2 or a > 5) then a = nil end
+local agrees = (not a) or (not known) or math.abs(a - known) / known < 0.08
+if known and agrees and pts[n].q > 0.25 and (S.PrecFit or fps < 45 or n < 7) then
 local sum, wsum = 0, 0
 for _, p in ipairs(pts) do
 local w = p.q * p.q
@@ -7907,6 +7905,30 @@ end
 return sum / wsum
 end
 return base
+end
+Shot.slopeMiss = Shot.slopeMiss or {}
+function Shot.slopeCommit(samples, key)
+if not S.LagSync or (JH.FPS or 60) < 40 then return end
+local pts, lastq = {}, -1
+for _, sm in ipairs(samples) do
+if sm.q < lastq - 0.001 then break end
+lastq = sm.q
+if sm.q > 0.12 and sm.q < 0.93 then pts[#pts + 1] = sm end
+end
+if #pts < 8 then return end
+local a = ls(pts)
+if not a or a < 1.2 or a > 5 then return end
+local known = Shot.slopes[key]
+if not known then
+Shot.slopes[key] = a
+elseif math.abs(a - known) / known < 0.08 then
+Shot.slopes[key] = known * 0.85 + a * 0.15
+Shot.slopeMiss[key] = 0
+else
+local miss = (Shot.slopeMiss[key] or 0) + 1
+Shot.slopeMiss[key] = miss
+if miss >= 3 then Shot.slopes[key], Shot.slopeMiss[key] = a, 0 end
+end
 end
 
 -- built in and fixed shots have no learner, so the ping factor is learned from their verdicts
@@ -7932,12 +7954,14 @@ end
 if shootPage then
 local c = UI.Card(shootPage, "Lag sync")
 UI.Toggle(c, "Lag sync (follow my ping and FPS)", "LagSync")
+UI.Toggle(c, "Smoother meter reading", "PrecFit")
 UI.Note(c, "Learns your normal ping and FPS. When either gets worse, Auto Green releases earlier by exactly that much, so the shot still lands on the green. Nothing changes while you are at your normal.")
 UI.Slider(c, "Ping compensation factor (learns by itself)", "LagK", 0.5, 3.5, 0.05, 2, "x")
 local sPing = UI.Stat(c, "Ping now")
 local sBase = UI.Stat(c, "Ping normal")
 local sFps = UI.Stat(c, "FPS now")
 local sShift = UI.Stat(c, "Release shifted by")
+local sPerf = UI.Stat(c, "Perfects")
 task.spawn(function()
 while JH.Running do
 if Window.Visible and UI.current == shootPage then
@@ -7946,6 +7970,7 @@ sPing.Text = Lag.stable and string.format("%d ms", math.floor(Lag.stable * 1000 
 sBase.Text = Lag.pingBase and string.format("%d ms", math.floor(Lag.pingBase * 1000 + 0.5)) or "learning"
 sFps.Text = string.format("%d", math.floor(JH.FPS + 0.5))
 sShift.Text = S.LagSync and string.format("%d ms earlier", math.floor(Lag.total() * 1000 + 0.5)) or "off"
+sPerf.Text = string.format("%d / %d (%d%%)", Shot.stats.greens, Shot.stats.shots, Shot.stats.shots > 0 and math.floor(Shot.stats.greens * 100 / Shot.stats.shots + 0.5) or 0)
 end)
 end
 task.wait(0.5)
@@ -8210,7 +8235,7 @@ local S = {
 	GfxLow = false, GfxEffects = false, GfxTextures = false, GfxShadows = false, GfxPost = false, GfxHideOthers = false, GfxCull = false,
 	GfxCullDist = 250, GfxBoost = false, GfxFpsCap = 0, PingStab = false, PingWindow = 3, FinalAdj = "",
 	ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
-	LagSync = true, LagK = 2,
+	LagSync = true, LagK = 2, PrecFit = true,
 	AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
 	AR = false, ARSpeed = 1.3, ARReact = 0.05, ARRange = 70, ARJump = true, ARMagnet = true, ARMagRange = 8, ARMarker = false,
@@ -10408,6 +10433,7 @@ function Shot.remoteCore(ctx)
 		RunService.Heartbeat:Wait()
 	end
 	if mconn then pcall(function() mconn:Disconnect() end) end
+	pcall(Shot.slopeCommit, samples, key)
 	-- the last few milliseconds are spent waiting exactly, so the release lands on the point and not on a frame boundary
 	local last, stuck = tick(), 0
 	while not usedMeter and not manual and not ctx.ended and tick() - m0 < hold do
@@ -14922,25 +14948,24 @@ function Mover.watchShot(pressT)
 end
 -- AUTO GREEN, GRAPHICS AND PING UPGRADE
 do
-	-- AUTO GREEN: the original learner, plus a small drift watch for shots that are already locked
+	-- AUTO GREEN: the original learner, plus a drift watch for shots that are already locked
 	local origAutoLearn = Shot.autoLearn
 	function Shot.autoLearn(info, res, strength)
 	local a = Shot.auto and Shot.auto[info.key]
 	if a and a.locked and a.mode == "peak" and not info.manual and Shot.autoActive(info.key) then
 	local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 	if idx then
-	local side = (idx > 5 and 1) or (idx < 4 and -1) or 0
-	if side == 0 then
-	a.driftN, a.driftSide = 0, 0
-	else
-	if a.driftSide == side then a.driftN = (a.driftN or 0) + 1 else a.driftSide, a.driftN = side, 1 end
-	if a.driftN >= 3 then
+	a.win = a.win or {}
+	a.win[#a.win + 1] = (idx > 5 and 1) or (idx < 4 and -1) or 0
+	if #a.win > 6 then table.remove(a.win, 1) end
+	local sum = 0
+	for _, v in ipairs(a.win) do sum = sum + v end
+	if math.abs(sum) >= 3 then
 	local before = a.hold
-	a.hold = clamp(a.hold + side * 0.005, 0, 0.1)
-	a.driftN = 0
-	Shot.noteAdjust(info.key, before, a.hold, "Drifted " .. (side > 0 and "late" or "early") .. ", nudged")
+	a.hold = clamp(a.hold + (sum > 0 and 1 or -1) * 0.004, 0, 0.1)
+	a.win = {}
+	Shot.noteAdjust(info.key, before, a.hold, "Drifted " .. (sum > 0 and "late" or "early") .. ", nudged")
 	Shot.autoSave()
-	end
 	end
 	end
 	end
@@ -16296,33 +16321,55 @@ do
 		return (n * stq - st * sq) / den
 	end
 	function Shot.peakFitSmart(samples, key)
-		local base = Shot.peakFit(samples)
-		if not S.LagSync then return base end
-		local pts, lastq = {}, -1
-		for _, sm in ipairs(samples) do
-			if sm.q < lastq - 0.001 then break end
-			lastq = sm.q
-			if sm.q > 0.12 and sm.q < 0.93 then pts[#pts + 1] = sm end
-		end
-		local n = #pts
-		if n < 2 then return base end
-		local a = n >= 8 and ls(pts) or nil
-		local known = Shot.slopes[key]
-		local fps = JH.FPS or 60
-		if a and a >= 1.2 and a <= 5 and fps >= 40 then
-			known = known and (known * 0.8 + a * 0.2) or a
-			Shot.slopes[key] = known
-		end
-		if known and (fps < 45 or n < 7) and pts[n].q > 0.25 then
-			local sum, wsum = 0, 0
-			for _, p in ipairs(pts) do
-				local w = p.q * p.q
-				sum = sum + (p.t + (Shot.PEAK_Q - p.q) / known) * w
-				wsum = wsum + w
-			end
-			return sum / wsum
-		end
-		return base
+	local base = Shot.peakFit(samples)
+	if not S.LagSync then return base end
+	local pts, lastq = {}, -1
+	for _, sm in ipairs(samples) do
+	if sm.q < lastq - 0.001 then break end
+	lastq = sm.q
+	if sm.q > 0.12 and sm.q < 0.93 then pts[#pts + 1] = sm end
+	end
+	local n = #pts
+	if n < 2 then return base end
+	local fps = JH.FPS or 60
+	local known = Shot.slopes[key]
+	local a = n >= 6 and ls(pts) or nil
+	if a and (a < 1.2 or a > 5) then a = nil end
+	local agrees = (not a) or (not known) or math.abs(a - known) / known < 0.08
+	if known and agrees and pts[n].q > 0.25 and (S.PrecFit or fps < 45 or n < 7) then
+	local sum, wsum = 0, 0
+	for _, p in ipairs(pts) do
+	local w = p.q * p.q
+	sum = sum + (p.t + (Shot.PEAK_Q - p.q) / known) * w
+	wsum = wsum + w
+	end
+	return sum / wsum
+	end
+	return base
+	end
+	Shot.slopeMiss = Shot.slopeMiss or {}
+	function Shot.slopeCommit(samples, key)
+	if not S.LagSync or (JH.FPS or 60) < 40 then return end
+	local pts, lastq = {}, -1
+	for _, sm in ipairs(samples) do
+	if sm.q < lastq - 0.001 then break end
+	lastq = sm.q
+	if sm.q > 0.12 and sm.q < 0.93 then pts[#pts + 1] = sm end
+	end
+	if #pts < 8 then return end
+	local a = ls(pts)
+	if not a or a < 1.2 or a > 5 then return end
+	local known = Shot.slopes[key]
+	if not known then
+	Shot.slopes[key] = a
+	elseif math.abs(a - known) / known < 0.08 then
+	Shot.slopes[key] = known * 0.85 + a * 0.15
+	Shot.slopeMiss[key] = 0
+	else
+	local miss = (Shot.slopeMiss[key] or 0) + 1
+	Shot.slopeMiss[key] = miss
+	if miss >= 3 then Shot.slopes[key], Shot.slopeMiss[key] = a, 0 end
+	end
 	end
 
 	-- built in and fixed shots have no learner, so the ping factor is learned from their verdicts
@@ -16348,12 +16395,14 @@ do
 	if shootPage then
 		local c = UI.Card(shootPage, "Lag sync")
 		UI.Toggle(c, "Lag sync (follow my ping and FPS)", "LagSync")
+		UI.Toggle(c, "Smoother meter reading", "PrecFit")
 		UI.Note(c, "Learns your normal ping and FPS. When either gets worse, Auto Green releases earlier by exactly that much, so the shot still lands on the green. Nothing changes while you are at your normal.")
 		UI.Slider(c, "Ping compensation factor (learns by itself)", "LagK", 0.5, 3.5, 0.05, 2, "x")
 		local sPing = UI.Stat(c, "Ping now")
 		local sBase = UI.Stat(c, "Ping normal")
 		local sFps = UI.Stat(c, "FPS now")
 		local sShift = UI.Stat(c, "Release shifted by")
+		local sPerf = UI.Stat(c, "Perfects")
 		task.spawn(function()
 			while JH.Running do
 				if Window.Visible and UI.current == shootPage then
@@ -16362,6 +16411,7 @@ do
 						sBase.Text = Lag.pingBase and string.format("%d ms", math.floor(Lag.pingBase * 1000 + 0.5)) or "learning"
 						sFps.Text = string.format("%d", math.floor(JH.FPS + 0.5))
 						sShift.Text = S.LagSync and string.format("%d ms earlier", math.floor(Lag.total() * 1000 + 0.5)) or "off"
+						sPerf.Text = string.format("%d / %d (%d%%)", Shot.stats.greens, Shot.stats.shots, Shot.stats.shots > 0 and math.floor(Shot.stats.greens * 100 / Shot.stats.shots + 0.5) or 0)
 					end)
 				end
 				task.wait(0.5)
