@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.30 shot-line"
+local VERSION = "v1.31 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -130,7 +130,7 @@ Codes = "100M RELEASE 100KLIKES 500KMEMBERS SORRYFORBUGS", CodeRemotes = true,
 AutoGreen = true, AutoCalibrate = true, AutoTiming = true, ShotRelease = "Auto",
 HoldTime = 0.55, MaxHold = 1.6, CalSpeed = 0.6, CalStep = 0.02,
 ShotTimes = "", ShotRatio = 0, BarPath = "", BarProp = "", BarAt = 0, BarNudge = 0,
-ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, FinderCat = "Jump shots", PerfectGreen = false, PerfectGreenPct = 100, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, Lightning = true, BoltCount = 6, BoltSpeed = 1, BoltThick = 2, BoltBright = 0.9, BoltColor = "White + Yellow", BgMove = true, BgGlow = 0.5, BgOrbs = true, AccentMode = "Gold", OutlineSpeed = 1, LogoStyle = "J bolt H", LogoBg = true, Preset = "Lightning Gold", PacketOn = true, PacketMul = 1,
+ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, PeakLead = 0.027, FinderCat = "Jump shots", PerfectGreen = false, PerfectGreenPct = 100, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, Lightning = true, BoltCount = 6, BoltSpeed = 1, BoltThick = 2, BoltBright = 0.9, BoltColor = "White + Yellow", BgMove = true, BgGlow = 0.5, BgOrbs = true, AccentMode = "Gold", OutlineSpeed = 1, LogoStyle = "J bolt H", LogoBg = true, Preset = "Lightning Gold", PacketOn = true, PacketMul = 1,
 MovingOffset = 0, SprintOffset = 0, PingComp = 0, Humanize = 0, Nudge = 0, GreenSound = true,
 HookShootButton = true, ShootButtonPath = "", ReleaseMethod = "Both", FireClick = true,
 ManualAssist = true, ShootKey = "E", SprintKey = "LeftShift",
@@ -233,6 +233,7 @@ end
 if S.AutoCal == nil then S.AutoCal = true end
 if S.PerfectGreen == nil then S.PerfectGreen = false end
 if S.FinderCat == nil then S.FinderCat = "Jump shots" end
+if S.PeakLead == nil then S.PeakLead = 0.027 end
 if S.PerfectGreenPct == nil then S.PerfectGreenPct = 100 end
 if S.AutoTimes == nil then S.AutoTimes = "" end
 if S.SettingsVer < 14 then
@@ -1251,6 +1252,7 @@ local fin = Shot.FINAL[key]
 if fin then return string.format("locked %.3fs (built in)", fin) end
 Shot.autoLoad()
 local a = Shot.auto[key]
+if a and a.mode == "peak" then return string.format("%s %.0f ms before the peak", a.locked and "locked" or "learning", a.hold * 1000) end
 if a then return string.format("%s %.3fs", a.locked and "locked" or "learning", a.hold) end
 return ""
 end
@@ -2033,7 +2035,7 @@ end
 local comp, p = Shot.pingComp()
 local ptxt
 if S.PerfectGreen then ptxt = string.format("%.0f ms earlier (ping %.0f ms)", comp * 1000, p * 1000) else ptxt = string.format("off (ping %.0f ms)", p * 1000) end
-return Shot.nameFor(cur.key, cur.anim), string.format("%.3fs", cur.hold), cur.state or "-", last,
+return Shot.nameFor(cur.key, cur.anim), (cur.mode == "peak") and string.format("%.0f ms before the peak", cur.hold * 1000) or string.format("%.3fs", cur.hold), cur.state or "-", last,
 (#lines > 0) and table.concat(lines, "\n") or "No change yet", ptxt
 end
 function Shot.statusStep()
@@ -2080,12 +2082,12 @@ if Shot.autoLoaded then return end
 Shot.autoLoaded = true
 Shot.auto = {}
 for kind, key, val in string.gmatch(S.AutoTimes or "", "(%a):(%S-)=([%d%.]+)") do
-Shot.auto[key] = { hold = tonumber(val), greens = {}, locked = kind == "L", dir = 1 }
+Shot.auto[key] = { hold = tonumber(val), greens = {}, locked = (kind == "L" or kind == "l"), dir = 1, mode = (kind == "l" or kind == "p") and "peak" or nil }
 end
 end
 function Shot.autoSave()
 local parts = {}
-for key, a in pairs(Shot.auto) do parts[#parts + 1] = string.format("%s:%s=%.3f", a.locked and "L" or "P", key, a.hold) end
+for key, a in pairs(Shot.auto) do parts[#parts + 1] = string.format("%s:%s=%.4f", a.mode == "peak" and (a.locked and "l" or "p") or (a.locked and "L" or "P"), key, a.hold) end
 table.sort(parts)
 S.AutoTimes = table.concat(parts, " ")
 saveSoon()
@@ -2102,6 +2104,77 @@ if S.Sweep and Rec.shotOn then return false end
 if Shot.times["la:" .. key] or Shot.times["r:" .. key] then return false end
 return true
 end
+Shot.PEAK_Q = 0.978
+function Shot.peakFit(samples)
+local pts, lastq = {}, -1
+for _, sm in ipairs(samples) do
+if sm.q < lastq - 0.001 then break end
+lastq = sm.q
+if sm.q > 0.12 and sm.q < 0.93 then pts[#pts + 1] = sm end
+end
+local n = #pts
+if n < 6 or pts[n].q < 0.3 then return nil end
+local t0 = pts[1].t
+local st, sq, stt, stq = 0, 0, 0, 0
+for _, p in ipairs(pts) do
+local x = p.t - t0
+st, sq, stt, stq = st + x, sq + p.q, stt + x * x, stq + x * p.q
+end
+local den = n * stt - st * st
+if den <= 1e-9 then return nil end
+local a = (n * stq - st * sq) / den
+local b = (sq - a * st) / n
+if a < 1.2 or a > 5 then return nil end
+return t0 + (Shot.PEAK_Q - b) / a
+end
+function Shot.peakLearn(info, res, strength, a, key)
+if a.locked then return true end
+local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+if not idx then return true end
+if info.manual and idx ~= 5 then return true end
+local lead = info.lead or a.hold
+if not info.manual and math.abs(lead - a.hold) > 0.05 then return true end
+local before = a.hold
+a.n = (a.n or 0) + 1
+local why
+if idx == 5 then
+a.hold, a.locked = lead, true
+S.PeakLead = clamp(S.PeakLead * 0.5 + lead * 0.5, 0, 0.08)
+pcall(notify, "Auto Green", string.format("Learned this shot: %.0f ms before the peak", lead * 1000), 3)
+why = "Perfect, locked"
+else
+local d, mag
+if idx == 4 then
+d, mag = a.dir or 1, 0.4
+elseif idx <= 3 then
+d, mag = -1, (idx == 3 and 0.7) or (idx == 2 and 1.0) or 1.5
+else
+d, mag = 1, (idx == 6 and 0.7) or (idx == 7 and 1.0) or 1.5
+end
+a.step = a.step or 0.012
+if idx == 4 then
+a.goodRun = (a.goodRun or 0) + 1
+a.step = clamp(a.step * ((a.goodRun >= 2) and 1.15 or 0.85), 0.002, 0.008)
+else
+a.goodRun = 0
+if a.lastD and a.lastD ~= d then
+a.step = math.max(0.002, a.step * 0.5)
+elseif a.lastD == d then
+a.step = math.min(0.02, a.step * 1.3)
+end
+a.lastD, a.dir = d, d
+end
+a.hold = clamp(lead + d * a.step * mag, 0, 0.1)
+S.PeakLead = clamp(S.PeakLead + d * a.step * mag * 0.25, 0, 0.08)
+why = (Shot.VERDICT[idx] or "?") .. (d > 0 and ", letting go earlier" or ", letting go later")
+end
+if math.abs(a.hold - before) > 0.0003 or a.locked then Shot.noteAdjust(key, before, a.hold, why) end
+Shot.autoSave()
+if Rec.shotOn then
+Rec.shotAdd(string.format("AUTOCAL(meter) key=%s idx=%s lead=%.4f next=%.4f locked=%s", key, tostring(idx), lead, a.hold, tostring(a.locked)))
+end
+return true
+end
 function Shot.autoLearn(info, res, strength)
 local key = info.key
 if not Shot.autoActive(key) then return false end
@@ -2109,6 +2182,7 @@ Shot.autoLoad()
 local a = Shot.auto[key]
 if not a then return false end
 if a.locked then return true end
+if a.mode == "peak" then return Shot.peakLearn(info, res, strength, a, key) end
 local held = (info.held or 0) + (info.comp or 0)
 local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 if not idx or not held then return true end
@@ -2169,10 +2243,14 @@ if Shot.autoActive(key) then
 Shot.autoLoad()
 local a = Shot.auto[key]
 if not a then
-a = { hold = Shot.times[key] or Shot.AUTO_START, greens = {}, locked = false, dir = 1 }
+a = { hold = S.PeakLead or 0.027, greens = {}, locked = false, dir = 1, mode = "peak" }
 Shot.auto[key] = a
 end
 Shot.lastSweep = nil
+if a.mode == "peak" then
+Shot.cur = { key = key, hold = a.hold, mode = "peak", state = a.locked and "Locked (learned)" or "Learning (by the meter)" }
+return a.hold, a.hold, "peak"
+end
 local state = a.locked and "Locked (learned)" or ((a.n or 0) > 0 and ((a.dir or 1) > 0 and "Learning, trying later" or "Learning, trying earlier")) or "Learning"
 Shot.cur = { key = key, hold = a.hold, state = state }
 return clamp(a.hold, Shot.FLOOR, S.MaxHold), a.hold
@@ -2314,12 +2392,19 @@ local pk = Shot.packetT >= m0 - 0.01 and Shot.packet or nil
 local sit = Shot.situation()
 local key = Shot.remoteKey(cap, sit)
 Shot.cap = nil
-local hold, base = Shot.remoteHold(key, pk)
-local comp = Shot.pingComp()
+local hold, base, mode = Shot.remoteHold(key, pk)
+local comp, peakLead = 0, nil
+if mode == "peak" then
+peakLead = hold
+hold = Shot.AUTO_START
+else
+comp = Shot.pingComp()
 if comp ~= 0 then hold = math.max(Shot.FLOOR, hold - comp) end
+end
 if Shot.cur then Shot.cur.comp = comp end
 local manual = false
 local usedMeter, qpred = false, nil
+local peakAimed = false
 local ok0, ping0 = pcall(function() return LP:GetNetworkPing() end)
 local lead = (ok0 and ping0 or 0.04) + 0.016 + S.Nudge / 1000
 while tick() - m0 < S.MaxHold do
@@ -2329,7 +2414,14 @@ break
 end
 local now = tick()
 local n = #samples
-if S.MeterAim and n >= 3 and now - samples[n].t < 0.15 then
+if peakLead then
+local tp = Shot.peakFit(samples)
+if tp then
+hold = math.max(Shot.FLOOR, tp - (Shot.pingNow() + peakLead) - m0)
+peakAimed = true
+end
+if now - m0 >= hold - 0.02 and (peakAimed or now - m0 >= Shot.AUTO_START - 0.02) then break end
+elseif S.MeterAim and n >= 3 and now - samples[n].t < 0.15 then
 local a, b = samples[math.max(1, n - 3)], samples[n]
 local dt = b.t - a.t
 if dt > 0.01 then
@@ -2368,11 +2460,11 @@ Rec.add("shot", string.format("remote shot key=%s packet=%s hold=%.3f base=%.3f 
 base, held, Shot.lastRelease, tostring(S.ShotStyle), tostring(ctx.space)))
 end
 if Rec.shotOn then
-Rec.shotAdd(string.format("RELEASE meter=%s target=%.3f predicted=%s samples=%d key=%s packet=%s hold=%.4f held=%.4f by=%s style=%s ping=%s comp=%.4f", tostring(usedMeter), S.MeterTarget, tostring(qpred), #samples, key, tostring(pk), hold, held,
-Shot.lastRelease, tostring(S.ShotStyle), tostring(pcall(function() return LP:GetNetworkPing() end) and LP:GetNetworkPing() or "?"), comp))
+Rec.shotAdd(string.format("RELEASE meter=%s target=%.3f predicted=%s samples=%d key=%s packet=%s hold=%.4f held=%.4f by=%s style=%s ping=%s comp=%.4f lead=%s", tostring(usedMeter), S.MeterTarget, tostring(qpred), #samples, key, tostring(pk), hold, held,
+Shot.lastRelease, tostring(S.ShotStyle), tostring(pcall(function() return LP:GetNetworkPing() end) and LP:GetNetworkPing() or "?"), comp, tostring(peakLead)))
 end
 task.spawn(Shot.evaluate, { snap = snap, since = since, sit = sit, key = key, base = base, held = held, manual = manual,
-pk = pk, remote = true, usedBar = false, usedMeter = usedMeter, qpred = qpred, comp = manual and 0 or comp })
+pk = pk, remote = true, usedBar = false, usedMeter = usedMeter, qpred = qpred, comp = manual and 0 or comp, lead = peakLead })
 end
 function Shot.core(mode, ctx)
 if mode == "remote" then return Shot.remoteCore(ctx) end
@@ -6533,7 +6625,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.30 shot-line"
+local VERSION = "v1.31 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -6623,7 +6715,7 @@ local S = {
 	AutoGreen = true, AutoCalibrate = true, AutoTiming = true, ShotRelease = "Auto",
 	HoldTime = 0.55, MaxHold = 1.6, CalSpeed = 0.6, CalStep = 0.02,
 	ShotTimes = "", ShotRatio = 0, BarPath = "", BarProp = "", BarAt = 0, BarNudge = 0,
-	ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, FinderCat = "Jump shots", PerfectGreen = false, PerfectGreenPct = 100, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, Lightning = true, BoltCount = 6, BoltSpeed = 1, BoltThick = 2, BoltBright = 0.9, BoltColor = "White + Yellow", BgMove = true, BgGlow = 0.5, BgOrbs = true, AccentMode = "Gold", OutlineSpeed = 1, LogoStyle = "J bolt H", LogoBg = true, Preset = "Lightning Gold", PacketOn = true, PacketMul = 1,
+	ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, PeakLead = 0.027, FinderCat = "Jump shots", PerfectGreen = false, PerfectGreenPct = 100, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, Lightning = true, BoltCount = 6, BoltSpeed = 1, BoltThick = 2, BoltBright = 0.9, BoltColor = "White + Yellow", BgMove = true, BgGlow = 0.5, BgOrbs = true, AccentMode = "Gold", OutlineSpeed = 1, LogoStyle = "J bolt H", LogoBg = true, Preset = "Lightning Gold", PacketOn = true, PacketMul = 1,
 	MovingOffset = 0, SprintOffset = 0, PingComp = 0, Humanize = 0, Nudge = 0, GreenSound = true,
 	HookShootButton = true, ShootButtonPath = "", ReleaseMethod = "Both", FireClick = true,
 	ManualAssist = true, ShootKey = "E", SprintKey = "LeftShift",
@@ -6733,6 +6825,7 @@ end
 if S.AutoCal == nil then S.AutoCal = true end
 if S.PerfectGreen == nil then S.PerfectGreen = false end
 if S.FinderCat == nil then S.FinderCat = "Jump shots" end
+if S.PeakLead == nil then S.PeakLead = 0.027 end
 if S.PerfectGreenPct == nil then S.PerfectGreenPct = 100 end
 if S.AutoTimes == nil then S.AutoTimes = "" end
 if S.SettingsVer < 14 then
@@ -7818,6 +7911,7 @@ function Shot.keyStatus(key)
 	if fin then return string.format("locked %.3fs (built in)", fin) end
 	Shot.autoLoad()
 	local a = Shot.auto[key]
+	if a and a.mode == "peak" then return string.format("%s %.0f ms before the peak", a.locked and "locked" or "learning", a.hold * 1000) end
 	if a then return string.format("%s %.3fs", a.locked and "locked" or "learning", a.hold) end
 	return ""
 end
@@ -8629,7 +8723,7 @@ function Shot.statusLines()
 	local comp, p = Shot.pingComp()
 	local ptxt
 	if S.PerfectGreen then ptxt = string.format("%.0f ms earlier (ping %.0f ms)", comp * 1000, p * 1000) else ptxt = string.format("off (ping %.0f ms)", p * 1000) end
-	return Shot.nameFor(cur.key, cur.anim), string.format("%.3fs", cur.hold), cur.state or "-", last,
+	return Shot.nameFor(cur.key, cur.anim), (cur.mode == "peak") and string.format("%.0f ms before the peak", cur.hold * 1000) or string.format("%.3fs", cur.hold), cur.state or "-", last,
 		(#lines > 0) and table.concat(lines, "\n") or "No change yet", ptxt
 end
 function Shot.statusStep()
@@ -8676,12 +8770,12 @@ function Shot.autoLoad()
 	Shot.autoLoaded = true
 	Shot.auto = {}
 	for kind, key, val in string.gmatch(S.AutoTimes or "", "(%a):(%S-)=([%d%.]+)") do
-		Shot.auto[key] = { hold = tonumber(val), greens = {}, locked = kind == "L", dir = 1 }
+		Shot.auto[key] = { hold = tonumber(val), greens = {}, locked = (kind == "L" or kind == "l"), dir = 1, mode = (kind == "l" or kind == "p") and "peak" or nil }
 	end
 end
 function Shot.autoSave()
 	local parts = {}
-	for key, a in pairs(Shot.auto) do parts[#parts + 1] = string.format("%s:%s=%.3f", a.locked and "L" or "P", key, a.hold) end
+	for key, a in pairs(Shot.auto) do parts[#parts + 1] = string.format("%s:%s=%.4f", a.mode == "peak" and (a.locked and "l" or "p") or (a.locked and "L" or "P"), key, a.hold) end
 	table.sort(parts)
 	S.AutoTimes = table.concat(parts, " ")
 	saveSoon()
@@ -8698,6 +8792,80 @@ function Shot.autoActive(key)
 	if Shot.times["la:" .. key] or Shot.times["r:" .. key] then return false end
 	return true
 end
+Shot.PEAK_Q = 0.978
+-- the meter climbs in a straight line to its peak, and a Perfect is a release that reaches the server as the meter hits that peak.
+-- Fit a line to the meter readings so far and name the moment the peak will arrive (works for every animation and shot speed).
+function Shot.peakFit(samples)
+	local pts, lastq = {}, -1
+	for _, sm in ipairs(samples) do
+		if sm.q < lastq - 0.001 then break end
+		lastq = sm.q
+		if sm.q > 0.12 and sm.q < 0.93 then pts[#pts + 1] = sm end
+	end
+	local n = #pts
+	if n < 6 or pts[n].q < 0.3 then return nil end
+	local t0 = pts[1].t
+	local st, sq, stt, stq = 0, 0, 0, 0
+	for _, p in ipairs(pts) do
+		local x = p.t - t0
+		st, sq, stt, stq = st + x, sq + p.q, stt + x * x, stq + x * p.q
+	end
+	local den = n * stt - st * st
+	if den <= 1e-9 then return nil end
+	local a = (n * stq - st * sq) / den
+	local b = (sq - a * st) / n
+	if a < 1.2 or a > 5 then return nil end
+	return t0 + (Shot.PEAK_Q - b) / a
+end
+function Shot.peakLearn(info, res, strength, a, key)
+	if a.locked then return true end
+	local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+	if not idx then return true end
+	if info.manual and idx ~= 5 then return true end
+	local lead = info.lead or a.hold
+	if not info.manual and math.abs(lead - a.hold) > 0.05 then return true end
+	local before = a.hold
+	a.n = (a.n or 0) + 1
+	local why
+	if idx == 5 then
+		a.hold, a.locked = lead, true
+		S.PeakLead = clamp(S.PeakLead * 0.5 + lead * 0.5, 0, 0.08)
+		pcall(notify, "Auto Green", string.format("Learned this shot: %.0f ms before the peak", lead * 1000), 3)
+		why = "Perfect, locked"
+	else
+		-- late: let go earlier (a bigger lead), early: later. The step gets smaller as the shot gets closer to the green.
+		local d, mag
+		if idx == 4 then
+			d, mag = a.dir or 1, 0.4
+		elseif idx <= 3 then
+			d, mag = -1, (idx == 3 and 0.7) or (idx == 2 and 1.0) or 1.5
+		else
+			d, mag = 1, (idx == 6 and 0.7) or (idx == 7 and 1.0) or 1.5
+		end
+		a.step = a.step or 0.012
+		if idx == 4 then
+			a.goodRun = (a.goodRun or 0) + 1
+			a.step = clamp(a.step * ((a.goodRun >= 2) and 1.15 or 0.85), 0.002, 0.008)
+		else
+			a.goodRun = 0
+			if a.lastD and a.lastD ~= d then
+				a.step = math.max(0.002, a.step * 0.5)
+			elseif a.lastD == d then
+				a.step = math.min(0.02, a.step * 1.3)
+			end
+			a.lastD, a.dir = d, d
+		end
+		a.hold = clamp(lead + d * a.step * mag, 0, 0.1)
+		S.PeakLead = clamp(S.PeakLead + d * a.step * mag * 0.25, 0, 0.08)
+		why = (Shot.VERDICT[idx] or "?") .. (d > 0 and ", letting go earlier" or ", letting go later")
+	end
+	if math.abs(a.hold - before) > 0.0003 or a.locked then Shot.noteAdjust(key, before, a.hold, why) end
+	Shot.autoSave()
+	if Rec.shotOn then
+		Rec.shotAdd(string.format("AUTOCAL(meter) key=%s idx=%s lead=%.4f next=%.4f locked=%s", key, tostring(idx), lead, a.hold, tostring(a.locked)))
+	end
+	return true
+end
 function Shot.autoLearn(info, res, strength)
 	local key = info.key
 	if not Shot.autoActive(key) then return false end
@@ -8705,6 +8873,7 @@ function Shot.autoLearn(info, res, strength)
 	local a = Shot.auto[key]
 	if not a then return false end
 	if a.locked then return true end
+	if a.mode == "peak" then return Shot.peakLearn(info, res, strength, a, key) end
 	local held = (info.held or 0) + (info.comp or 0)
 	local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 	if not idx or not held then return true end
@@ -8768,10 +8937,14 @@ function Shot.remoteHold(key, pk)
 		Shot.autoLoad()
 		local a = Shot.auto[key]
 		if not a then
-			a = { hold = Shot.times[key] or Shot.AUTO_START, greens = {}, locked = false, dir = 1 }
+			a = { hold = S.PeakLead or 0.027, greens = {}, locked = false, dir = 1, mode = "peak" }
 			Shot.auto[key] = a
 		end
 		Shot.lastSweep = nil
+		if a.mode == "peak" then
+			Shot.cur = { key = key, hold = a.hold, mode = "peak", state = a.locked and "Locked (learned)" or "Learning (by the meter)" }
+			return a.hold, a.hold, "peak"
+		end
 		local state = a.locked and "Locked (learned)" or ((a.n or 0) > 0 and ((a.dir or 1) > 0 and "Learning, trying later" or "Learning, trying earlier")) or "Learning"
 		Shot.cur = { key = key, hold = a.hold, state = state }
 		return clamp(a.hold, Shot.FLOOR, S.MaxHold), a.hold
@@ -8926,12 +9099,19 @@ function Shot.remoteCore(ctx)
 	local sit = Shot.situation()
 	local key = Shot.remoteKey(cap, sit)
 	Shot.cap = nil
-	local hold, base = Shot.remoteHold(key, pk)
-	local comp = Shot.pingComp()
-	if comp ~= 0 then hold = math.max(Shot.FLOOR, hold - comp) end
+	local hold, base, mode = Shot.remoteHold(key, pk)
+	local comp, peakLead = 0, nil
+	if mode == "peak" then
+		peakLead = hold
+		hold = Shot.AUTO_START
+	else
+		comp = Shot.pingComp()
+		if comp ~= 0 then hold = math.max(Shot.FLOOR, hold - comp) end
+	end
 	if Shot.cur then Shot.cur.comp = comp end
 	local manual = false
 	local usedMeter, qpred = false, nil
+	local peakAimed = false
 	local ok0, ping0 = pcall(function() return LP:GetNetworkPing() end)
 	local lead = (ok0 and ping0 or 0.04) + 0.016 + S.Nudge / 1000
 	while tick() - m0 < S.MaxHold do
@@ -8942,7 +9122,15 @@ function Shot.remoteCore(ctx)
 		local now = tick()
 		local n = #samples
 		-- the meter moves by itself: JHub releases when it is about to reach the aim point (by the meter, not by a clock)
-		if S.MeterAim and n >= 3 and now - samples[n].t < 0.15 then
+		if peakLead then
+			-- by the meter: let go one ping plus the lead before the meter reaches its peak
+			local tp = Shot.peakFit(samples)
+			if tp then
+				hold = math.max(Shot.FLOOR, tp - (Shot.pingNow() + peakLead) - m0)
+				peakAimed = true
+			end
+			if now - m0 >= hold - 0.02 and (peakAimed or now - m0 >= Shot.AUTO_START - 0.02) then break end
+		elseif S.MeterAim and n >= 3 and now - samples[n].t < 0.15 then
 			local a, b = samples[math.max(1, n - 3)], samples[n]
 			local dt = b.t - a.t
 			if dt > 0.01 then
@@ -8983,11 +9171,11 @@ function Shot.remoteCore(ctx)
 			base, held, Shot.lastRelease, tostring(S.ShotStyle), tostring(ctx.space)))
 	end
 	if Rec.shotOn then
-		Rec.shotAdd(string.format("RELEASE meter=%s target=%.3f predicted=%s samples=%d key=%s packet=%s hold=%.4f held=%.4f by=%s style=%s ping=%s comp=%.4f", tostring(usedMeter), S.MeterTarget, tostring(qpred), #samples, key, tostring(pk), hold, held,
-			Shot.lastRelease, tostring(S.ShotStyle), tostring(pcall(function() return LP:GetNetworkPing() end) and LP:GetNetworkPing() or "?"), comp))
+		Rec.shotAdd(string.format("RELEASE meter=%s target=%.3f predicted=%s samples=%d key=%s packet=%s hold=%.4f held=%.4f by=%s style=%s ping=%s comp=%.4f lead=%s", tostring(usedMeter), S.MeterTarget, tostring(qpred), #samples, key, tostring(pk), hold, held,
+			Shot.lastRelease, tostring(S.ShotStyle), tostring(pcall(function() return LP:GetNetworkPing() end) and LP:GetNetworkPing() or "?"), comp, tostring(peakLead)))
 	end
 	task.spawn(Shot.evaluate, { snap = snap, since = since, sit = sit, key = key, base = base, held = held, manual = manual,
-		pk = pk, remote = true, usedBar = false, usedMeter = usedMeter, qpred = qpred, comp = manual and 0 or comp })
+		pk = pk, remote = true, usedBar = false, usedMeter = usedMeter, qpred = qpred, comp = manual and 0 or comp, lead = peakLead })
 end
 function Shot.core(mode, ctx)
 	if mode == "remote" then return Shot.remoteCore(ctx) end
