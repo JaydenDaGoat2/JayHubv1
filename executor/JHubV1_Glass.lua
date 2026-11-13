@@ -144,7 +144,7 @@ GfxCullDist = 250, GfxBoost = false, GfxFpsCap = 0, PingStab = false, PingWindow
 ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
 LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
-AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false,
+AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0,
 LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -8491,19 +8491,20 @@ end
 -- POST FADES: these built-in timings keep learning from the game's verdicts and settle on Perfect; every other built-in shot is left alone
 do
 local POST = {
-["__all"] = true,
+["111074210919383"] = true, ["71484695722621"] = true,
+["77401448272074"] = true, ["128777513307709+77401448272074"] = true,
 }
 local loaded, st = false, {}
 local function load()
 if loaded then return end
 loaded = true
 for key, val in string.gmatch(S.FinalAdj or "", "(%S-)=([%-%d%.]+)") do
-if Shot.FINAL[key] then Shot.finalAdj[key] = tonumber(val) end
+if POST[key] then Shot.finalAdj[key] = tonumber(val) end
 end
 end
 local function save()
 local parts = {}
-for key in pairs(Shot.finalAdj) do
+for key in pairs(POST) do
 if Shot.finalAdj[key] then parts[#parts + 1] = string.format("%s=%.4f", key, Shot.finalAdj[key]) end
 end
 table.sort(parts)
@@ -8512,7 +8513,7 @@ saveSoon()
 end
 function Shot.finalLoad() load() end
 function Shot.finalLearn(info, res, strength)
-if info.manual or not Shot.FINAL[info.key] then return end
+if info.manual or not POST[info.key] then return end
 local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 if not idx then return end
 load()
@@ -8534,6 +8535,39 @@ Shot.finalAdj[key] = new
 Shot.noteAdjust(key, (Shot.FINAL[key] or 0) + old, (Shot.FINAL[key] or 0) + new, Shot.VERDICT[idx] or "?")
 save()
 end
+end
+end
+-- POST SPIN FADE ON EVERY CHOSEN JUMPSHOT: any jumpshot that ends in a post fade starts from the post fade's own learned timing
+do
+local FADE = { "111074210919383", "71484695722621", "77401448272074" }
+local function isFade(key)
+key = tostring(key)
+for _, id in ipairs(FADE) do
+if string.find(key, id, 1, true) then return true end
+end
+return false
+end
+local prevSeed3 = Shot.seedLead
+function Shot.seedLead(key)
+if isFade(key) and (S.PFLeadN or 0) >= 2 and (S.PFLead or 0) > 0 then return clamp(S.PFLead, 0, 0.1) end
+return prevSeed3(key)
+end
+local prevLearn3 = Shot.autoLearn
+function Shot.autoLearn(info, res, strength)
+if info and info.lead and not info.manual and not Shot.FINAL[info.key] and isFade(info.key) then
+local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+if idx then
+local off = (idx == 5 and 0) or (idx == 4 and -0.6) or (idx - 5)
+if math.abs(off) <= 3 then
+local est = clamp(info.lead + off * (S.PeakBin or 0.014) * 0.8, 0, 0.1)
+local n = S.PFLeadN or 0
+if n < 2 or (S.PFLead or 0) <= 0 then S.PFLead = est else S.PFLead = S.PFLead * 0.8 + est * 0.2 end
+S.PFLeadN = math.min(n + 1, 999)
+saveSoon()
+end
+end
+end
+return prevLearn3(info, res, strength)
 end
 end
 UI.syncAuto()
@@ -8799,7 +8833,7 @@ local S = {
 	ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
 	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
-	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false,
+	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0,
 	LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 	AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -17494,19 +17528,20 @@ end
 -- POST FADES: these built-in timings keep learning from the game's verdicts and settle on Perfect; every other built-in shot is left alone
 do
 	local POST = {
-		["__all"] = true,
+		["111074210919383"] = true, ["71484695722621"] = true,
+		["77401448272074"] = true, ["128777513307709+77401448272074"] = true,
 	}
 	local loaded, st = false, {}
 	local function load()
 		if loaded then return end
 		loaded = true
 		for key, val in string.gmatch(S.FinalAdj or "", "(%S-)=([%-%d%.]+)") do
-			if Shot.FINAL[key] then Shot.finalAdj[key] = tonumber(val) end
+			if POST[key] then Shot.finalAdj[key] = tonumber(val) end
 		end
 	end
 	local function save()
 		local parts = {}
-		for key in pairs(Shot.finalAdj) do
+		for key in pairs(POST) do
 			if Shot.finalAdj[key] then parts[#parts + 1] = string.format("%s=%.4f", key, Shot.finalAdj[key]) end
 		end
 		table.sort(parts)
@@ -17515,7 +17550,7 @@ do
 	end
 	function Shot.finalLoad() load() end
 	function Shot.finalLearn(info, res, strength)
-		if info.manual or not Shot.FINAL[info.key] then return end
+		if info.manual or not POST[info.key] then return end
 		local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 		if not idx then return end
 		load()
@@ -17537,6 +17572,39 @@ do
 			Shot.noteAdjust(key, (Shot.FINAL[key] or 0) + old, (Shot.FINAL[key] or 0) + new, Shot.VERDICT[idx] or "?")
 			save()
 		end
+	end
+end
+-- POST SPIN FADE ON EVERY CHOSEN JUMPSHOT: any jumpshot that ends in a post fade starts from the post fade's own learned timing
+do
+	local FADE = { "111074210919383", "71484695722621", "77401448272074" }
+	local function isFade(key)
+		key = tostring(key)
+		for _, id in ipairs(FADE) do
+			if string.find(key, id, 1, true) then return true end
+		end
+		return false
+	end
+	local prevSeed3 = Shot.seedLead
+	function Shot.seedLead(key)
+		if isFade(key) and (S.PFLeadN or 0) >= 2 and (S.PFLead or 0) > 0 then return clamp(S.PFLead, 0, 0.1) end
+		return prevSeed3(key)
+	end
+	local prevLearn3 = Shot.autoLearn
+	function Shot.autoLearn(info, res, strength)
+		if info and info.lead and not info.manual and not Shot.FINAL[info.key] and isFade(info.key) then
+			local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+			if idx then
+				local off = (idx == 5 and 0) or (idx == 4 and -0.6) or (idx - 5)
+				if math.abs(off) <= 3 then
+					local est = clamp(info.lead + off * (S.PeakBin or 0.014) * 0.8, 0, 0.1)
+					local n = S.PFLeadN or 0
+					if n < 2 or (S.PFLead or 0) <= 0 then S.PFLead = est else S.PFLead = S.PFLead * 0.8 + est * 0.2 end
+					S.PFLeadN = math.min(n + 1, 999)
+					saveSoon()
+				end
+			end
+		end
+		return prevLearn3(info, res, strength)
 	end
 end
 UI.syncAuto()
