@@ -1,8 +1,0 @@
-# JHub shared shot timings. One shot per line: animation key, an equals sign, the release time in seconds.
-# Anything after a hash on a line is a note. Every copy of the script reads this file when it starts.
-# Built into the script already (listed here for reference):
-15851912457+15851919155=0.357  # Jump Shot 1
-111074210919383=0.357  # Post fade
-71484695722621=0.311  # Post spin fade (left)
-77401448272074=0.329  # Post spin fade (right)
-128777513307709+77401448272074=0.329  # Post spin fade (right, other key)
