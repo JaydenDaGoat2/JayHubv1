@@ -126,7 +126,7 @@ OutlineColor = "White", OutlineThick = 2, OutlineShine = true,
 TextColor = "White", TextStroke = true, Font = "Gotham", Corner = 10, UIScale = 1,
 LogoSize = 58, LogoOpacity = 1, LogoAnim = true, LogoX = -1, LogoY = -1,
 Blur = false, BlurSize = 10, Watermark = true, Notifications = true, Sounds = true, MenuKey = "RightShift",
-Codes = "100M RELEASE 100KLIKES 500KMEMBERS SORRYFORBUGS", CodeRemotes = true,
+Codes = "100M 100KLIKES 500KMEMBERS 100KCCUPLS RELEASE SORRYFORBUGS", CodeRemotes = true,
 AutoGreen = true, AutoCalibrate = true, AutoTiming = true, ShotRelease = "Auto",
 HoldTime = 0.55, MaxHold = 1.6, CalSpeed = 0.6, CalStep = 0.02,
 ShotTimes = "", ShotRatio = 0, BarPath = "", BarProp = "", BarAt = 0, BarNudge = 0,
@@ -141,6 +141,12 @@ GatherGlide = false, GatherGlidePower = 26, GatherGlideTime = 0.45,
 DribbleGlideSpeed = 1, ShotGlideSpeed = 1, GatherGlideSpeed = 1,
 GfxLow = false, GfxEffects = false, GfxTextures = false, GfxShadows = false, GfxPost = false, GfxHideOthers = false, GfxCull = false,
 GfxCullDist = 250, GfxBoost = false, GfxFpsCap = 0, PingStab = false, PingWindow = 3, FinalAdj = "",
+ShotGlideMethod = "GameVel", NoStun = false, StunIds = "", HoopMarks = "",
+AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
+AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
+AR = false, ARSpeed = 1.3, ARReact = 0.05, ARRange = 70, ARJump = true, ARMagnet = true, ARMagRange = 8, ARMarker = false,
+AP = false, APBuild = "Small", APPostScore = true, APAllAround = true, APOpenDist = 6, APRange = 24, APThree = true, APDrive = true, APLayups = true, APSprint = true, APMoves = true,
+APShotDelay = 0.8, APDefend = true, APRebound = true, APAntiAfk = true, APPause = true, APStaminaMin = 20, APHoop = "Nearest", APPostRange = 8, APSpot = 22, APSpeed = 1, APTeam = "By team",
 GlideFade = 60, GlideSmart = true, GlideStopAtWalls = false, GlideNeedBall = true, GlideMethod = "Auto",
 DribbleKeys = "Z C X V", GatherKeys = "", DribbleBtnPaths = "", GatherBtnPaths = "",
 AnimDribble = "", AnimGather = "", AnimShot = "",
@@ -258,8 +264,9 @@ for key, val in pairs(have) do parts[#parts + 1] = key .. "=" .. val end
 table.sort(parts)
 S.ShotTimes = table.concat(parts, " ")
 end
-S.SettingsVer = 28
-DEFAULTS.SettingsVer = 28
+if S.SettingsVer < 29 then S.Codes = DEFAULTS.Codes end
+S.SettingsVer = 29
+DEFAULTS.SettingsVer = 29
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 S.ShotTimes = S.ShotTimes
 S.RecOn = false
@@ -2438,7 +2445,12 @@ if dir.Magnitude < 0.1 then dir = flat(r.CFrame.LookVector) end
 if dir.Magnitude < 0.01 then return end
 dir = dir.Unit
 local method = S.GlideMethod
+if kind == "shot" and S.ShotGlideMethod and S.ShotGlideMethod ~= "Auto" then method = S.ShotGlideMethod end
 if method == "Auto" then method = Glide.chain[Glide.cur] end
+if method == "GameVel" then
+local gpm = Mover.playerModule()
+if not (gpm and gpm.Character and gpm.Character.Movement and typeof(gpm.Character.Movement.CFVelocity) == "Vector3") then method = "CFrame" end
+end
 Glide.token = Glide.token + 1
 local token = Glide.token
 local fadeStart = 1 - clamp(S.GlideFade, 0, 100) / 100
@@ -3952,6 +3964,7 @@ elseif okn and name == "MoveDirection" then
 local v = ...
 if typeof(v) == "Vector3" then
 Mover.gameDir, Mover.gameDirT = v, tick()
+if Mover.override and tick() - (Mover.overrideT or 0) < 0.4 and v.Magnitude < 0.3 then return old(self, Mover.override, select(2, ...)) end
 local okc, s = pcall(Mover.outScale)
 if okc and s > 1.001 and v.Magnitude > 0.05 then
 if Rec.on then task.defer(Rec.remote, self, method, table.pack(v * s), string.format("boosted x%.2f", s)) end
@@ -5955,6 +5968,7 @@ local sg = UI.Card(P, "Shot Glide")
 UI.Toggle(sg, "Shot Glide", "ShotGlide")
 UI.Slider(sg, "Glide power", "ShotGlidePower", 1, 80, 1, 0)
 UI.Slider(sg, "Glide speed", "ShotGlideSpeed", 0.5, 3, 0.1, 1, "x")
+UI.Dropdown(sg, "Shot glide method", "ShotGlideMethod", { "GameVel", "CFrame", "Velocity", "Auto" })
 UI.Slider(sg, "Time", "ShotGlideTime", 0.05, 1, 0.01, 2, "s")
 local gt = UI.Card(P, "Gather Step Glide")
 UI.Toggle(gt, "Gather Step Glide", "GatherGlide")
@@ -6274,7 +6288,7 @@ end
 Glide.fails = Glide.fails + 1
 if Glide.fails < 3 then return end
 Glide.fails = 0
-if S.GlideMethod == "Auto" then
+if S.GlideMethod == "Auto" and not (kind == "shot" and S.ShotGlideMethod ~= "Auto") then
 Glide.cur = Glide.cur % #Glide.chain + 1
 notify("Glide", "not yet, trying " .. Glide.chain[Glide.cur], 2)
 else
@@ -6295,13 +6309,19 @@ if dir.Magnitude < 0.1 then dir = flat(r.CFrame.LookVector) end
 if dir.Magnitude < 0.01 then return end
 dir = dir.Unit
 local method = S.GlideMethod
+if kind == "shot" and S.ShotGlideMethod and S.ShotGlideMethod ~= "Auto" then method = S.ShotGlideMethod end
 if method == "Auto" then method = Glide.chain[Glide.cur] end
+if method == "GameVel" then
+local gpm = Mover.playerModule()
+if not (gpm and gpm.Character and gpm.Character.Movement and typeof(gpm.Character.Movement.CFVelocity) == "Vector3") then method = "CFrame" end
+end
 Glide.token = Glide.token + 1
 local token = Glide.token
 local startPos = r.Position
 local why = Glide.why
 local walk = flat(intent) * Speed.gameWS
 local total = power * duration * 0.8
+local gbase = Mover.gameVel() or Vector3.new(0, 0, 0)
 local applied, finished, startedAt = 0, false, now
 if method == "Input" then
 Glide.input = { untilT = now + duration, scale = 1 + power / math.max(Speed.gameWS, 1), dir = dir, t0 = now, nextSend = 0 }
@@ -6353,6 +6373,15 @@ end
 return "stop"
 end
 local factor = 1.6 * (1 - p)
+if method == "GameVel" then
+local gpm = Mover.playerModule()
+local gmv = gpm and gpm.Character and gpm.Character.Movement
+if gmv and typeof(gmv.CFVelocity) == "Vector3" then
+local gv = gmv.CFVelocity
+gmv.CFVelocity = Vector3.new(gbase.X + dir.X * power * factor, gv.Y, gbase.Z + dir.Z * power * factor)
+end
+return nil
+end
 if method == "Impulse" or method == "CFrame" then return nil end
 if method == "AttrBoost" then
 local c = char()
@@ -7022,6 +7051,886 @@ end)
 Ping.trim(S.PingStab)
 Gfx.onChange()
 end
+-- GLIDE RULES, CODES, AUTO GUARD, AUTO BLOCK, AUTO REBOUND, AUTO GRIND, NO STUN
+do
+-- gather glide is only for hop steps and euro steps, step backs belong to the dribble glide
+Mover.GATHER_MOVES = { "euro", "hop", "gather" }
+local STEP_BACK = { "stepback", "step back" }
+local SHOT_MOVES = { "shot", "shoot", "jumper", "layup", "dunk", "fade", "floater", "hook" }
+
+function Glide.cancel()
+Glide.token = Glide.token + 1
+Glide.input = nil
+local c = char()
+if c then
+c:SetAttribute("SpeedBoost", 0)
+c:SetAttribute("SpeedBoostTime", 0)
+c:SetAttribute("AccelerationBoost", 0)
+end
+end
+function Glide.gatherOk(c)
+local gt = string.lower(tostring(c:GetAttribute("GatherType") or ""))
+local pk = string.lower(tostring(c:GetAttribute("LastDribblePackage") or ""))
+if string.find(gt, "pump", 1, true) then return false end
+if matchAny(gt, STEP_BACK) or matchAny(pk, STEP_BACK) then return false end
+return true
+end
+
+function Mover.onDribble(args)
+Anim.lastDribble = tick()
+local c0 = char()
+local pk0 = c0 and c0:GetAttribute("LastDribblePackage")
+local dir = Mover.moveWhere(1.5)
+if not dir and typeof(args[3]) == "Vector3" and flat(args[3]).Magnitude > 0.1 then dir = flat(args[3]) end
+task.spawn(function()
+local t0 = tick()
+while JH.Running and tick() - t0 < 0.1 do
+local cc = char()
+if cc and cc:GetAttribute("LastDribblePackage") ~= pk0 then break end
+RunService.Heartbeat:Wait()
+end
+if not JH.Running then return end
+local c = char()
+local pkg = c and c:GetAttribute("LastDribblePackage")
+local name = type(pkg) == "string" and string.lower(pkg) or ""
+if matchAny(name, SHOT_MOVES) then return end
+if matchAny(name, STEP_BACK) then
+local body = Mover.body()
+local back = body and -flat(body.CFrame.LookVector) or dir
+Glide.fire("dribble", "step back " .. name, back)
+return
+end
+dir = Mover.moveWhere(1.5) or dir
+if matchAny(name, Mover.GATHER_MOVES) then
+Glide.fire("gather", "gather move " .. name, dir)
+else
+Glide.fire("dribble", "dribble move " .. (name ~= "" and name or tostring(args[1])), dir)
+end
+end)
+end
+
+-- a running dribble or gather glide stops the moment a shot starts, and the shot glide does its own thing
+local baseShoot = Shot.onShootCall
+function Shot.onShootCall(args)
+local d = args[1]
+if type(d) == "table" and d.Shoot == true then pcall(Glide.cancel) end
+return baseShoot(args)
+end
+function Mover.watchShot(pressT)
+task.defer(function()
+local h, r = hum(), Mover.body()
+local stick
+if h and r then
+local okI, intent = pcall(Mover.intent, h, r)
+if okI and intent and intent.Magnitude > 0.1 then stick = flat(intent) end
+end
+local t0 = tick()
+while JH.Running and tick() - t0 < 0.35 and Shot.meterT < pressT - 0.05 do RunService.Heartbeat:Wait() end
+if not JH.Running or Shot.meterT < pressT - 0.05 then return end
+local c = char()
+local anim = string.lower(tostring(c and c:GetAttribute("BaseAnimation") or ""))
+local body = Mover.body()
+local dir = stick
+if not dir and body and matchAny(anim, { "fade", "stepback", "step back" }) then dir = -flat(body.CFrame.LookVector) end
+if not dir then dir = Mover.moveWhere(1.5) end
+if not dir and body then dir = flat(body.CFrame.LookVector) end
+Glide.lastStart.shot = 0
+Glide.fire("shot", "shot", dir)
+end)
+end
+
+---------------------------------------------------------------------
+-- CODES
+---------------------------------------------------------------------
+Net.KNOWN_CODES = { "100M", "100KLIKES", "500KMEMBERS", "100KCCUPLS", "RELEASE", "SORRYFORBUGS" }
+function Net.gameCodes()
+local found = {}
+if type(getloadedmodules) ~= "function" then return found end
+local okl, mods = pcall(getloadedmodules)
+if not okl or type(mods) ~= "table" then return found end
+local function walk(t, depth)
+if depth > 3 then return end
+for k, v in pairs(t) do
+if type(k) == "string" and #k >= 3 and #k <= 24 and string.find(k, "^[%u%d_]+$") and string.find(k, "%u") then found[k] = true end
+if type(v) == "table" then pcall(walk, v, depth + 1) end
+end
+end
+for _, m in ipairs(mods) do
+local okp, path = pcall(Bar.pathOf, m)
+if okp and string.find(string.lower(path), "code", 1, true) then
+local okr, res = pcall(require, m)
+if okr and type(res) == "table" then pcall(walk, res, 0) end
+end
+end
+return found
+end
+function Net.redeemViaRemotes(list)
+local remotes = {}
+for _, d in ipairs(ReplicatedStorage:GetDescendants()) do
+if (d:IsA("RemoteEvent") or d:IsA("RemoteFunction")) and matchAny(string.lower(d.Name), { "code", "redeem", "promo", "coupon" }) then
+remotes[#remotes + 1] = d
+end
+end
+if #remotes == 0 then return false end
+for _, code in ipairs(list) do
+for _, rm in ipairs(remotes) do
+if rm:IsA("RemoteFunction") then
+task.spawn(function()
+local ok, res = pcall(function() return rm:InvokeServer(code) end)
+log("Code " .. code .. " via " .. rm.Name .. ": " .. tostring(ok and res or "error"))
+end)
+else
+pcall(function() rm:FireServer(code) end)
+pcall(function() rm:FireServer({ Code = code }) end)
+log("Code " .. code .. " sent via " .. rm.Name)
+end
+end
+task.wait(1.2)
+end
+return true
+end
+function Net.redeemAll()
+local seen, list = {}, {}
+local function add(c)
+c = trim(c)
+if c ~= "" and not seen[c] then
+seen[c] = true
+list[#list + 1] = c
+end
+end
+for _, c in ipairs(tokens(S.Codes)) do add(c) end
+for _, c in ipairs(Net.KNOWN_CODES) do add(c) end
+local fromGame = Net.gameCodes()
+local extra = 0
+for c in pairs(fromGame) do
+if not seen[c] then extra = extra + 1 end
+add(c)
+end
+notify("Codes", string.format("Trying %d codes (%d found inside the game).", #list, extra), 3)
+local done = Net.redeemViaGui(list)
+if not done and S.CodeRemotes then done = Net.redeemViaRemotes(list) end
+if done then
+notify("Codes", "Finished. Check your coins and rewards.", 4)
+else
+notify("Codes", "Open the Store, then the Codes box, once. Then press Redeem all codes again.", 5)
+end
+end
+
+---------------------------------------------------------------------
+-- NO STUN
+---------------------------------------------------------------------
+local STUN_WORDS = { "stun", "stagger", "knock", "dizzy", "daze", "ragdoll", "flinch", "faint", "hurt" }
+local Bot = { hoops = {}, hoopsT = 0, track = setmetatable({}, { __mode = "k" }), cmd = nil, cmdT = 0, mul = 1, face = nil, faceT = 0,
+shotSeen = setmetatable({}, { __mode = "k" }), btnCache = {}, sprinting = false, shotT = 0, moveT = 0, blockT = 0,
+chaseUntil = 0, status = "Off", spot = nil, spotT = 0, ballT = 0, jumpT = 0 }
+JH.api.Bot = Bot
+
+function Bot.noStunStep()
+if not S.NoStun then return end
+local c, h = char(), hum()
+if c then
+if Bot.stunChar ~= c then
+Bot.stunChar = c
+bind(c.AttributeChanged, function(name)
+local low = string.lower(name)
+if S.NoStun and string.find(low, "stun", 1, true) and c:GetAttribute(name) then
+local a = Anim.animator
+local ok, list = pcall(function() return a and a:GetPlayingAnimationTracks() or {} end)
+if ok then
+for _, tr in ipairs(list) do
+local id = Anim.idOf(tr)
+if id ~= "" and not tr.Looped and not Anim.has("StunIds", id) then
+S.StunIds = trim((S.StunIds or "") .. " " .. id)
+saveSoon()
+end
+end
+end
+end
+end)
+end
+for k, v in pairs(c:GetAttributes()) do
+local low = string.lower(k)
+if string.find(low, "stun", 1, true) or string.find(low, "ragdoll", 1, true) or string.find(low, "stagger", 1, true) then
+if v == true then c:SetAttribute(k, false) elseif type(v) == "number" and v ~= 0 then c:SetAttribute(k, 0) end
+end
+end
+end
+if h then
+pcall(function()
+if h.PlatformStand then h.PlatformStand = false end
+local st = h:GetState()
+if st == Enum.HumanoidStateType.Ragdoll or st == Enum.HumanoidStateType.FallingDown then h:ChangeState(Enum.HumanoidStateType.GettingUp) end
+end)
+end
+local a = Anim.animator
+if a then
+local ok, list = pcall(function() return a:GetPlayingAnimationTracks() end)
+if ok then
+for _, tr in ipairs(list) do
+if Anim.has("StunIds", Anim.idOf(tr)) or matchAny(Anim.name(tr), STUN_WORDS) then pcall(function() tr:Stop(0) end) end
+end
+end
+end
+end
+
+---------------------------------------------------------------------
+-- BOT BASICS: players, hoops, movement
+---------------------------------------------------------------------
+function Bot.charOf(pl)
+return pl.Character or (workspace:FindFirstChild("Characters") and workspace.Characters:FindFirstChild(pl.Name))
+end
+function Bot.hasBall(c)
+local af = c:FindFirstChild("Attributes")
+local bv = af and af:FindFirstChild("Basketball")
+return (bv and bv.Value ~= nil) and true or false
+end
+function Bot.sample()
+local now = tick()
+for _, pl in ipairs(Players:GetPlayers()) do
+if pl ~= LP then
+local c = Bot.charOf(pl)
+local root = c and (c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart)
+if root then
+local tr = Bot.track[root]
+if not tr then
+Bot.track[root] = { p = root.Position, t = now, v = Vector3.new(0, 0, 0) }
+else
+local dt = now - tr.t
+if dt > 0.001 then
+local nv = (root.Position - tr.p) / dt
+tr.v = tr.v * 0.6 + Vector3.new(nv.X, 0, nv.Z) * 0.4
+tr.p, tr.t = root.Position, now
+end
+end
+end
+end
+end
+end
+function Bot.others()
+local out = {}
+for _, pl in ipairs(Players:GetPlayers()) do
+if pl ~= LP then
+local c = Bot.charOf(pl)
+local root = c and (c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart)
+local hm = c and c:FindFirstChildOfClass("Humanoid")
+if root and hm and hm.Health > 0 then
+local tr = Bot.track[root]
+out[#out + 1] = { pl = pl, c = c, root = root, pos = root.Position, vel = tr and tr.v or Vector3.new(0, 0, 0),
+mate = (S.APTeam == "By team" and LP.Team ~= nil and pl.Team == LP.Team) and true or false,
+ball = Bot.hasBall(c), shooting = c:GetAttribute("Action") == "Shooting" }
+end
+end
+end
+return out
+end
+function Bot.scanHoops()
+local list = {}
+local function add(pos)
+for _, h in ipairs(list) do
+if (h - pos).Magnitude < 14 then return end
+end
+list[#list + 1] = pos
+end
+for x, y, z in string.gmatch(S.HoopMarks or "", "(%-?[%d%.]+),(%-?[%d%.]+),(%-?[%d%.]+)") do
+add(Vector3.new(tonumber(x), tonumber(y), tonumber(z)))
+end
+local n = 0
+for _, d in ipairs(workspace:GetDescendants()) do
+n = n + 1
+if n % 500 == 0 then task.wait() end
+if d:IsA("BasePart") or d:IsA("Model") then
+local nm = string.lower(d.Name)
+if not string.find(nm, "ball", 1, true) and (nm == "rim" or nm == "hoop" or nm == "goal" or nm == "basket" or string.find(nm, "hoop", 1, true) or string.find(nm, "rim", 1, true) == 1) then
+local ok, pos = pcall(function() return d:IsA("Model") and d:GetPivot().Position or d.Position end)
+if ok then add(pos) end
+end
+end
+end
+Bot.hoops, Bot.hoopsT = list, tick()
+log("Hoops found: " .. #list)
+end
+function Bot.nearestHoop(pos, far)
+local best, bd
+for _, h in ipairs(Bot.hoops) do
+local d = flat(h - pos).Magnitude
+if not bd or (far and d > bd) or (not far and d < bd) then best, bd = h, d end
+end
+return best
+end
+function Bot.attackHoop(pos)
+local mode = S.APHoop
+if mode == "Farthest" then return Bot.nearestHoop(pos, true) end
+return Bot.nearestHoop(pos, false)
+end
+function Bot.move(dir, mul)
+if dir.Magnitude > 1 then dir = dir.Unit end
+Bot.cmd, Bot.cmdT, Bot.mul = dir, tick(), mul or 1
+Mover.override, Mover.overrideT = dir, tick()
+end
+function Bot.stopMove()
+Bot.cmd = nil
+Mover.override = nil
+end
+function Bot.faceAt(pos)
+local r = Mover.body()
+if not r then return end
+local d = flat(pos - r.Position)
+if d.Magnitude > 0.5 then Bot.face, Bot.faceT = d.Unit, tick() end
+end
+function Bot.stamina()
+local c = char()
+local v = c and c:GetAttribute("Stamina")
+if type(v) ~= "number" then return nil end
+return v <= 1 and v * 100 or v
+end
+function Bot.setSprint(on)
+if on then
+local st = Bot.stamina()
+if st and st <= S.APStaminaMin then on = false end
+end
+if on ~= Bot.sprinting then
+Bot.sprinting = on
+pcall(Input.action, "Sprint", on)
+end
+end
+function Bot.findBtn(words)
+local key = table.concat(words, "|")
+local c = Bot.btnCache[key]
+if c and tick() - c.t < 2 and (not c.obj or c.obj.Parent) then return c.obj end
+local pg = LP:FindFirstChild("PlayerGui")
+local found
+if pg then
+for _, d in ipairs(pg:GetDescendants()) do
+if d:IsA("GuiButton") and not d:IsDescendantOf(gui) and visibleChain(d) then
+local n = string.lower(d.Name .. " " .. (d:IsA("TextButton") and d.Text or ""))
+if matchAny(n, words) then
+found = d
+break
+end
+end
+end
+end
+Bot.btnCache[key] = { obj = found, t = tick() }
+return found
+end
+function Bot.press(key, hold, words)
+task.spawn(function()
+Input.sendKey(key, true)
+local btn = words and Bot.findBtn(words)
+if btn then Input.fireGui(btn, true, true) end
+task.wait(hold or 0.1)
+Input.sendKey(key, false)
+if btn then Input.fireGui(btn, false, true) end
+end)
+end
+function Bot.userActive()
+if not S.APPause then return false end
+local d = Mover.gameDir
+return d ~= nil and tick() - (Mover.gameDirT or 0) < 0.4 and flat(d).Magnitude > 0.35
+end
+bind(RunService.Stepped, function(_, dt)
+if dt <= 0 or dt > 0.25 then return end
+local r = Mover.body()
+if not r then return end
+local now = tick()
+if Bot.cmd and now - Bot.cmdT < 0.35 and Bot.cmd.Magnitude > 0.05 then
+r.CFrame = r.CFrame + Bot.cmd * Speed.gameWS * Bot.mul * dt
+Mover.sync(r)
+end
+if Bot.face and now - Bot.faceT < 0.35 then
+local p = r.Position
+r.CFrame = CFrame.new(p, p + Bot.face)
+end
+end)
+
+---------------------------------------------------------------------
+-- AUTO GUARD AND AUTO BLOCK
+---------------------------------------------------------------------
+function Bot.pickTarget(others, me, forced)
+local best, bd
+local mode = forced or S.AGTarget
+for _, o in ipairs(others) do
+if not o.mate then
+local d = flat(o.pos - me).Magnitude
+local score = d
+if mode == "Ball handler" then
+score = o.ball and (d - 1000) or d
+elseif mode == "Closest to hoop" then
+local h = Bot.nearestHoop(o.pos)
+score = h and flat(o.pos - h).Magnitude or d
+end
+if not bd or score < bd then best, bd = o, score end
+end
+end
+return best
+end
+function Bot.guardStep(me, others, forced)
+local t = Bot.pickTarget(others, me, forced)
+if not t then return false end
+local dist = flat(t.pos - me).Magnitude
+if dist > S.AGRange and not S.AGLock then return false end
+local now = tick()
+local react = S.AGLock and 0 or S.AGReact
+if not Bot.spot or Bot.spotTarget ~= t or now - Bot.spotT >= react then
+local ppos = t.pos + t.vel * S.AGPredict
+local hoop = Bot.nearestHoop(ppos)
+local dirf = hoop and flat(hoop - ppos) or flat(t.vel)
+if dirf.Magnitude < 0.1 then dirf = flat(me - ppos) end
+if dirf.Magnitude < 0.1 then dirf = Vector3.new(0, 0, 1) end
+Bot.spot, Bot.spotTarget, Bot.spotT = ppos + dirf.Unit * S.AGDist, t, now
+end
+local to = flat(Bot.spot - me)
+local d = to.Magnitude
+local strength = S.AGStrength / 100
+local mul = S.AGSpeed * (0.7 + strength * 1.3)
+if S.AGLock then mul = mul * 2 end
+if d < 0.5 then
+Bot.stopMove()
+else
+local gain = S.AGLock and 1 or math.min(1, d / (4 - 2.5 * strength))
+Bot.move(to.Unit * gain, mul)
+end
+if S.AGFace then Bot.faceAt(t.pos) end
+Bot.setSprint(S.AGSprint and d > 7)
+Bot.status = "Guarding " .. t.pl.Name
+return true
+end
+function Bot.blockStep(others, me)
+if not S.AB then return end
+local now = tick()
+for _, o in ipairs(others) do
+if not o.mate then
+local was = Bot.shotSeen[o.c]
+Bot.shotSeen[o.c] = o.shooting
+if o.shooting and not was and now - Bot.blockT > 0.9 then
+local dist = flat(o.pos - me).Magnitude
+if dist <= S.ABRange and math.random(100) <= S.ABChance then
+Bot.blockT = now
+if S.ABChase then Bot.chaseUntil, Bot.chaseRoot = now + S.ABDelay + 0.35, o.root end
+task.delay(S.ABDelay, function()
+if JH.Running then Bot.press(S.ABKey, 0.18, { "jump", "block" }) end
+end)
+end
+end
+end
+end
+end
+
+---------------------------------------------------------------------
+-- AUTO REBOUND
+---------------------------------------------------------------------
+local rayParams = RaycastParams.new()
+rayParams.FilterType = Enum.RaycastFilterType.Exclude
+function Bot.predictBall(b)
+local g = workspace.Gravity
+local p, v = b.Position, b.AssemblyLinearVelocity
+rayParams.FilterDescendantsInstances = { b, char() }
+local hit = workspace:Raycast(p, Vector3.new(0, -300, 0), rayParams)
+local floorY = hit and hit.Position.Y or (p.Y - 3)
+local catchY = floorY + 4.5
+local t = 0
+if p.Y > catchY then
+local disc = v.Y * v.Y + 2 * g * (p.Y - catchY)
+t = (v.Y + math.sqrt(disc)) / g
+else
+t = 0.2
+end
+t = clamp(t, 0, 4)
+return Vector3.new(p.X + v.X * t, floorY, p.Z + v.Z * t), t
+end
+function Bot.marker(pos)
+if not S.ARMarker or not pos then
+if Bot.mk then Bot.mk.Parent = nil end
+return
+end
+if not Bot.mk then
+local p = Instance.new("Part")
+p.Name = "JHReboundMarker"
+p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch = true, false, false, false
+p.Shape = Enum.PartType.Ball
+p.Size = Vector3.new(2, 2, 2)
+p.Material = Enum.Material.Neon
+p.Color = Color3.fromRGB(255, 221, 64)
+p.Transparency = 0.35
+Bot.mk = p
+end
+Bot.mk.Position = pos + Vector3.new(0, 1, 0)
+Bot.mk.Parent = workspace
+end
+function Bot.reboundStep(me, r)
+if not Feat.ballLoose() then
+Bot.marker(nil)
+return false
+end
+local b = Feat.findBall()
+if not b or not b.Parent then return false end
+if flat(b.Position - me).Magnitude > S.ARRange then return false end
+local land, t = Bot.predictBall(b)
+Bot.marker(land)
+local to = flat(land - me)
+local d = to.Magnitude
+if d > 0.8 then
+Bot.move(to.Unit, S.ARSpeed)
+Bot.setSprint(d > 8)
+else
+Bot.stopMove()
+end
+local bd = flat(b.Position - me).Magnitude
+local now = tick()
+if S.ARJump and bd < 7 and b.Position.Y > me.Y + 1 and now - Bot.jumpT > 0.8 then
+Bot.jumpT = now
+Bot.press("Space", 0.15, { "jump" })
+end
+if S.ARMagnet and bd <= S.ARMagRange and now - Bot.ballT > 0.4 then
+Bot.ballT = now
+pcall(Feat.getBall, true)
+end
+Bot.status = string.format("Rebound (%.1fs)", t)
+return true
+end
+
+---------------------------------------------------------------------
+-- AUTO PLAY
+---------------------------------------------------------------------
+function Bot.shoot(hoop)
+local now = tick()
+if now - Bot.shotT < S.APShotDelay or Shot.busy then return end
+Bot.shotT = now
+if hoop then Bot.faceAt(hoop) end
+Bot.stopMove()
+if S.ShotStyle ~= "Tap" then
+Bot.oldStyle = Bot.oldStyle or S.ShotStyle
+S.ShotStyle = "Tap"
+end
+Input.action("Shoot", true)
+task.delay(0.08, function() Input.action("Shoot", false) end)
+Bot.status = "Shooting"
+end
+function Bot.nearestDefender(me, others)
+local dd, dn = math.huge, nil
+for _, o in ipairs(others) do
+if not o.mate then
+local d = flat(o.pos - me).Magnitude
+if d < dd then dd, dn = d, o end
+end
+end
+return dd, dn
+end
+function Bot.steer(me, hoop, others)
+local toHoop = flat(hoop - me)
+local steer = toHoop.Unit
+local side = Vector3.new(-toHoop.Unit.Z, 0, toHoop.Unit.X)
+for _, o in ipairs(others) do
+if not o.mate then
+local off = flat(o.pos - me)
+local d = off.Magnitude
+if d < 9 and off:Dot(toHoop) > 0 then
+local s = off:Dot(side) > 0 and -1 or 1
+steer = steer + side * s * (1 - d / 9) * 1.3
+end
+end
+end
+return steer.Unit
+end
+function Bot.offense(me, others)
+local hoop = Bot.attackHoop(me)
+if not hoop then
+Bot.status = "No hoop found"
+return false
+end
+local c = char()
+if c and c:GetAttribute("Action") == "Shooting" then
+Bot.stopMove()
+return true
+end
+local dist = flat(hoop - me).Magnitude
+local dd = Bot.nearestDefender(me, others)
+local build = S.APBuild
+local now = tick()
+if build == "Big" and S.APPostScore then
+if dist > S.APPostRange then
+local tight = dd < 3.5
+Bot.move(flat(hoop - me).Unit * (tight and 0.6 or 1), S.APSpeed * (tight and 0.8 or 1))
+Bot.faceAt(hoop)
+Bot.setSprint(false)
+Bot.status = "Posting up"
+else
+Bot.shoot(hoop)
+end
+return true
+end
+if dist <= 9 and S.APLayups then
+Bot.shoot(hoop)
+return true
+end
+local open = dd >= S.APOpenDist
+if open and dist <= S.APRange and (S.APThree or dist <= 22) and dist > 9 then
+Bot.shoot(hoop)
+return true
+end
+if build == "Shooter" and not open then
+Bot.status = "Looking for an open look"
+end
+if S.APDrive or build == "Small" or build == "Wing" then
+local dir = Bot.steer(me, hoop, others)
+Bot.move(dir, S.APSpeed)
+Bot.setSprint(S.APSprint and dist > 12)
+Bot.status = "Driving"
+if S.APMoves and dd < 7 and now - Bot.moveT > 1.4 + math.random() * 1.2 then
+Bot.moveT = now
+local keys = tokens(S.DribbleKeys)
+if #keys > 0 then Bot.press(keys[math.random(#keys)], 0.06) end
+end
+else
+Bot.stopMove()
+end
+return true
+end
+function Bot.offBall(me, others)
+local hoop = Bot.attackHoop(me)
+if not hoop then return false end
+local now = tick()
+if S.APBuild == "Big" and S.APPostScore then
+local away = flat(me - hoop)
+if away.Magnitude < 0.1 then away = Vector3.new(0, 0, 1) end
+local spot = hoop + away.Unit * S.APPostRange
+local to = flat(spot - me)
+if to.Magnitude > 1.5 then Bot.move(to.Unit, S.APSpeed) else Bot.stopMove() end
+Bot.faceAt(hoop)
+Bot.status = "Sealing in the post"
+return true
+end
+if not Bot.spotUp or now - Bot.spotUpT > 1.2 then
+local best, bs
+for i = 0, 11 do
+local a = i * math.pi / 6
+local p = hoop + Vector3.new(math.cos(a), 0, math.sin(a)) * S.APSpot
+local score = 0
+local md = math.huge
+for _, o in ipairs(others) do
+if not o.mate then md = math.min(md, flat(o.pos - p).Magnitude) end
+end
+score = math.min(md, 14) - flat(p - me).Magnitude * 0.15
+if not bs or score > bs then best, bs = p, score end
+end
+Bot.spotUp, Bot.spotUpT = best, now
+end
+local to = flat(Bot.spotUp - me)
+if to.Magnitude > 1.5 then Bot.move(to.Unit, S.APSpeed) else Bot.stopMove() end
+Bot.faceAt(hoop)
+Bot.status = "Spacing the floor"
+return true
+end
+function Bot.play(me, others, hasBall)
+if hasBall then return Bot.offense(me, others) end
+local handler
+for _, o in ipairs(others) do
+if o.ball then handler = o end
+end
+if S.APRebound and Feat.ballLoose() and Bot.reboundStep(me) then return true end
+if handler then
+if handler.mate then return Bot.offBall(me, others) end
+if S.APDefend then return Bot.guardStep(me, others, "Ball handler") end
+return false
+end
+return Bot.offBall(me, others)
+end
+function Bot.setAP(on)
+S.AP = on
+if on then
+if not S.AutoGreen then UI.set("AutoGreen", true) end
+if Bot.sampleHoops ~= true then
+Bot.sampleHoops = true
+task.spawn(Bot.scanHoops)
+end
+notify("Auto play", "Bot is playing. Touch the stick to take over.", 3)
+else
+Bot.stopMove()
+Bot.setSprint(false)
+Bot.marker(nil)
+if Bot.oldStyle then
+S.ShotStyle, Bot.oldStyle = Bot.oldStyle, nil
+end
+Bot.status = "Off"
+end
+if Bot.apLabel then Bot.apLabel.Text = on and "Auto play: ON (tap to stop)" or "Auto play: OFF (tap to start)" end
+end
+function Bot.think()
+Bot.sample()
+local r, h = Mover.body(), hum()
+if not r or not h or h.Health <= 0 then
+Bot.stopMove()
+return
+end
+local active = S.AP or S.AG or S.AR or S.AB
+if not active then return end
+if #Bot.hoops == 0 and tick() - Bot.hoopsT > 10 and not Bot.scanning then
+Bot.scanning = true
+task.spawn(function()
+Bot.scanHoops()
+Bot.scanning = false
+end)
+end
+if Bot.userActive() then
+Bot.stopMove()
+Bot.setSprint(false)
+Bot.status = "You are driving"
+return
+end
+local me = r.Position
+local others = Bot.others()
+local hasBall = Feat.hasBall()
+pcall(Bot.blockStep, others, me)
+local now = tick()
+if now < Bot.chaseUntil and Bot.chaseRoot and Bot.chaseRoot.Parent then
+local to = flat(Bot.chaseRoot.Position - me)
+if to.Magnitude > 2 then Bot.move(to.Unit, 2.2) else Bot.stopMove() end
+Bot.faceAt(Bot.chaseRoot.Position)
+Bot.status = "Contesting the shot"
+return
+end
+local acted = false
+if S.AP then
+acted = Bot.play(me, others, hasBall)
+else
+if S.AR and not hasBall then acted = Bot.reboundStep(me) end
+if not acted and S.AG and not hasBall then acted = Bot.guardStep(me, others) end
+end
+if not acted then
+Bot.stopMove()
+Bot.setSprint(false)
+if not S.AP then Bot.status = "Waiting" end
+end
+end
+task.spawn(function()
+while JH.Running do
+pcall(Bot.think)
+pcall(Bot.noStunStep)
+task.wait(0.05)
+end
+end)
+pcall(function()
+local vu = game:GetService("VirtualUser")
+bind(LP.Idled, function()
+if S.AP and S.APAntiAfk then pcall(function() vu:CaptureController() vu:ClickButton2(Vector2.new()) end) end
+end)
+end)
+local oldUnload2 = JH.Unload
+function JH.Unload()
+Mover.override = nil
+Bot.cmd = nil
+if Bot.oldStyle then S.ShotStyle = Bot.oldStyle end
+if Bot.mk then pcall(function() Bot.mk:Destroy() end) end
+oldUnload2()
+end
+
+---------------------------------------------------------------------
+-- TABS
+---------------------------------------------------------------------
+local playersPage
+for _, p in ipairs(UI.pages) do
+if p.name == "Players" then playersPage = p end
+end
+if playersPage then
+local ns = UI.Card(playersPage, "No stun")
+UI.Toggle(ns, "No stun", "NoStun")
+UI.Note(ns, "Stops stun animations, clears stun flags on your character and gets you back up. It also learns new stun animations the game shows you.")
+end
+
+local GP = UI.Page("Auto Guard", "A")
+local g1 = UI.Card(GP, "Auto guard")
+UI.Toggle(g1, "Auto guard", "AG")
+UI.Dropdown(g1, "Who to guard", "AGTarget", { "Ball handler", "Closest to me", "Closest to hoop" })
+UI.Slider(g1, "Guard distance (studs in front)", "AGDist", 1, 12, 0.5, 1)
+UI.Slider(g1, "Guard speed", "AGSpeed", 0.5, 3, 0.1, 1, "x")
+UI.Slider(g1, "Strength (how hard it corrects)", "AGStrength", 0, 100, 5, 0, "%")
+UI.Slider(g1, "Reaction time", "AGReact", 0, 0.5, 0.01, 2, "s")
+UI.Slider(g1, "Prediction (looks ahead)", "AGPredict", 0, 0.6, 0.02, 2, "s")
+UI.Slider(g1, "Guard range", "AGRange", 10, 120, 5, 0, " studs")
+UI.Toggle(g1, "Stay in front no matter what", "AGLock")
+UI.Toggle(g1, "Face the player I guard", "AGFace")
+UI.Toggle(g1, "Sprint to catch up", "AGSprint")
+UI.Note(g1, "It stands between the player and the hoop, and leads where they are going. Stay in front no matter what ignores range and reaction and chases at double speed.")
+local g2 = UI.Card(GP, "Auto block")
+UI.Toggle(g2, "Auto block", "AB")
+UI.Slider(g2, "Block range", "ABRange", 4, 30, 1, 0, " studs")
+UI.Slider(g2, "Block timing (delay after the shot starts)", "ABDelay", 0, 0.5, 0.01, 2, "s")
+UI.Slider(g2, "Block chance", "ABChance", 0, 100, 5, 0, "%")
+UI.Toggle(g2, "Run at the shooter first", "ABChase")
+UI.Keybind(g2, "Block / jump key", function() return S.ABKey end, function(v) S.ABKey = (v ~= "" and v) or "Space" end)
+UI.Note(g2, "Blocks by jumping at the shooter. If your game blocks with another button, set it here.")
+
+local RP = UI.Page("Auto Rebound", "R")
+local r1 = UI.Card(RP, "Auto rebound")
+UI.Toggle(r1, "Auto rebound", "AR")
+UI.Slider(r1, "Speed", "ARSpeed", 0.5, 3, 0.1, 1, "x")
+UI.Slider(r1, "Reaction time", "ARReact", 0, 0.5, 0.01, 2, "s")
+UI.Slider(r1, "Range", "ARRange", 15, 150, 5, 0, " studs")
+UI.Toggle(r1, "Jump for the ball", "ARJump")
+UI.Toggle(r1, "Grab it with the ball magnet when close", "ARMagnet")
+UI.Slider(r1, "Grab distance", "ARMagRange", 3, 20, 1, 0, " studs")
+UI.Toggle(r1, "Show where the ball will land", "ARMarker")
+UI.Note(r1, "Follows the ball's path, runs to where it will come down at hand height, jumps and grabs it.")
+
+local AP = UI.Page("Auto Grind", "G")
+local a1 = UI.Card(AP, "Auto play")
+local _, apLabel = UI.Button(a1, S.AP and "Auto play: ON (tap to stop)" or "Auto play: OFF (tap to start)", function() Bot.setAP(not S.AP) end, true)
+Bot.apLabel = apLabel
+local statStat = UI.Stat(a1, "Doing")
+UI.Dropdown(a1, "Build", "APBuild", { "Big", "Small", "Wing", "Shooter" })
+UI.Note(a1, "Needs Auto Green on, and it turns it on for you. Touch the stick and the bot hands the game back to you.")
+local a2 = UI.Card(AP, "Big build")
+UI.Toggle(a2, "Post score (post up and score all game)", "APPostScore")
+UI.Slider(a2, "Post range from the hoop", "APPostRange", 4, 14, 0.5, 1, " studs")
+local a3 = UI.Card(AP, "Small build")
+UI.Toggle(a3, "All around score (dribble, shoot open, lay ups)", "APAllAround")
+UI.Toggle(a3, "Dribble moves", "APMoves")
+local a4 = UI.Card(AP, "Smart shots")
+UI.Slider(a4, "Open when defender is farther than", "APOpenDist", 2, 15, 0.5, 1, " studs")
+UI.Slider(a4, "Longest jumper", "APRange", 12, 40, 1, 0, " studs")
+UI.Toggle(a4, "Take threes", "APThree")
+UI.Toggle(a4, "Take lay ups and dunks", "APLayups")
+UI.Toggle(a4, "Drive to the hoop", "APDrive")
+UI.Slider(a4, "Time between shots", "APShotDelay", 0.3, 4, 0.1, 1, "s")
+local a5 = UI.Card(AP, "Movement")
+UI.Slider(a5, "Bot speed", "APSpeed", 0.5, 2, 0.1, 1, "x")
+UI.Toggle(a5, "Sprint", "APSprint")
+UI.Slider(a5, "Stop sprinting under this stamina", "APStaminaMin", 0, 80, 5, 0, "%")
+UI.Slider(a5, "Spot up distance", "APSpot", 12, 30, 1, 0, " studs")
+local a6 = UI.Card(AP, "Behaviour")
+UI.Toggle(a6, "Guard when the other team has the ball", "APDefend")
+UI.Toggle(a6, "Chase rebounds", "APRebound")
+UI.Toggle(a6, "Hand control back when I touch the stick", "APPause")
+UI.Toggle(a6, "Anti AFK", "APAntiAfk")
+UI.Dropdown(a6, "Teammates", "APTeam", { "By team", "Everyone is an opponent" })
+UI.Dropdown(a6, "Hoop to attack", "APHoop", { "Nearest", "Farthest" })
+UI.Button(a6, "Rescan hoops", function() task.spawn(Bot.scanHoops) end)
+UI.Button(a6, "Mark a hoop (stand under the rim first)", function()
+local r = Mover.body()
+if not r then return end
+local p = r.Position
+S.HoopMarks = (S.HoopMarks or "") .. string.format("%.1f,%.1f,%.1f;", p.X, p.Y + 8, p.Z)
+saveSoon()
+task.spawn(Bot.scanHoops)
+notify("Hoop", "Marked", 2)
+end)
+
+task.spawn(function()
+while JH.Running do
+if Window.Visible and UI.current and UI.current.name == "Auto Grind" then
+pcall(function() statStat.Text = Bot.status end)
+end
+task.wait(0.4)
+end
+end)
+
+-- UI customizations goes to the bottom of the tab list
+for _, p in ipairs(UI.pages) do
+if p.name == "UI" then p.lbl.Parent.LayoutOrder = 999 end
+end
+if S.AP then S.AP = false end
+task.spawn(Bot.scanHoops)
+end
 UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
@@ -7081,7 +7990,7 @@ local c = char()
 local a = c and c:GetAttribute("Action")
 if type(a) == "string" and a ~= last then
 last = a
-if a == "Gathering" and c:GetAttribute("GatherType") ~= "Pumpfake" then pcall(Glide.fire, "gather", "gather step") end
+if a == "Gathering" and Glide.gatherOk and Glide.gatherOk(c) then pcall(Glide.fire, "gather", "gather step") end
 end
 task.wait(0.03)
 end
@@ -7261,7 +8170,7 @@ local S = {
 	LogoSize = 58, LogoOpacity = 1, LogoAnim = true, LogoX = -1, LogoY = -1,
 	Blur = false, BlurSize = 10, Watermark = true, Notifications = true, Sounds = true, MenuKey = "RightShift",
 	-- main
-	Codes = "100M RELEASE 100KLIKES 500KMEMBERS SORRYFORBUGS", CodeRemotes = true,
+	Codes = "100M 100KLIKES 500KMEMBERS 100KCCUPLS RELEASE SORRYFORBUGS", CodeRemotes = true,
 	-- shooting
 	AutoGreen = true, AutoCalibrate = true, AutoTiming = true, ShotRelease = "Auto",
 	HoldTime = 0.55, MaxHold = 1.6, CalSpeed = 0.6, CalStep = 0.02,
@@ -7278,6 +8187,12 @@ local S = {
 	DribbleGlideSpeed = 1, ShotGlideSpeed = 1, GatherGlideSpeed = 1,
 	GfxLow = false, GfxEffects = false, GfxTextures = false, GfxShadows = false, GfxPost = false, GfxHideOthers = false, GfxCull = false,
 	GfxCullDist = 250, GfxBoost = false, GfxFpsCap = 0, PingStab = false, PingWindow = 3, FinalAdj = "",
+	ShotGlideMethod = "GameVel", NoStun = false, StunIds = "", HoopMarks = "",
+	AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
+	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
+	AR = false, ARSpeed = 1.3, ARReact = 0.05, ARRange = 70, ARJump = true, ARMagnet = true, ARMagRange = 8, ARMarker = false,
+	AP = false, APBuild = "Small", APPostScore = true, APAllAround = true, APOpenDist = 6, APRange = 24, APThree = true, APDrive = true, APLayups = true, APSprint = true, APMoves = true,
+	APShotDelay = 0.8, APDefend = true, APRebound = true, APAntiAfk = true, APPause = true, APStaminaMin = 20, APHoop = "Nearest", APPostRange = 8, APSpot = 22, APSpeed = 1, APTeam = "By team",
 	GlideFade = 60, GlideSmart = true, GlideStopAtWalls = false, GlideNeedBall = true, GlideMethod = "Auto",
 	DribbleKeys = "Z C X V", GatherKeys = "", DribbleBtnPaths = "", GatherBtnPaths = "",
 	AnimDribble = "", AnimGather = "", AnimShot = "",
@@ -7401,8 +8316,9 @@ if S.SettingsVer < 28 then
 	table.sort(parts)
 	S.ShotTimes = table.concat(parts, " ")
 end
-S.SettingsVer = 28
-DEFAULTS.SettingsVer = 28
+if S.SettingsVer < 29 then S.Codes = DEFAULTS.Codes end
+S.SettingsVer = 29
+DEFAULTS.SettingsVer = 29
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 S.ShotTimes = S.ShotTimes
 S.RecOn = false
@@ -9708,7 +10624,12 @@ function Glide.start(kind, power, duration, dirOverride)
 	if dir.Magnitude < 0.01 then return end
 	dir = dir.Unit
 	local method = S.GlideMethod
+	if kind == "shot" and S.ShotGlideMethod and S.ShotGlideMethod ~= "Auto" then method = S.ShotGlideMethod end
 	if method == "Auto" then method = Glide.chain[Glide.cur] end
+	if method == "GameVel" then
+	local gpm = Mover.playerModule()
+	if not (gpm and gpm.Character and gpm.Character.Movement and typeof(gpm.Character.Movement.CFVelocity) == "Vector3") then method = "CFrame" end
+	end
 	-- a new glide replaces the running one instead of stacking speed
 	Glide.token = Glide.token + 1
 	local token = Glide.token
@@ -11286,6 +12207,7 @@ function Rec.hook()
 						local v = ...
 						if typeof(v) == "Vector3" then
 							Mover.gameDir, Mover.gameDirT = v, tick()
+							if Mover.override and tick() - (Mover.overrideT or 0) < 0.4 and v.Magnitude < 0.3 then return old(self, Mover.override, select(2, ...)) end
 							local okc, s = pcall(Mover.outScale)
 							if okc and s > 1.001 and v.Magnitude > 0.05 then
 								if Rec.on then task.defer(Rec.remote, self, method, table.pack(v * s), string.format("boosted x%.2f", s)) end
@@ -13388,6 +14310,7 @@ do
 	UI.Toggle(sg, "Shot Glide", "ShotGlide")
 	UI.Slider(sg, "Glide power", "ShotGlidePower", 1, 80, 1, 0)
 	UI.Slider(sg, "Glide speed", "ShotGlideSpeed", 0.5, 3, 0.1, 1, "x")
+	UI.Dropdown(sg, "Shot glide method", "ShotGlideMethod", { "GameVel", "CFrame", "Velocity", "Auto" })
 	UI.Slider(sg, "Time", "ShotGlideTime", 0.05, 1, 0.01, 2, "s")
 
 	local gt = UI.Card(P, "Gather Step Glide")
@@ -13759,7 +14682,7 @@ function Glide.judge(kind, method, startPos, dir, expected, why)
 	Glide.fails = Glide.fails + 1
 	if Glide.fails < 3 then return end
 	Glide.fails = 0
-	if S.GlideMethod == "Auto" then
+	if S.GlideMethod == "Auto" and not (kind == "shot" and S.ShotGlideMethod ~= "Auto") then
 		Glide.cur = Glide.cur % #Glide.chain + 1
 		notify("Glide", "not yet, trying " .. Glide.chain[Glide.cur], 2)
 	else
@@ -13780,13 +14703,19 @@ function Glide.start(kind, power, duration, dirOverride)
 	if dir.Magnitude < 0.01 then return end
 	dir = dir.Unit
 	local method = S.GlideMethod
+	if kind == "shot" and S.ShotGlideMethod and S.ShotGlideMethod ~= "Auto" then method = S.ShotGlideMethod end
 	if method == "Auto" then method = Glide.chain[Glide.cur] end
+	if method == "GameVel" then
+	local gpm = Mover.playerModule()
+	if not (gpm and gpm.Character and gpm.Character.Movement and typeof(gpm.Character.Movement.CFVelocity) == "Vector3") then method = "CFrame" end
+	end
 	Glide.token = Glide.token + 1
 	local token = Glide.token
 	local startPos = r.Position
 	local why = Glide.why
 	local walk = flat(intent) * Speed.gameWS
 	local total = power * duration * 0.8
+	local gbase = Mover.gameVel() or Vector3.new(0, 0, 0)
 	local applied, finished, startedAt = 0, false, now
 	if method == "Input" then
 		Glide.input = { untilT = now + duration, scale = 1 + power / math.max(Speed.gameWS, 1), dir = dir, t0 = now, nextSend = 0 }
@@ -13838,6 +14767,15 @@ function Glide.start(kind, power, duration, dirOverride)
 			return "stop"
 		end
 		local factor = 1.6 * (1 - p)
+		if method == "GameVel" then
+		local gpm = Mover.playerModule()
+		local gmv = gpm and gpm.Character and gpm.Character.Movement
+		if gmv and typeof(gmv.CFVelocity) == "Vector3" then
+		local gv = gmv.CFVelocity
+		gmv.CFVelocity = Vector3.new(gbase.X + dir.X * power * factor, gv.Y, gbase.Z + dir.Z * power * factor)
+		end
+		return nil
+		end
 		if method == "Impulse" or method == "CFrame" then return nil end
 		if method == "AttrBoost" then
 			local c = char()
@@ -14507,6 +15445,886 @@ do
 	Ping.trim(S.PingStab)
 	Gfx.onChange()
 end
+-- GLIDE RULES, CODES, AUTO GUARD, AUTO BLOCK, AUTO REBOUND, AUTO GRIND, NO STUN
+do
+	-- gather glide is only for hop steps and euro steps, step backs belong to the dribble glide
+	Mover.GATHER_MOVES = { "euro", "hop", "gather" }
+	local STEP_BACK = { "stepback", "step back" }
+	local SHOT_MOVES = { "shot", "shoot", "jumper", "layup", "dunk", "fade", "floater", "hook" }
+
+	function Glide.cancel()
+		Glide.token = Glide.token + 1
+		Glide.input = nil
+		local c = char()
+		if c then
+			c:SetAttribute("SpeedBoost", 0)
+			c:SetAttribute("SpeedBoostTime", 0)
+			c:SetAttribute("AccelerationBoost", 0)
+		end
+	end
+	function Glide.gatherOk(c)
+		local gt = string.lower(tostring(c:GetAttribute("GatherType") or ""))
+		local pk = string.lower(tostring(c:GetAttribute("LastDribblePackage") or ""))
+		if string.find(gt, "pump", 1, true) then return false end
+		if matchAny(gt, STEP_BACK) or matchAny(pk, STEP_BACK) then return false end
+		return true
+	end
+
+	function Mover.onDribble(args)
+		Anim.lastDribble = tick()
+		local c0 = char()
+		local pk0 = c0 and c0:GetAttribute("LastDribblePackage")
+		local dir = Mover.moveWhere(1.5)
+		if not dir and typeof(args[3]) == "Vector3" and flat(args[3]).Magnitude > 0.1 then dir = flat(args[3]) end
+		task.spawn(function()
+			local t0 = tick()
+			while JH.Running and tick() - t0 < 0.1 do
+				local cc = char()
+				if cc and cc:GetAttribute("LastDribblePackage") ~= pk0 then break end
+				RunService.Heartbeat:Wait()
+			end
+			if not JH.Running then return end
+			local c = char()
+			local pkg = c and c:GetAttribute("LastDribblePackage")
+			local name = type(pkg) == "string" and string.lower(pkg) or ""
+			if matchAny(name, SHOT_MOVES) then return end
+			if matchAny(name, STEP_BACK) then
+				local body = Mover.body()
+				local back = body and -flat(body.CFrame.LookVector) or dir
+				Glide.fire("dribble", "step back " .. name, back)
+				return
+			end
+			dir = Mover.moveWhere(1.5) or dir
+			if matchAny(name, Mover.GATHER_MOVES) then
+				Glide.fire("gather", "gather move " .. name, dir)
+			else
+				Glide.fire("dribble", "dribble move " .. (name ~= "" and name or tostring(args[1])), dir)
+			end
+		end)
+	end
+
+	-- a running dribble or gather glide stops the moment a shot starts, and the shot glide does its own thing
+	local baseShoot = Shot.onShootCall
+	function Shot.onShootCall(args)
+		local d = args[1]
+		if type(d) == "table" and d.Shoot == true then pcall(Glide.cancel) end
+		return baseShoot(args)
+	end
+	function Mover.watchShot(pressT)
+		task.defer(function()
+			local h, r = hum(), Mover.body()
+			local stick
+			if h and r then
+				local okI, intent = pcall(Mover.intent, h, r)
+				if okI and intent and intent.Magnitude > 0.1 then stick = flat(intent) end
+			end
+			local t0 = tick()
+			while JH.Running and tick() - t0 < 0.35 and Shot.meterT < pressT - 0.05 do RunService.Heartbeat:Wait() end
+			if not JH.Running or Shot.meterT < pressT - 0.05 then return end
+			local c = char()
+			local anim = string.lower(tostring(c and c:GetAttribute("BaseAnimation") or ""))
+			local body = Mover.body()
+			local dir = stick
+			if not dir and body and matchAny(anim, { "fade", "stepback", "step back" }) then dir = -flat(body.CFrame.LookVector) end
+			if not dir then dir = Mover.moveWhere(1.5) end
+			if not dir and body then dir = flat(body.CFrame.LookVector) end
+			Glide.lastStart.shot = 0
+			Glide.fire("shot", "shot", dir)
+		end)
+	end
+
+	---------------------------------------------------------------------
+	-- CODES
+	---------------------------------------------------------------------
+	Net.KNOWN_CODES = { "100M", "100KLIKES", "500KMEMBERS", "100KCCUPLS", "RELEASE", "SORRYFORBUGS" }
+	function Net.gameCodes()
+		local found = {}
+		if type(getloadedmodules) ~= "function" then return found end
+		local okl, mods = pcall(getloadedmodules)
+		if not okl or type(mods) ~= "table" then return found end
+		local function walk(t, depth)
+			if depth > 3 then return end
+			for k, v in pairs(t) do
+				if type(k) == "string" and #k >= 3 and #k <= 24 and string.find(k, "^[%u%d_]+$") and string.find(k, "%u") then found[k] = true end
+				if type(v) == "table" then pcall(walk, v, depth + 1) end
+			end
+		end
+		for _, m in ipairs(mods) do
+			local okp, path = pcall(Bar.pathOf, m)
+			if okp and string.find(string.lower(path), "code", 1, true) then
+				local okr, res = pcall(require, m)
+				if okr and type(res) == "table" then pcall(walk, res, 0) end
+			end
+		end
+		return found
+	end
+	function Net.redeemViaRemotes(list)
+		local remotes = {}
+		for _, d in ipairs(ReplicatedStorage:GetDescendants()) do
+			if (d:IsA("RemoteEvent") or d:IsA("RemoteFunction")) and matchAny(string.lower(d.Name), { "code", "redeem", "promo", "coupon" }) then
+				remotes[#remotes + 1] = d
+			end
+		end
+		if #remotes == 0 then return false end
+		for _, code in ipairs(list) do
+			for _, rm in ipairs(remotes) do
+				if rm:IsA("RemoteFunction") then
+					task.spawn(function()
+						local ok, res = pcall(function() return rm:InvokeServer(code) end)
+						log("Code " .. code .. " via " .. rm.Name .. ": " .. tostring(ok and res or "error"))
+					end)
+				else
+					pcall(function() rm:FireServer(code) end)
+					pcall(function() rm:FireServer({ Code = code }) end)
+					log("Code " .. code .. " sent via " .. rm.Name)
+				end
+			end
+			task.wait(1.2)
+		end
+		return true
+	end
+	function Net.redeemAll()
+		local seen, list = {}, {}
+		local function add(c)
+			c = trim(c)
+			if c ~= "" and not seen[c] then
+				seen[c] = true
+				list[#list + 1] = c
+			end
+		end
+		for _, c in ipairs(tokens(S.Codes)) do add(c) end
+		for _, c in ipairs(Net.KNOWN_CODES) do add(c) end
+		local fromGame = Net.gameCodes()
+		local extra = 0
+		for c in pairs(fromGame) do
+			if not seen[c] then extra = extra + 1 end
+			add(c)
+		end
+		notify("Codes", string.format("Trying %d codes (%d found inside the game).", #list, extra), 3)
+		local done = Net.redeemViaGui(list)
+		if not done and S.CodeRemotes then done = Net.redeemViaRemotes(list) end
+		if done then
+			notify("Codes", "Finished. Check your coins and rewards.", 4)
+		else
+			notify("Codes", "Open the Store, then the Codes box, once. Then press Redeem all codes again.", 5)
+		end
+	end
+
+	---------------------------------------------------------------------
+	-- NO STUN
+	---------------------------------------------------------------------
+	local STUN_WORDS = { "stun", "stagger", "knock", "dizzy", "daze", "ragdoll", "flinch", "faint", "hurt" }
+	local Bot = { hoops = {}, hoopsT = 0, track = setmetatable({}, { __mode = "k" }), cmd = nil, cmdT = 0, mul = 1, face = nil, faceT = 0,
+		shotSeen = setmetatable({}, { __mode = "k" }), btnCache = {}, sprinting = false, shotT = 0, moveT = 0, blockT = 0,
+		chaseUntil = 0, status = "Off", spot = nil, spotT = 0, ballT = 0, jumpT = 0 }
+	JH.api.Bot = Bot
+
+	function Bot.noStunStep()
+		if not S.NoStun then return end
+		local c, h = char(), hum()
+		if c then
+			if Bot.stunChar ~= c then
+				Bot.stunChar = c
+				bind(c.AttributeChanged, function(name)
+					local low = string.lower(name)
+					if S.NoStun and string.find(low, "stun", 1, true) and c:GetAttribute(name) then
+						local a = Anim.animator
+						local ok, list = pcall(function() return a and a:GetPlayingAnimationTracks() or {} end)
+						if ok then
+							for _, tr in ipairs(list) do
+								local id = Anim.idOf(tr)
+								if id ~= "" and not tr.Looped and not Anim.has("StunIds", id) then
+									S.StunIds = trim((S.StunIds or "") .. " " .. id)
+									saveSoon()
+								end
+							end
+						end
+					end
+				end)
+			end
+			for k, v in pairs(c:GetAttributes()) do
+				local low = string.lower(k)
+				if string.find(low, "stun", 1, true) or string.find(low, "ragdoll", 1, true) or string.find(low, "stagger", 1, true) then
+					if v == true then c:SetAttribute(k, false) elseif type(v) == "number" and v ~= 0 then c:SetAttribute(k, 0) end
+				end
+			end
+		end
+		if h then
+			pcall(function()
+				if h.PlatformStand then h.PlatformStand = false end
+				local st = h:GetState()
+				if st == Enum.HumanoidStateType.Ragdoll or st == Enum.HumanoidStateType.FallingDown then h:ChangeState(Enum.HumanoidStateType.GettingUp) end
+			end)
+		end
+		local a = Anim.animator
+		if a then
+			local ok, list = pcall(function() return a:GetPlayingAnimationTracks() end)
+			if ok then
+				for _, tr in ipairs(list) do
+					if Anim.has("StunIds", Anim.idOf(tr)) or matchAny(Anim.name(tr), STUN_WORDS) then pcall(function() tr:Stop(0) end) end
+				end
+			end
+		end
+	end
+
+	---------------------------------------------------------------------
+	-- BOT BASICS: players, hoops, movement
+	---------------------------------------------------------------------
+	function Bot.charOf(pl)
+		return pl.Character or (workspace:FindFirstChild("Characters") and workspace.Characters:FindFirstChild(pl.Name))
+	end
+	function Bot.hasBall(c)
+		local af = c:FindFirstChild("Attributes")
+		local bv = af and af:FindFirstChild("Basketball")
+		return (bv and bv.Value ~= nil) and true or false
+	end
+	function Bot.sample()
+		local now = tick()
+		for _, pl in ipairs(Players:GetPlayers()) do
+			if pl ~= LP then
+				local c = Bot.charOf(pl)
+				local root = c and (c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart)
+				if root then
+					local tr = Bot.track[root]
+					if not tr then
+						Bot.track[root] = { p = root.Position, t = now, v = Vector3.new(0, 0, 0) }
+					else
+						local dt = now - tr.t
+						if dt > 0.001 then
+							local nv = (root.Position - tr.p) / dt
+							tr.v = tr.v * 0.6 + Vector3.new(nv.X, 0, nv.Z) * 0.4
+							tr.p, tr.t = root.Position, now
+						end
+					end
+				end
+			end
+		end
+	end
+	function Bot.others()
+		local out = {}
+		for _, pl in ipairs(Players:GetPlayers()) do
+			if pl ~= LP then
+				local c = Bot.charOf(pl)
+				local root = c and (c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart)
+				local hm = c and c:FindFirstChildOfClass("Humanoid")
+				if root and hm and hm.Health > 0 then
+					local tr = Bot.track[root]
+					out[#out + 1] = { pl = pl, c = c, root = root, pos = root.Position, vel = tr and tr.v or Vector3.new(0, 0, 0),
+						mate = (S.APTeam == "By team" and LP.Team ~= nil and pl.Team == LP.Team) and true or false,
+						ball = Bot.hasBall(c), shooting = c:GetAttribute("Action") == "Shooting" }
+				end
+			end
+		end
+		return out
+	end
+	function Bot.scanHoops()
+		local list = {}
+		local function add(pos)
+			for _, h in ipairs(list) do
+				if (h - pos).Magnitude < 14 then return end
+			end
+			list[#list + 1] = pos
+		end
+		for x, y, z in string.gmatch(S.HoopMarks or "", "(%-?[%d%.]+),(%-?[%d%.]+),(%-?[%d%.]+)") do
+			add(Vector3.new(tonumber(x), tonumber(y), tonumber(z)))
+		end
+		local n = 0
+		for _, d in ipairs(workspace:GetDescendants()) do
+			n = n + 1
+			if n % 500 == 0 then task.wait() end
+			if d:IsA("BasePart") or d:IsA("Model") then
+				local nm = string.lower(d.Name)
+				if not string.find(nm, "ball", 1, true) and (nm == "rim" or nm == "hoop" or nm == "goal" or nm == "basket" or string.find(nm, "hoop", 1, true) or string.find(nm, "rim", 1, true) == 1) then
+					local ok, pos = pcall(function() return d:IsA("Model") and d:GetPivot().Position or d.Position end)
+					if ok then add(pos) end
+				end
+			end
+		end
+		Bot.hoops, Bot.hoopsT = list, tick()
+		log("Hoops found: " .. #list)
+	end
+	function Bot.nearestHoop(pos, far)
+		local best, bd
+		for _, h in ipairs(Bot.hoops) do
+			local d = flat(h - pos).Magnitude
+			if not bd or (far and d > bd) or (not far and d < bd) then best, bd = h, d end
+		end
+		return best
+	end
+	function Bot.attackHoop(pos)
+		local mode = S.APHoop
+		if mode == "Farthest" then return Bot.nearestHoop(pos, true) end
+		return Bot.nearestHoop(pos, false)
+	end
+	function Bot.move(dir, mul)
+		if dir.Magnitude > 1 then dir = dir.Unit end
+		Bot.cmd, Bot.cmdT, Bot.mul = dir, tick(), mul or 1
+		Mover.override, Mover.overrideT = dir, tick()
+	end
+	function Bot.stopMove()
+		Bot.cmd = nil
+		Mover.override = nil
+	end
+	function Bot.faceAt(pos)
+		local r = Mover.body()
+		if not r then return end
+		local d = flat(pos - r.Position)
+		if d.Magnitude > 0.5 then Bot.face, Bot.faceT = d.Unit, tick() end
+	end
+	function Bot.stamina()
+		local c = char()
+		local v = c and c:GetAttribute("Stamina")
+		if type(v) ~= "number" then return nil end
+		return v <= 1 and v * 100 or v
+	end
+	function Bot.setSprint(on)
+		if on then
+			local st = Bot.stamina()
+			if st and st <= S.APStaminaMin then on = false end
+		end
+		if on ~= Bot.sprinting then
+			Bot.sprinting = on
+			pcall(Input.action, "Sprint", on)
+		end
+	end
+	function Bot.findBtn(words)
+		local key = table.concat(words, "|")
+		local c = Bot.btnCache[key]
+		if c and tick() - c.t < 2 and (not c.obj or c.obj.Parent) then return c.obj end
+		local pg = LP:FindFirstChild("PlayerGui")
+		local found
+		if pg then
+			for _, d in ipairs(pg:GetDescendants()) do
+				if d:IsA("GuiButton") and not d:IsDescendantOf(gui) and visibleChain(d) then
+					local n = string.lower(d.Name .. " " .. (d:IsA("TextButton") and d.Text or ""))
+					if matchAny(n, words) then
+						found = d
+						break
+					end
+				end
+			end
+		end
+		Bot.btnCache[key] = { obj = found, t = tick() }
+		return found
+	end
+	function Bot.press(key, hold, words)
+		task.spawn(function()
+			Input.sendKey(key, true)
+			local btn = words and Bot.findBtn(words)
+			if btn then Input.fireGui(btn, true, true) end
+			task.wait(hold or 0.1)
+			Input.sendKey(key, false)
+			if btn then Input.fireGui(btn, false, true) end
+		end)
+	end
+	function Bot.userActive()
+		if not S.APPause then return false end
+		local d = Mover.gameDir
+		return d ~= nil and tick() - (Mover.gameDirT or 0) < 0.4 and flat(d).Magnitude > 0.35
+	end
+	bind(RunService.Stepped, function(_, dt)
+		if dt <= 0 or dt > 0.25 then return end
+		local r = Mover.body()
+		if not r then return end
+		local now = tick()
+		if Bot.cmd and now - Bot.cmdT < 0.35 and Bot.cmd.Magnitude > 0.05 then
+			r.CFrame = r.CFrame + Bot.cmd * Speed.gameWS * Bot.mul * dt
+			Mover.sync(r)
+		end
+		if Bot.face and now - Bot.faceT < 0.35 then
+			local p = r.Position
+			r.CFrame = CFrame.new(p, p + Bot.face)
+		end
+	end)
+
+	---------------------------------------------------------------------
+	-- AUTO GUARD AND AUTO BLOCK
+	---------------------------------------------------------------------
+	function Bot.pickTarget(others, me, forced)
+		local best, bd
+		local mode = forced or S.AGTarget
+		for _, o in ipairs(others) do
+			if not o.mate then
+				local d = flat(o.pos - me).Magnitude
+				local score = d
+				if mode == "Ball handler" then
+					score = o.ball and (d - 1000) or d
+				elseif mode == "Closest to hoop" then
+					local h = Bot.nearestHoop(o.pos)
+					score = h and flat(o.pos - h).Magnitude or d
+				end
+				if not bd or score < bd then best, bd = o, score end
+			end
+		end
+		return best
+	end
+	function Bot.guardStep(me, others, forced)
+		local t = Bot.pickTarget(others, me, forced)
+		if not t then return false end
+		local dist = flat(t.pos - me).Magnitude
+		if dist > S.AGRange and not S.AGLock then return false end
+		local now = tick()
+		local react = S.AGLock and 0 or S.AGReact
+		if not Bot.spot or Bot.spotTarget ~= t or now - Bot.spotT >= react then
+			local ppos = t.pos + t.vel * S.AGPredict
+			local hoop = Bot.nearestHoop(ppos)
+			local dirf = hoop and flat(hoop - ppos) or flat(t.vel)
+			if dirf.Magnitude < 0.1 then dirf = flat(me - ppos) end
+			if dirf.Magnitude < 0.1 then dirf = Vector3.new(0, 0, 1) end
+			Bot.spot, Bot.spotTarget, Bot.spotT = ppos + dirf.Unit * S.AGDist, t, now
+		end
+		local to = flat(Bot.spot - me)
+		local d = to.Magnitude
+		local strength = S.AGStrength / 100
+		local mul = S.AGSpeed * (0.7 + strength * 1.3)
+		if S.AGLock then mul = mul * 2 end
+		if d < 0.5 then
+			Bot.stopMove()
+		else
+			local gain = S.AGLock and 1 or math.min(1, d / (4 - 2.5 * strength))
+			Bot.move(to.Unit * gain, mul)
+		end
+		if S.AGFace then Bot.faceAt(t.pos) end
+		Bot.setSprint(S.AGSprint and d > 7)
+		Bot.status = "Guarding " .. t.pl.Name
+		return true
+	end
+	function Bot.blockStep(others, me)
+		if not S.AB then return end
+		local now = tick()
+		for _, o in ipairs(others) do
+			if not o.mate then
+				local was = Bot.shotSeen[o.c]
+				Bot.shotSeen[o.c] = o.shooting
+				if o.shooting and not was and now - Bot.blockT > 0.9 then
+					local dist = flat(o.pos - me).Magnitude
+					if dist <= S.ABRange and math.random(100) <= S.ABChance then
+						Bot.blockT = now
+						if S.ABChase then Bot.chaseUntil, Bot.chaseRoot = now + S.ABDelay + 0.35, o.root end
+						task.delay(S.ABDelay, function()
+							if JH.Running then Bot.press(S.ABKey, 0.18, { "jump", "block" }) end
+						end)
+					end
+				end
+			end
+		end
+	end
+
+	---------------------------------------------------------------------
+	-- AUTO REBOUND
+	---------------------------------------------------------------------
+	local rayParams = RaycastParams.new()
+	rayParams.FilterType = Enum.RaycastFilterType.Exclude
+	function Bot.predictBall(b)
+		local g = workspace.Gravity
+		local p, v = b.Position, b.AssemblyLinearVelocity
+		rayParams.FilterDescendantsInstances = { b, char() }
+		local hit = workspace:Raycast(p, Vector3.new(0, -300, 0), rayParams)
+		local floorY = hit and hit.Position.Y or (p.Y - 3)
+		local catchY = floorY + 4.5
+		local t = 0
+		if p.Y > catchY then
+			local disc = v.Y * v.Y + 2 * g * (p.Y - catchY)
+			t = (v.Y + math.sqrt(disc)) / g
+		else
+			t = 0.2
+		end
+		t = clamp(t, 0, 4)
+		return Vector3.new(p.X + v.X * t, floorY, p.Z + v.Z * t), t
+	end
+	function Bot.marker(pos)
+		if not S.ARMarker or not pos then
+			if Bot.mk then Bot.mk.Parent = nil end
+			return
+		end
+		if not Bot.mk then
+			local p = Instance.new("Part")
+			p.Name = "JHReboundMarker"
+			p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch = true, false, false, false
+			p.Shape = Enum.PartType.Ball
+			p.Size = Vector3.new(2, 2, 2)
+			p.Material = Enum.Material.Neon
+			p.Color = Color3.fromRGB(255, 221, 64)
+			p.Transparency = 0.35
+			Bot.mk = p
+		end
+		Bot.mk.Position = pos + Vector3.new(0, 1, 0)
+		Bot.mk.Parent = workspace
+	end
+	function Bot.reboundStep(me, r)
+		if not Feat.ballLoose() then
+			Bot.marker(nil)
+			return false
+		end
+		local b = Feat.findBall()
+		if not b or not b.Parent then return false end
+		if flat(b.Position - me).Magnitude > S.ARRange then return false end
+		local land, t = Bot.predictBall(b)
+		Bot.marker(land)
+		local to = flat(land - me)
+		local d = to.Magnitude
+		if d > 0.8 then
+			Bot.move(to.Unit, S.ARSpeed)
+			Bot.setSprint(d > 8)
+		else
+			Bot.stopMove()
+		end
+		local bd = flat(b.Position - me).Magnitude
+		local now = tick()
+		if S.ARJump and bd < 7 and b.Position.Y > me.Y + 1 and now - Bot.jumpT > 0.8 then
+			Bot.jumpT = now
+			Bot.press("Space", 0.15, { "jump" })
+		end
+		if S.ARMagnet and bd <= S.ARMagRange and now - Bot.ballT > 0.4 then
+			Bot.ballT = now
+			pcall(Feat.getBall, true)
+		end
+		Bot.status = string.format("Rebound (%.1fs)", t)
+		return true
+	end
+
+	---------------------------------------------------------------------
+	-- AUTO PLAY
+	---------------------------------------------------------------------
+	function Bot.shoot(hoop)
+		local now = tick()
+		if now - Bot.shotT < S.APShotDelay or Shot.busy then return end
+		Bot.shotT = now
+		if hoop then Bot.faceAt(hoop) end
+		Bot.stopMove()
+		if S.ShotStyle ~= "Tap" then
+			Bot.oldStyle = Bot.oldStyle or S.ShotStyle
+			S.ShotStyle = "Tap"
+		end
+		Input.action("Shoot", true)
+		task.delay(0.08, function() Input.action("Shoot", false) end)
+		Bot.status = "Shooting"
+	end
+	function Bot.nearestDefender(me, others)
+		local dd, dn = math.huge, nil
+		for _, o in ipairs(others) do
+			if not o.mate then
+				local d = flat(o.pos - me).Magnitude
+				if d < dd then dd, dn = d, o end
+			end
+		end
+		return dd, dn
+	end
+	function Bot.steer(me, hoop, others)
+		local toHoop = flat(hoop - me)
+		local steer = toHoop.Unit
+		local side = Vector3.new(-toHoop.Unit.Z, 0, toHoop.Unit.X)
+		for _, o in ipairs(others) do
+			if not o.mate then
+				local off = flat(o.pos - me)
+				local d = off.Magnitude
+				if d < 9 and off:Dot(toHoop) > 0 then
+					local s = off:Dot(side) > 0 and -1 or 1
+					steer = steer + side * s * (1 - d / 9) * 1.3
+				end
+			end
+		end
+		return steer.Unit
+	end
+	function Bot.offense(me, others)
+		local hoop = Bot.attackHoop(me)
+		if not hoop then
+			Bot.status = "No hoop found"
+			return false
+		end
+		local c = char()
+		if c and c:GetAttribute("Action") == "Shooting" then
+			Bot.stopMove()
+			return true
+		end
+		local dist = flat(hoop - me).Magnitude
+		local dd = Bot.nearestDefender(me, others)
+		local build = S.APBuild
+		local now = tick()
+		if build == "Big" and S.APPostScore then
+			if dist > S.APPostRange then
+				local tight = dd < 3.5
+				Bot.move(flat(hoop - me).Unit * (tight and 0.6 or 1), S.APSpeed * (tight and 0.8 or 1))
+				Bot.faceAt(hoop)
+				Bot.setSprint(false)
+				Bot.status = "Posting up"
+			else
+				Bot.shoot(hoop)
+			end
+			return true
+		end
+		if dist <= 9 and S.APLayups then
+			Bot.shoot(hoop)
+			return true
+		end
+		local open = dd >= S.APOpenDist
+		if open and dist <= S.APRange and (S.APThree or dist <= 22) and dist > 9 then
+			Bot.shoot(hoop)
+			return true
+		end
+		if build == "Shooter" and not open then
+			Bot.status = "Looking for an open look"
+		end
+		if S.APDrive or build == "Small" or build == "Wing" then
+			local dir = Bot.steer(me, hoop, others)
+			Bot.move(dir, S.APSpeed)
+			Bot.setSprint(S.APSprint and dist > 12)
+			Bot.status = "Driving"
+			if S.APMoves and dd < 7 and now - Bot.moveT > 1.4 + math.random() * 1.2 then
+				Bot.moveT = now
+				local keys = tokens(S.DribbleKeys)
+				if #keys > 0 then Bot.press(keys[math.random(#keys)], 0.06) end
+			end
+		else
+			Bot.stopMove()
+		end
+		return true
+	end
+	function Bot.offBall(me, others)
+		local hoop = Bot.attackHoop(me)
+		if not hoop then return false end
+		local now = tick()
+		if S.APBuild == "Big" and S.APPostScore then
+			local away = flat(me - hoop)
+			if away.Magnitude < 0.1 then away = Vector3.new(0, 0, 1) end
+			local spot = hoop + away.Unit * S.APPostRange
+			local to = flat(spot - me)
+			if to.Magnitude > 1.5 then Bot.move(to.Unit, S.APSpeed) else Bot.stopMove() end
+			Bot.faceAt(hoop)
+			Bot.status = "Sealing in the post"
+			return true
+		end
+		if not Bot.spotUp or now - Bot.spotUpT > 1.2 then
+			local best, bs
+			for i = 0, 11 do
+				local a = i * math.pi / 6
+				local p = hoop + Vector3.new(math.cos(a), 0, math.sin(a)) * S.APSpot
+				local score = 0
+				local md = math.huge
+				for _, o in ipairs(others) do
+					if not o.mate then md = math.min(md, flat(o.pos - p).Magnitude) end
+				end
+				score = math.min(md, 14) - flat(p - me).Magnitude * 0.15
+				if not bs or score > bs then best, bs = p, score end
+			end
+			Bot.spotUp, Bot.spotUpT = best, now
+		end
+		local to = flat(Bot.spotUp - me)
+		if to.Magnitude > 1.5 then Bot.move(to.Unit, S.APSpeed) else Bot.stopMove() end
+		Bot.faceAt(hoop)
+		Bot.status = "Spacing the floor"
+		return true
+	end
+	function Bot.play(me, others, hasBall)
+		if hasBall then return Bot.offense(me, others) end
+		local handler
+		for _, o in ipairs(others) do
+			if o.ball then handler = o end
+		end
+		if S.APRebound and Feat.ballLoose() and Bot.reboundStep(me) then return true end
+		if handler then
+			if handler.mate then return Bot.offBall(me, others) end
+			if S.APDefend then return Bot.guardStep(me, others, "Ball handler") end
+			return false
+		end
+		return Bot.offBall(me, others)
+	end
+	function Bot.setAP(on)
+		S.AP = on
+		if on then
+			if not S.AutoGreen then UI.set("AutoGreen", true) end
+			if Bot.sampleHoops ~= true then
+				Bot.sampleHoops = true
+				task.spawn(Bot.scanHoops)
+			end
+			notify("Auto play", "Bot is playing. Touch the stick to take over.", 3)
+		else
+			Bot.stopMove()
+			Bot.setSprint(false)
+			Bot.marker(nil)
+			if Bot.oldStyle then
+				S.ShotStyle, Bot.oldStyle = Bot.oldStyle, nil
+			end
+			Bot.status = "Off"
+		end
+		if Bot.apLabel then Bot.apLabel.Text = on and "Auto play: ON (tap to stop)" or "Auto play: OFF (tap to start)" end
+	end
+	function Bot.think()
+		Bot.sample()
+		local r, h = Mover.body(), hum()
+		if not r or not h or h.Health <= 0 then
+			Bot.stopMove()
+			return
+		end
+		local active = S.AP or S.AG or S.AR or S.AB
+		if not active then return end
+		if #Bot.hoops == 0 and tick() - Bot.hoopsT > 10 and not Bot.scanning then
+			Bot.scanning = true
+			task.spawn(function()
+				Bot.scanHoops()
+				Bot.scanning = false
+			end)
+		end
+		if Bot.userActive() then
+			Bot.stopMove()
+			Bot.setSprint(false)
+			Bot.status = "You are driving"
+			return
+		end
+		local me = r.Position
+		local others = Bot.others()
+		local hasBall = Feat.hasBall()
+		pcall(Bot.blockStep, others, me)
+		local now = tick()
+		if now < Bot.chaseUntil and Bot.chaseRoot and Bot.chaseRoot.Parent then
+			local to = flat(Bot.chaseRoot.Position - me)
+			if to.Magnitude > 2 then Bot.move(to.Unit, 2.2) else Bot.stopMove() end
+			Bot.faceAt(Bot.chaseRoot.Position)
+			Bot.status = "Contesting the shot"
+			return
+		end
+		local acted = false
+		if S.AP then
+			acted = Bot.play(me, others, hasBall)
+		else
+			if S.AR and not hasBall then acted = Bot.reboundStep(me) end
+			if not acted and S.AG and not hasBall then acted = Bot.guardStep(me, others) end
+		end
+		if not acted then
+			Bot.stopMove()
+			Bot.setSprint(false)
+			if not S.AP then Bot.status = "Waiting" end
+		end
+	end
+	task.spawn(function()
+		while JH.Running do
+			pcall(Bot.think)
+			pcall(Bot.noStunStep)
+			task.wait(0.05)
+		end
+	end)
+	pcall(function()
+		local vu = game:GetService("VirtualUser")
+		bind(LP.Idled, function()
+			if S.AP and S.APAntiAfk then pcall(function() vu:CaptureController() vu:ClickButton2(Vector2.new()) end) end
+		end)
+	end)
+	local oldUnload2 = JH.Unload
+	function JH.Unload()
+		Mover.override = nil
+		Bot.cmd = nil
+		if Bot.oldStyle then S.ShotStyle = Bot.oldStyle end
+		if Bot.mk then pcall(function() Bot.mk:Destroy() end) end
+		oldUnload2()
+	end
+
+	---------------------------------------------------------------------
+	-- TABS
+	---------------------------------------------------------------------
+	local playersPage
+	for _, p in ipairs(UI.pages) do
+		if p.name == "Players" then playersPage = p end
+	end
+	if playersPage then
+		local ns = UI.Card(playersPage, "No stun")
+		UI.Toggle(ns, "No stun", "NoStun")
+		UI.Note(ns, "Stops stun animations, clears stun flags on your character and gets you back up. It also learns new stun animations the game shows you.")
+	end
+
+	local GP = UI.Page("Auto Guard", "A")
+	local g1 = UI.Card(GP, "Auto guard")
+	UI.Toggle(g1, "Auto guard", "AG")
+	UI.Dropdown(g1, "Who to guard", "AGTarget", { "Ball handler", "Closest to me", "Closest to hoop" })
+	UI.Slider(g1, "Guard distance (studs in front)", "AGDist", 1, 12, 0.5, 1)
+	UI.Slider(g1, "Guard speed", "AGSpeed", 0.5, 3, 0.1, 1, "x")
+	UI.Slider(g1, "Strength (how hard it corrects)", "AGStrength", 0, 100, 5, 0, "%")
+	UI.Slider(g1, "Reaction time", "AGReact", 0, 0.5, 0.01, 2, "s")
+	UI.Slider(g1, "Prediction (looks ahead)", "AGPredict", 0, 0.6, 0.02, 2, "s")
+	UI.Slider(g1, "Guard range", "AGRange", 10, 120, 5, 0, " studs")
+	UI.Toggle(g1, "Stay in front no matter what", "AGLock")
+	UI.Toggle(g1, "Face the player I guard", "AGFace")
+	UI.Toggle(g1, "Sprint to catch up", "AGSprint")
+	UI.Note(g1, "It stands between the player and the hoop, and leads where they are going. Stay in front no matter what ignores range and reaction and chases at double speed.")
+	local g2 = UI.Card(GP, "Auto block")
+	UI.Toggle(g2, "Auto block", "AB")
+	UI.Slider(g2, "Block range", "ABRange", 4, 30, 1, 0, " studs")
+	UI.Slider(g2, "Block timing (delay after the shot starts)", "ABDelay", 0, 0.5, 0.01, 2, "s")
+	UI.Slider(g2, "Block chance", "ABChance", 0, 100, 5, 0, "%")
+	UI.Toggle(g2, "Run at the shooter first", "ABChase")
+	UI.Keybind(g2, "Block / jump key", function() return S.ABKey end, function(v) S.ABKey = (v ~= "" and v) or "Space" end)
+	UI.Note(g2, "Blocks by jumping at the shooter. If your game blocks with another button, set it here.")
+
+	local RP = UI.Page("Auto Rebound", "R")
+	local r1 = UI.Card(RP, "Auto rebound")
+	UI.Toggle(r1, "Auto rebound", "AR")
+	UI.Slider(r1, "Speed", "ARSpeed", 0.5, 3, 0.1, 1, "x")
+	UI.Slider(r1, "Reaction time", "ARReact", 0, 0.5, 0.01, 2, "s")
+	UI.Slider(r1, "Range", "ARRange", 15, 150, 5, 0, " studs")
+	UI.Toggle(r1, "Jump for the ball", "ARJump")
+	UI.Toggle(r1, "Grab it with the ball magnet when close", "ARMagnet")
+	UI.Slider(r1, "Grab distance", "ARMagRange", 3, 20, 1, 0, " studs")
+	UI.Toggle(r1, "Show where the ball will land", "ARMarker")
+	UI.Note(r1, "Follows the ball's path, runs to where it will come down at hand height, jumps and grabs it.")
+
+	local AP = UI.Page("Auto Grind", "G")
+	local a1 = UI.Card(AP, "Auto play")
+	local _, apLabel = UI.Button(a1, S.AP and "Auto play: ON (tap to stop)" or "Auto play: OFF (tap to start)", function() Bot.setAP(not S.AP) end, true)
+	Bot.apLabel = apLabel
+	local statStat = UI.Stat(a1, "Doing")
+	UI.Dropdown(a1, "Build", "APBuild", { "Big", "Small", "Wing", "Shooter" })
+	UI.Note(a1, "Needs Auto Green on, and it turns it on for you. Touch the stick and the bot hands the game back to you.")
+	local a2 = UI.Card(AP, "Big build")
+	UI.Toggle(a2, "Post score (post up and score all game)", "APPostScore")
+	UI.Slider(a2, "Post range from the hoop", "APPostRange", 4, 14, 0.5, 1, " studs")
+	local a3 = UI.Card(AP, "Small build")
+	UI.Toggle(a3, "All around score (dribble, shoot open, lay ups)", "APAllAround")
+	UI.Toggle(a3, "Dribble moves", "APMoves")
+	local a4 = UI.Card(AP, "Smart shots")
+	UI.Slider(a4, "Open when defender is farther than", "APOpenDist", 2, 15, 0.5, 1, " studs")
+	UI.Slider(a4, "Longest jumper", "APRange", 12, 40, 1, 0, " studs")
+	UI.Toggle(a4, "Take threes", "APThree")
+	UI.Toggle(a4, "Take lay ups and dunks", "APLayups")
+	UI.Toggle(a4, "Drive to the hoop", "APDrive")
+	UI.Slider(a4, "Time between shots", "APShotDelay", 0.3, 4, 0.1, 1, "s")
+	local a5 = UI.Card(AP, "Movement")
+	UI.Slider(a5, "Bot speed", "APSpeed", 0.5, 2, 0.1, 1, "x")
+	UI.Toggle(a5, "Sprint", "APSprint")
+	UI.Slider(a5, "Stop sprinting under this stamina", "APStaminaMin", 0, 80, 5, 0, "%")
+	UI.Slider(a5, "Spot up distance", "APSpot", 12, 30, 1, 0, " studs")
+	local a6 = UI.Card(AP, "Behaviour")
+	UI.Toggle(a6, "Guard when the other team has the ball", "APDefend")
+	UI.Toggle(a6, "Chase rebounds", "APRebound")
+	UI.Toggle(a6, "Hand control back when I touch the stick", "APPause")
+	UI.Toggle(a6, "Anti AFK", "APAntiAfk")
+	UI.Dropdown(a6, "Teammates", "APTeam", { "By team", "Everyone is an opponent" })
+	UI.Dropdown(a6, "Hoop to attack", "APHoop", { "Nearest", "Farthest" })
+	UI.Button(a6, "Rescan hoops", function() task.spawn(Bot.scanHoops) end)
+	UI.Button(a6, "Mark a hoop (stand under the rim first)", function()
+		local r = Mover.body()
+		if not r then return end
+		local p = r.Position
+		S.HoopMarks = (S.HoopMarks or "") .. string.format("%.1f,%.1f,%.1f;", p.X, p.Y + 8, p.Z)
+		saveSoon()
+		task.spawn(Bot.scanHoops)
+		notify("Hoop", "Marked", 2)
+	end)
+
+	task.spawn(function()
+		while JH.Running do
+			if Window.Visible and UI.current and UI.current.name == "Auto Grind" then
+				pcall(function() statStat.Text = Bot.status end)
+			end
+			task.wait(0.4)
+		end
+	end)
+
+	-- UI customizations goes to the bottom of the tab list
+	for _, p in ipairs(UI.pages) do
+		if p.name == "UI" then p.lbl.Parent.LayoutOrder = 999 end
+	end
+	if S.AP then S.AP = false end
+	task.spawn(Bot.scanHoops)
+end
 UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
@@ -14572,7 +16390,7 @@ task.spawn(function()
 		local a = c and c:GetAttribute("Action")
 		if type(a) == "string" and a ~= last then
 			last = a
-			if a == "Gathering" and c:GetAttribute("GatherType") ~= "Pumpfake" then pcall(Glide.fire, "gather", "gather step") end
+			if a == "Gathering" and Glide.gatherOk and Glide.gatherOk(c) then pcall(Glide.fire, "gather", "gather step") end
 		end
 		task.wait(0.03)
 	end
