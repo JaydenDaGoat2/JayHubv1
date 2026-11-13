@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.31 shot-line"
+local VERSION = "v1.31b shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -130,7 +130,7 @@ Codes = "100M RELEASE 100KLIKES 500KMEMBERS SORRYFORBUGS", CodeRemotes = true,
 AutoGreen = true, AutoCalibrate = true, AutoTiming = true, ShotRelease = "Auto",
 HoldTime = 0.55, MaxHold = 1.6, CalSpeed = 0.6, CalStep = 0.02,
 ShotTimes = "", ShotRatio = 0, BarPath = "", BarProp = "", BarAt = 0, BarNudge = 0,
-ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, PeakLead = 0.027, FinderCat = "Jump shots", PerfectGreen = false, PerfectGreenPct = 100, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, Lightning = true, BoltCount = 6, BoltSpeed = 1, BoltThick = 2, BoltBright = 0.9, BoltColor = "White + Yellow", BgMove = true, BgGlow = 0.5, BgOrbs = true, AccentMode = "Gold", OutlineSpeed = 1, LogoStyle = "J bolt H", LogoBg = true, Preset = "Lightning Gold", PacketOn = true, PacketMul = 1,
+ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, PeakLead = 0.027, PerfectGreen = false, PerfectGreenPct = 100, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, Lightning = true, BoltCount = 6, BoltSpeed = 1, BoltThick = 2, BoltBright = 0.9, BoltColor = "White + Yellow", BgMove = true, BgGlow = 0.5, BgOrbs = true, AccentMode = "Gold", OutlineSpeed = 1, LogoStyle = "J bolt H", LogoBg = true, Preset = "Lightning Gold", PacketOn = true, PacketMul = 1,
 MovingOffset = 0, SprintOffset = 0, PingComp = 0, Humanize = 0, Nudge = 0, GreenSound = true,
 HookShootButton = true, ShootButtonPath = "", ReleaseMethod = "Both", FireClick = true,
 ManualAssist = true, ShootKey = "E", SprintKey = "LeftShift",
@@ -232,7 +232,6 @@ S.ShotTimes = table.concat(parts, " ")
 end
 if S.AutoCal == nil then S.AutoCal = true end
 if S.PerfectGreen == nil then S.PerfectGreen = false end
-if S.FinderCat == nil then S.FinderCat = "Jump shots" end
 if S.PeakLead == nil then S.PeakLead = 0.027 end
 if S.PerfectGreenPct == nil then S.PerfectGreenPct = 100 end
 if S.AutoTimes == nil then S.AutoTimes = "" end
@@ -1051,7 +1050,6 @@ function Anim.handle(track)
 local n = Anim.name(track)
 if track.Looped and matchAny(n, { "dribble", "ball", "handle" }) then Anim.loops[track] = true end
 Shot.noteTrack(track)
-pcall(Anim.fndTrack, track)
 local kind, how = Anim.classify(track)
 if Rec.on then
 Rec.add("anim", string.format("%s id=%s len=%.2f prio=%s looped=%s speed=%s -> %s", (track.Name or "") ~= "" and track.Name or "?",
@@ -1084,209 +1082,6 @@ for track in pairs(Anim.seen) do
 if not playing[track] then Anim.seen[track] = nil end
 end
 end
-Anim.fnd = { entries = {}, byNorm = {}, cur = nil, scanned = false, scanning = false, lastAttr = nil, lastAction = nil, count = 0 }
-Anim.FND_CATS = { "Jump shots", "Layups", "Reverse layups", "Floaters", "Dunks", "Standing dunks", "Reverse dunks", "Posts", "Other shots" }
-local function fndNorm(s) return string.lower((string.gsub(tostring(s), "[%s_%-]", ""))) end
-function Anim.fndCat(name, path)
-local l = fndNorm(name)
-path = path or ""
-if string.find(path, "landings", 1, true) then return nil end
-if string.find(path, "dunking", 1, true) then
-if string.find(path, "/reverse", 1, true) then return "Reverse dunks" end
-if string.find(path, "/standing", 1, true) then return "Standing dunks" end
-return "Dunks"
-end
-if string.find(l, "standing", 1, true) and string.find(l, "dunk", 1, true) then return "Standing dunks" end
-if string.find(l, "reverse", 1, true) and (string.find(l, "slam", 1, true) or string.find(l, "dunk", 1, true)) then return "Reverse dunks" end
-for _, w in ipairs({ "dunk", "slam", "tomahawk", "windmill", "rimgrazer", "alleyoop" }) do
-if string.find(l, w, 1, true) then return "Dunks" end
-end
-if string.find(l, "reverselay", 1, true) then return "Reverse layups" end
-if string.find(l, "floater", 1, true) then return "Floaters" end
-for _, w in ipairs({ "layup", "scoop", "euro", "fingerroll" }) do
-if string.find(l, w, 1, true) then return "Layups" end
-end
-if string.find(l, "post", 1, true) or string.find(l, "hook", 1, true) then return "Posts" end
-for _, w in ipairs({ "jumpshot", "jumper" }) do
-if string.find(l, w, 1, true) then return "Jump shots" end
-end
-for _, w in ipairs({ "closeshot", "closefade", "fadeaway", "movingshot", "freethrow", "underrim" }) do
-if string.find(l, w, 1, true) then return "Other shots" end
-end
-return nil
-end
-function Anim.fndAdd(name, cat, detail)
-local f = Anim.fnd
-local n = fndNorm(name)
-local e = f.byNorm[n]
-if e then
-if detail and (not e.detail or e.detail == "") then e.detail = detail end
-return e
-end
-e = { name = name, cat = cat, norm = n, detail = detail or "", count = 0 }
-f.byNorm[n] = e
-f.entries[#f.entries + 1] = e
-return e
-end
-function Anim.fndBaseline()
-for n = 1, 16 do Anim.fndAdd("Jumpshot " .. n, "Jump shots", "shot package " .. n) end
-Anim.fndAdd("Layup", "Layups", "packages 1 to 4")
-Anim.fndAdd("InsideHandLayup", "Layups")
-Anim.fndAdd("OppositeLayup", "Layups")
-Anim.fndAdd("ReverseLayup", "Reverse layups")
-Anim.fndAdd("Floater", "Floaters", "packages 1 to 4")
-for _, nm in ipairs({ "PostFade", "PostHook", "SpinHook", "SpinPostFade", "StepPostFade" }) do Anim.fndAdd(nm, "Posts") end
-for _, nm in ipairs({ "CloseFade", "CloseShot", "FadeAway", "FreeThrow", "MovingShot", "UnderRimCloseShot" }) do Anim.fndAdd(nm, "Other shots") end
-for _, nm in ipairs({ "DunkTest", "Eastbay", "OffOneOneHandedLebronSlam", "OffOneOneHandedWindmill", "OffTwoOneHandedPaul", "OffTwoTest",
-"OneHandedOffOneInsideHand", "OneHandedOffOneRimGrazer", "OneHandedOffOneSideTomahawk", "OneHandedOffOneZionSlam", "OneHandedOffTwoBetweenTheLegs",
-"OneHandedOffTwoTomahawk", "OneHandedOffTwoWindmill", "TwoHandedOffOneReverseWindmill", "TwoHandedOffOneRimGrazer",
-"TwoHandedOffTwoBackScratcherHang", "TwoHandedOffTwoKobe360Slam", "TwoHandedOffTwoSideClutch", "TwoHandedOffTwoWestbrookSlam",
-"Under", "Woah", "Woah2", "Woah3", "Woah4" }) do Anim.fndAdd(nm, "Dunks") end
-for _, nm in ipairs({ "OneHandedOffTwoStandingDunk", "TwoHandedOffTwoBackScratcherStandingDunk", "TwoHandedOffTwoStandingDunk" }) do Anim.fndAdd(nm, "Standing dunks") end
-Anim.fndAdd("OffTwoOneHandedReverseSlam", "Reverse dunks")
-end
-function Anim.fndScan()
-local f = Anim.fnd
-if f.scanned or f.scanning then return end
-f.scanning = true
-task.spawn(function()
-pcall(function()
-local n = 0
-for _, inst in ipairs(ReplicatedStorage:GetDescendants()) do
-n = n + 1
-if n % 1500 == 0 then task.wait() end
-local path, p, guard = "", inst.Parent, 0
-while p and p ~= ReplicatedStorage and guard < 30 do
-path = string.lower(p.Name) .. "/" .. path
-p = p.Parent
-guard = guard + 1
-end
-if inst:IsA("ModuleScript") or inst:IsA("Animation") then
-local num = string.match(path, "shooting/packages/(%d+)/$")
-if num then
-local cat = Anim.fndCat(inst.Name, "")
-if cat == "Jump shots" then
-local e = Anim.fndAdd("Jumpshot " .. num, cat, "shot package " .. num)
-pcall(function()
-local m = require(inst)
-if type(m) == "table" and type(m.Speed) == "number" then e.detail = string.format("shot package %s, speed %s", num, tostring(m.Speed)) end
-end)
-elseif cat then
-Anim.fndAdd(inst.Name, cat)
-end
-elseif string.find(path, "dunking/animations", 1, true) then
-local cat = Anim.fndCat(inst.Name, path)
-if cat then Anim.fndAdd(inst.Name, cat) end
-elseif inst:IsA("Animation") then
-local cat = Anim.fndCat(inst.Name, path)
-if cat then Anim.fndAdd(inst.Name, cat) end
-end
-end
-end
-end)
-f.scanned, f.scanning = true, false
-end)
-end
-function Anim.fndMatch(name)
-local f = Anim.fnd
-local l = fndNorm(name)
-local num = string.match(l, "^jumpshot(%d+)")
-if num and f.byNorm["jumpshot" .. num] then return f.byNorm["jumpshot" .. num] end
-local best, bl = nil, 0
-for _, e in ipairs(f.entries) do
-if #e.norm > bl and string.sub(l, 1, #e.norm) == e.norm and e.cat ~= "Jump shots" then best, bl = e, #e.norm end
-end
-return best
-end
-function Anim.fndSeen(name, fromAttr)
-if type(name) ~= "string" or name == "" then return end
-local f = Anim.fnd
-local e = Anim.fndMatch(name)
-if not e then
-local cat = Anim.fndCat(name, "") or (fromAttr and "Other shots")
-if not cat then return end
-e = Anim.fndAdd(name, cat)
-end
-e.anim = name
-e.count = e.count + 1
-e.t = tick()
-f.cur = e
-return e
-end
-function Anim.fndTrack(track)
-Anim.fndScan()
-local a = track.Animation
-local nm = a and a.Name or ""
-if nm == "" or nm == "Animation" then nm = track.Name or "" end
-if nm ~= "" and Anim.fndCat(nm, "") then Anim.fndSeen(nm, false) end
-end
-function Anim.fndStep()
-local f = Anim.fnd
-local c = char()
-if not c then return end
-local v = c:GetAttribute("BaseAnimation")
-local act = c:GetAttribute("Action")
-if f.lastAttr == nil then
-f.lastAttr = (type(v) == "string") and v or ""
-f.lastAction = act
-return
-end
-local isStr = type(v) == "string" and v ~= ""
-if isStr and (v ~= f.lastAttr or (act == "Shooting" and f.lastAction ~= "Shooting")) then
-f.lastAttr = v
-Anim.fndSeen(v, true)
-end
-f.lastAction = act
-end
-function Anim.fndResult(key)
-local c = char()
-local v = c and c:GetAttribute("BaseAnimation")
-if type(v) ~= "string" or v == "" then return end
-Shot.keyName[key] = v
-local e = Anim.fndMatch(v) or Anim.fndSeen(v, true)
-if e then e.key = key end
-end
-function Shot.keyStatus(key)
-if not key then return "" end
-local fin = Shot.FINAL[key]
-if fin then return string.format("locked %.3fs (built in)", fin) end
-Shot.autoLoad()
-local a = Shot.auto[key]
-if a and a.mode == "peak" then return string.format("%s %.0f ms before the peak", a.locked and "locked" or "learning", a.hold * 1000) end
-if a then return string.format("%s %.3fs", a.locked and "locked" or "learning", a.hold) end
-return ""
-end
-function Anim.fndSort(a, b)
-local na, nb = string.match(a.name, "^Jumpshot (%d+)$"), string.match(b.name, "^Jumpshot (%d+)$")
-if na and nb then return tonumber(na) < tonumber(nb) end
-return string.lower(a.name) < string.lower(b.name)
-end
-function Anim.fndList(cat)
-local f = Anim.fnd
-local rows = {}
-for _, e in ipairs(f.entries) do
-if e.cat == cat then rows[#rows + 1] = e end
-end
-table.sort(rows, Anim.fndSort)
-local lines = {}
-for _, e in ipairs(rows) do
-local s = (f.cur == e and "> " or "   ") .. e.name
-if e.anim and e.anim ~= e.name then s = s .. " [" .. e.anim .. "]" end
-local st = Shot.keyStatus(e.key)
-if st ~= "" then s = s .. "  -  " .. st end
-lines[#lines + 1] = s
-end
-if #lines == 0 then return "Nothing found here yet" end
-return table.concat(lines, "\n"), #rows
-end
-function Anim.fndNow()
-local e = Anim.fnd.cur
-if not e then return "-", "-", "-" end
-local ago = math.floor(math.max(0, tick() - (e.t or tick())))
-local st = Shot.keyStatus(e.key)
-return e.anim or e.name, string.format("%s  (%ds ago)", e.cat, ago), (st ~= "") and st or "-"
-end
-Anim.fndBaseline()
 function Anim.hookChar(c)
 task.spawn(function()
 local function find() return c:FindFirstChildOfClass("Humanoid") or c:FindFirstChildOfClass("AnimationController") or c:FindFirstChildWhichIsA("Animator", true) end
@@ -2038,28 +1833,6 @@ if S.PerfectGreen then ptxt = string.format("%.0f ms earlier (ping %.0f ms)", co
 return Shot.nameFor(cur.key, cur.anim), (cur.mode == "peak") and string.format("%.0f ms before the peak", cur.hold * 1000) or string.format("%.3fs", cur.hold), cur.state or "-", last,
 (#lines > 0) and table.concat(lines, "\n") or "No change yet", ptxt
 end
-function Shot.statusStep()
-local st = UI.autoStat
-if not st then return end
-local now = tick()
-if Shot.statusT and now - Shot.statusT < 0.25 then return end
-Shot.statusT = now
-local a, b, c, d, e, f = Shot.statusLines()
-st.shot.Text, st.timing.Text, st.state.Text, st.last.Text, st.adj.Text = a, b, c, d, e
-if st.ping then st.ping.Text = f end
-local fd = UI.finder
-if fd then
-pcall(Anim.fndStep)
-pcall(Anim.fndScan)
-local n1, n2, n3 = Anim.fndNow()
-fd.now.Text, fd.type.Text, fd.timing.Text = n1, n2, n3
-local txt, cnt = Anim.fndList(S.FinderCat or "Jump shots")
-if txt ~= fd.last then
-fd.last = txt
-fd.list.Text = txt
-end
-end
-end
 Shot.PING_REF = 0.022
 function Shot.pingNow()
 local ok, p = pcall(function() return LP:GetNetworkPing() end)
@@ -2286,7 +2059,6 @@ if info then
 local ch = char()
 Shot.last = { t = tick(), held = info.held, idx = info.idx, res = res, key = info.key }
 if Shot.cur and Shot.cur.key == info.key and ch then Shot.cur.anim = ch:GetAttribute("BaseAnimation") end
-pcall(Anim.fndResult, info.key)
 end
 if info and Shot.FINAL[info.key] then return end
 if info and Shot.autoLearn(info, res, strength) then return end
@@ -6111,14 +5883,6 @@ UI.Toggle(rc, "Record the game", "RecOn", function(v) if v then Rec.start() else
 R.rec = UI.Stat(rc, "Recorded")
 UI.Buttons(rc, { { "Copy recording", Rec.copy }, { "Clear", Rec.clear } })
 UI.Button(rc, "Copy remote spy (RSpy)", Rec.copySpy)
-local ag = UI.Card(P, "Auto Green status")
-UI.autoStat = { shot = UI.Stat(ag, "Jump shot"), timing = UI.Stat(ag, "Timing"), state = UI.Stat(ag, "State"), last = UI.Stat(ag, "Last shot"), ping = UI.Stat(ag, "Ping fix"),
-adj = UI.Note(ag, "No change yet") }
-local fc = UI.Card(P, "Shot finder")
-UI.finder = { now = UI.Stat(fc, "You are on"), type = UI.Stat(fc, "Type"), timing = UI.Stat(fc, "Auto Green"), last = nil }
-UI.Dropdown(fc, "Show", "FinderCat", Anim.FND_CATS, function() if UI.finder then UI.finder.last = nil end Shot.statusT = nil end)
-UI.finder.list = UI.Note(fc, "Loading the game's moves")
-UI.Button(fc, "Rescan the game", function() Anim.fnd.scanned = false Anim.fndScan() end)
 local sr = UI.Card(P, "Shot recorder")
 UI.Toggle(sr, "Record shots (turn off to copy everything)", "RecShots", function(v) if v then Rec.shotStart() else Rec.shotStop() end end)
 UI.Toggle(sr, "Sweep timings while recording", "Sweep")
@@ -6537,7 +6301,6 @@ end)
 task.spawn(function()
 while JH.Running do
 pcall(Feat.magnetStep)
-pcall(Shot.statusStep)
 pcall(Feat.V.step)
 task.wait(0.05)
 end
@@ -6625,7 +6388,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.31 shot-line"
+local VERSION = "v1.31b shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -6715,7 +6478,7 @@ local S = {
 	AutoGreen = true, AutoCalibrate = true, AutoTiming = true, ShotRelease = "Auto",
 	HoldTime = 0.55, MaxHold = 1.6, CalSpeed = 0.6, CalStep = 0.02,
 	ShotTimes = "", ShotRatio = 0, BarPath = "", BarProp = "", BarAt = 0, BarNudge = 0,
-	ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, PeakLead = 0.027, FinderCat = "Jump shots", PerfectGreen = false, PerfectGreenPct = 100, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, Lightning = true, BoltCount = 6, BoltSpeed = 1, BoltThick = 2, BoltBright = 0.9, BoltColor = "White + Yellow", BgMove = true, BgGlow = 0.5, BgOrbs = true, AccentMode = "Gold", OutlineSpeed = 1, LogoStyle = "J bolt H", LogoBg = true, Preset = "Lightning Gold", PacketOn = true, PacketMul = 1,
+	ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 60, Learn = false, PeakLead = 0.027, PerfectGreen = false, PerfectGreenPct = 100, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, Lightning = true, BoltCount = 6, BoltSpeed = 1, BoltThick = 2, BoltBright = 0.9, BoltColor = "White + Yellow", BgMove = true, BgGlow = 0.5, BgOrbs = true, AccentMode = "Gold", OutlineSpeed = 1, LogoStyle = "J bolt H", LogoBg = true, Preset = "Lightning Gold", PacketOn = true, PacketMul = 1,
 	MovingOffset = 0, SprintOffset = 0, PingComp = 0, Humanize = 0, Nudge = 0, GreenSound = true,
 	HookShootButton = true, ShootButtonPath = "", ReleaseMethod = "Both", FireClick = true,
 	ManualAssist = true, ShootKey = "E", SprintKey = "LeftShift",
@@ -6824,7 +6587,6 @@ if S.SettingsVer < 13 then
 end
 if S.AutoCal == nil then S.AutoCal = true end
 if S.PerfectGreen == nil then S.PerfectGreen = false end
-if S.FinderCat == nil then S.FinderCat = "Jump shots" end
 if S.PeakLead == nil then S.PeakLead = 0.027 end
 if S.PerfectGreenPct == nil then S.PerfectGreenPct = 100 end
 if S.AutoTimes == nil then S.AutoTimes = "" end
@@ -7703,7 +7465,6 @@ function Anim.handle(track)
 	local n = Anim.name(track)
 	if track.Looped and matchAny(n, { "dribble", "ball", "handle" }) then Anim.loops[track] = true end
 	Shot.noteTrack(track)
-	pcall(Anim.fndTrack, track)
 	local kind, how = Anim.classify(track)
 	if Rec.on then
 		Rec.add("anim", string.format("%s id=%s len=%.2f prio=%s looped=%s speed=%s -> %s", (track.Name or "") ~= "" and track.Name or "?",
@@ -7737,215 +7498,6 @@ function Anim.poll()
 		if not playing[track] then Anim.seen[track] = nil end
 	end
 end
--- SHOT FINDER: every jump shot, layup, floater, reverse layup, dunk, standing dunk and post move the game has, by its real name,
--- and which one you are on
-Anim.fnd = { entries = {}, byNorm = {}, cur = nil, scanned = false, scanning = false, lastAttr = nil, lastAction = nil, count = 0 }
-Anim.FND_CATS = { "Jump shots", "Layups", "Reverse layups", "Floaters", "Dunks", "Standing dunks", "Reverse dunks", "Posts", "Other shots" }
-local function fndNorm(s) return string.lower((string.gsub(tostring(s), "[%s_%-]", ""))) end
-function Anim.fndCat(name, path)
-	local l = fndNorm(name)
-	path = path or ""
-	if string.find(path, "landings", 1, true) then return nil end
-	if string.find(path, "dunking", 1, true) then
-		if string.find(path, "/reverse", 1, true) then return "Reverse dunks" end
-		if string.find(path, "/standing", 1, true) then return "Standing dunks" end
-		return "Dunks"
-	end
-	if string.find(l, "standing", 1, true) and string.find(l, "dunk", 1, true) then return "Standing dunks" end
-	if string.find(l, "reverse", 1, true) and (string.find(l, "slam", 1, true) or string.find(l, "dunk", 1, true)) then return "Reverse dunks" end
-	for _, w in ipairs({ "dunk", "slam", "tomahawk", "windmill", "rimgrazer", "alleyoop" }) do
-		if string.find(l, w, 1, true) then return "Dunks" end
-	end
-	if string.find(l, "reverselay", 1, true) then return "Reverse layups" end
-	if string.find(l, "floater", 1, true) then return "Floaters" end
-	for _, w in ipairs({ "layup", "scoop", "euro", "fingerroll" }) do
-		if string.find(l, w, 1, true) then return "Layups" end
-	end
-	if string.find(l, "post", 1, true) or string.find(l, "hook", 1, true) then return "Posts" end
-	for _, w in ipairs({ "jumpshot", "jumper" }) do
-		if string.find(l, w, 1, true) then return "Jump shots" end
-	end
-	for _, w in ipairs({ "closeshot", "closefade", "fadeaway", "movingshot", "freethrow", "underrim" }) do
-		if string.find(l, w, 1, true) then return "Other shots" end
-	end
-	return nil
-end
-function Anim.fndAdd(name, cat, detail)
-	local f = Anim.fnd
-	local n = fndNorm(name)
-	local e = f.byNorm[n]
-	if e then
-		if detail and (not e.detail or e.detail == "") then e.detail = detail end
-		return e
-	end
-	e = { name = name, cat = cat, norm = n, detail = detail or "", count = 0 }
-	f.byNorm[n] = e
-	f.entries[#f.entries + 1] = e
-	return e
-end
--- the names the game's own files use (read from its shooting packages and dunk list); the scan below adds whatever else it finds
-function Anim.fndBaseline()
-	for n = 1, 16 do Anim.fndAdd("Jumpshot " .. n, "Jump shots", "shot package " .. n) end
-	Anim.fndAdd("Layup", "Layups", "packages 1 to 4")
-	Anim.fndAdd("InsideHandLayup", "Layups")
-	Anim.fndAdd("OppositeLayup", "Layups")
-	Anim.fndAdd("ReverseLayup", "Reverse layups")
-	Anim.fndAdd("Floater", "Floaters", "packages 1 to 4")
-	for _, nm in ipairs({ "PostFade", "PostHook", "SpinHook", "SpinPostFade", "StepPostFade" }) do Anim.fndAdd(nm, "Posts") end
-	for _, nm in ipairs({ "CloseFade", "CloseShot", "FadeAway", "FreeThrow", "MovingShot", "UnderRimCloseShot" }) do Anim.fndAdd(nm, "Other shots") end
-	for _, nm in ipairs({ "DunkTest", "Eastbay", "OffOneOneHandedLebronSlam", "OffOneOneHandedWindmill", "OffTwoOneHandedPaul", "OffTwoTest",
-		"OneHandedOffOneInsideHand", "OneHandedOffOneRimGrazer", "OneHandedOffOneSideTomahawk", "OneHandedOffOneZionSlam", "OneHandedOffTwoBetweenTheLegs",
-		"OneHandedOffTwoTomahawk", "OneHandedOffTwoWindmill", "TwoHandedOffOneReverseWindmill", "TwoHandedOffOneRimGrazer",
-		"TwoHandedOffTwoBackScratcherHang", "TwoHandedOffTwoKobe360Slam", "TwoHandedOffTwoSideClutch", "TwoHandedOffTwoWestbrookSlam",
-		"Under", "Woah", "Woah2", "Woah3", "Woah4" }) do Anim.fndAdd(nm, "Dunks") end
-	for _, nm in ipairs({ "OneHandedOffTwoStandingDunk", "TwoHandedOffTwoBackScratcherStandingDunk", "TwoHandedOffTwoStandingDunk" }) do Anim.fndAdd(nm, "Standing dunks") end
-	Anim.fndAdd("OffTwoOneHandedReverseSlam", "Reverse dunks")
-end
-function Anim.fndScan()
-	local f = Anim.fnd
-	if f.scanned or f.scanning then return end
-	f.scanning = true
-	task.spawn(function()
-		pcall(function()
-			local n = 0
-			for _, inst in ipairs(ReplicatedStorage:GetDescendants()) do
-				n = n + 1
-				if n % 1500 == 0 then task.wait() end
-				local path, p, guard = "", inst.Parent, 0
-				while p and p ~= ReplicatedStorage and guard < 30 do
-					path = string.lower(p.Name) .. "/" .. path
-					p = p.Parent
-					guard = guard + 1
-				end
-				if inst:IsA("ModuleScript") or inst:IsA("Animation") then
-					local num = string.match(path, "shooting/packages/(%d+)/$")
-					if num then
-						local cat = Anim.fndCat(inst.Name, "")
-						if cat == "Jump shots" then
-							local e = Anim.fndAdd("Jumpshot " .. num, cat, "shot package " .. num)
-							pcall(function()
-								local m = require(inst)
-								if type(m) == "table" and type(m.Speed) == "number" then e.detail = string.format("shot package %s, speed %s", num, tostring(m.Speed)) end
-							end)
-						elseif cat then
-							Anim.fndAdd(inst.Name, cat)
-						end
-					elseif string.find(path, "dunking/animations", 1, true) then
-						local cat = Anim.fndCat(inst.Name, path)
-						if cat then Anim.fndAdd(inst.Name, cat) end
-					elseif inst:IsA("Animation") then
-						local cat = Anim.fndCat(inst.Name, path)
-						if cat then Anim.fndAdd(inst.Name, cat) end
-					end
-				end
-			end
-		end)
-		f.scanned, f.scanning = true, false
-	end)
-end
--- which listed move a played animation name belongs to
-function Anim.fndMatch(name)
-	local f = Anim.fnd
-	local l = fndNorm(name)
-	local num = string.match(l, "^jumpshot(%d+)")
-	if num and f.byNorm["jumpshot" .. num] then return f.byNorm["jumpshot" .. num] end
-	local best, bl = nil, 0
-	for _, e in ipairs(f.entries) do
-		if #e.norm > bl and string.sub(l, 1, #e.norm) == e.norm and e.cat ~= "Jump shots" then best, bl = e, #e.norm end
-	end
-	return best
-end
-function Anim.fndSeen(name, fromAttr)
-	if type(name) ~= "string" or name == "" then return end
-	local f = Anim.fnd
-	local e = Anim.fndMatch(name)
-	if not e then
-		local cat = Anim.fndCat(name, "") or (fromAttr and "Other shots")
-		if not cat then return end
-		e = Anim.fndAdd(name, cat)
-	end
-	e.anim = name
-	e.count = e.count + 1
-	e.t = tick()
-	f.cur = e
-	return e
-end
-function Anim.fndTrack(track)
-	Anim.fndScan()
-	local a = track.Animation
-	local nm = a and a.Name or ""
-	if nm == "" or nm == "Animation" then nm = track.Name or "" end
-	if nm ~= "" and Anim.fndCat(nm, "") then Anim.fndSeen(nm, false) end
-end
--- the game also writes the move it is playing onto your character (BaseAnimation)
-function Anim.fndStep()
-	local f = Anim.fnd
-	local c = char()
-	if not c then return end
-	local v = c:GetAttribute("BaseAnimation")
-	local act = c:GetAttribute("Action")
-	if f.lastAttr == nil then
-		f.lastAttr = (type(v) == "string") and v or ""
-		f.lastAction = act
-		return
-	end
-	local isStr = type(v) == "string" and v ~= ""
-	if isStr and (v ~= f.lastAttr or (act == "Shooting" and f.lastAction ~= "Shooting")) then
-		f.lastAttr = v
-		Anim.fndSeen(v, true)
-	end
-	f.lastAction = act
-end
--- called when a shot is graded: ties the animation name to the timing key
-function Anim.fndResult(key)
-	local c = char()
-	local v = c and c:GetAttribute("BaseAnimation")
-	if type(v) ~= "string" or v == "" then return end
-	Shot.keyName[key] = v
-	local e = Anim.fndMatch(v) or Anim.fndSeen(v, true)
-	if e then e.key = key end
-end
-function Shot.keyStatus(key)
-	if not key then return "" end
-	local fin = Shot.FINAL[key]
-	if fin then return string.format("locked %.3fs (built in)", fin) end
-	Shot.autoLoad()
-	local a = Shot.auto[key]
-	if a and a.mode == "peak" then return string.format("%s %.0f ms before the peak", a.locked and "locked" or "learning", a.hold * 1000) end
-	if a then return string.format("%s %.3fs", a.locked and "locked" or "learning", a.hold) end
-	return ""
-end
-function Anim.fndSort(a, b)
-	local na, nb = string.match(a.name, "^Jumpshot (%d+)$"), string.match(b.name, "^Jumpshot (%d+)$")
-	if na and nb then return tonumber(na) < tonumber(nb) end
-	return string.lower(a.name) < string.lower(b.name)
-end
-function Anim.fndList(cat)
-	local f = Anim.fnd
-	local rows = {}
-	for _, e in ipairs(f.entries) do
-		if e.cat == cat then rows[#rows + 1] = e end
-	end
-	table.sort(rows, Anim.fndSort)
-	local lines = {}
-	for _, e in ipairs(rows) do
-		local s = (f.cur == e and "> " or "   ") .. e.name
-		if e.anim and e.anim ~= e.name then s = s .. " [" .. e.anim .. "]" end
-		local st = Shot.keyStatus(e.key)
-		if st ~= "" then s = s .. "  -  " .. st end
-		lines[#lines + 1] = s
-	end
-	if #lines == 0 then return "Nothing found here yet" end
-	return table.concat(lines, "\n"), #rows
-end
-function Anim.fndNow()
-	local e = Anim.fnd.cur
-	if not e then return "-", "-", "-" end
-	local ago = math.floor(math.max(0, tick() - (e.t or tick())))
-	local st = Shot.keyStatus(e.key)
-	return e.anim or e.name, string.format("%s  (%ds ago)", e.cat, ago), (st ~= "") and st or "-"
-end
-Anim.fndBaseline()
 function Anim.hookChar(c)
 	task.spawn(function()
 		local function find() return c:FindFirstChildOfClass("Humanoid") or c:FindFirstChildOfClass("AnimationController") or c:FindFirstChildWhichIsA("Animator", true) end
@@ -8726,28 +8278,6 @@ function Shot.statusLines()
 	return Shot.nameFor(cur.key, cur.anim), (cur.mode == "peak") and string.format("%.0f ms before the peak", cur.hold * 1000) or string.format("%.3fs", cur.hold), cur.state or "-", last,
 		(#lines > 0) and table.concat(lines, "\n") or "No change yet", ptxt
 end
-function Shot.statusStep()
-	local st = UI.autoStat
-	if not st then return end
-	local now = tick()
-	if Shot.statusT and now - Shot.statusT < 0.25 then return end
-	Shot.statusT = now
-	local a, b, c, d, e, f = Shot.statusLines()
-	st.shot.Text, st.timing.Text, st.state.Text, st.last.Text, st.adj.Text = a, b, c, d, e
-	if st.ping then st.ping.Text = f end
-	local fd = UI.finder
-	if fd then
-		pcall(Anim.fndStep)
-		pcall(Anim.fndScan)
-		local n1, n2, n3 = Anim.fndNow()
-		fd.now.Text, fd.type.Text, fd.timing.Text = n1, n2, n3
-		local txt, cnt = Anim.fndList(S.FinderCat or "Jump shots")
-		if txt ~= fd.last then
-			fd.last = txt
-			fd.list.Text = txt
-		end
-	end
-end
 Shot.PING_REF = 0.022
 function Shot.pingNow()
 	local ok, p = pcall(function() return LP:GetNetworkPing() end)
@@ -8985,7 +8515,6 @@ function Shot.learnRemote(info, res, strength)
 		local ch = char()
 		Shot.last = { t = tick(), held = info.held, idx = info.idx, res = res, key = info.key }
 		if Shot.cur and Shot.cur.key == info.key and ch then Shot.cur.anim = ch:GetAttribute("BaseAnimation") end
-		pcall(Anim.fndResult, info.key)
 	end
 	if info and Shot.FINAL[info.key] then return end
 	if info and Shot.autoLearn(info, res, strength) then return end
@@ -12989,16 +12518,6 @@ do
 	UI.Buttons(rc, { { "Copy recording", Rec.copy }, { "Clear", Rec.clear } })
 	UI.Button(rc, "Copy remote spy (RSpy)", Rec.copySpy)
 
-	local ag = UI.Card(P, "Auto Green status")
-	UI.autoStat = { shot = UI.Stat(ag, "Jump shot"), timing = UI.Stat(ag, "Timing"), state = UI.Stat(ag, "State"), last = UI.Stat(ag, "Last shot"), ping = UI.Stat(ag, "Ping fix"),
-		adj = UI.Note(ag, "No change yet") }
-
-	local fc = UI.Card(P, "Shot finder")
-	UI.finder = { now = UI.Stat(fc, "You are on"), type = UI.Stat(fc, "Type"), timing = UI.Stat(fc, "Auto Green"), last = nil }
-	UI.Dropdown(fc, "Show", "FinderCat", Anim.FND_CATS, function() if UI.finder then UI.finder.last = nil end Shot.statusT = nil end)
-	UI.finder.list = UI.Note(fc, "Loading the game's moves")
-	UI.Button(fc, "Rescan the game", function() Anim.fnd.scanned = false Anim.fndScan() end)
-
 	local sr = UI.Card(P, "Shot recorder")
 	UI.Toggle(sr, "Record shots (turn off to copy everything)", "RecShots", function(v) if v then Rec.shotStart() else Rec.shotStop() end end)
 	UI.Toggle(sr, "Sweep timings while recording", "Sweep")
@@ -13486,7 +13005,6 @@ end)
 task.spawn(function()
 	while JH.Running do
 		pcall(Feat.magnetStep)
-		pcall(Shot.statusStep)
 		pcall(Feat.V.step)
 		task.wait(0.05)
 	end
