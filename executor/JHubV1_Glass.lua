@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.43 shot-line"
+local VERSION = "v1.44 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -7857,6 +7857,12 @@ task.wait(0.4)
 end
 end)
 
+-- Auto Guard and Auto Grind are removed for now: tabs hidden, features forced off
+S.AG, S.AB, S.AP = false, false, false
+for _, p in ipairs(UI.pages) do
+	if p.name == "Auto Guard" or p.name == "Auto Grind" then p.lbl.Parent.Visible = false end
+end
+
 -- UI customizations goes to the bottom of the tab list
 for _, p in ipairs(UI.pages) do
 if p.name == "UI" then p.lbl.Parent.LayoutOrder = 999 end
@@ -8640,7 +8646,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.43 shot-line"
+local VERSION = "v1.44 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -16806,6 +16812,12 @@ do
 		end
 	end)
 
+	-- Auto Guard and Auto Grind are removed for now: tabs hidden, features forced off
+	S.AG, S.AB, S.AP = false, false, false
+	for _, p in ipairs(UI.pages) do
+		if p.name == "Auto Guard" or p.name == "Auto Grind" then p.lbl.Parent.Visible = false end
+	end
+	
 	-- UI customizations goes to the bottom of the tab list
 	for _, p in ipairs(UI.pages) do
 		if p.name == "UI" then p.lbl.Parent.LayoutOrder = 999 end
