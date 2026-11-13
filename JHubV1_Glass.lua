@@ -142,6 +142,7 @@ DribbleGlideSpeed = 1, ShotGlideSpeed = 1, GatherGlideSpeed = 1,
 GfxLow = false, GfxEffects = false, GfxTextures = false, GfxShadows = false, GfxPost = false, GfxHideOthers = false, GfxCull = false,
 GfxCullDist = 250, GfxBoost = false, GfxFpsCap = 0, PingStab = false, PingWindow = 3, FinalAdj = "",
 ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
+LagSync = true, LagK = 2,
 AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
 AR = false, ARSpeed = 1.3, ARReact = 0.05, ARRange = 70, ARJump = true, ARMagnet = true, ARMagRange = 8, ARMarker = false,
@@ -2190,7 +2191,7 @@ local usedMeter, qpred = false, nil
 local peakAimed = false
 local ok0, ping0 = pcall(function() return LP:GetNetworkPing() end)
 local lead = (ok0 and ping0 or 0.04) + 0.016 + S.Nudge / 1000
-local look = clamp(1.3 / math.max(JH.FPS or 60, 10), 0.02, 0.05)
+local look = Shot.lookAhead()
 while tick() - m0 < S.MaxHold do
 if ctx.ended then
 manual = true
@@ -2199,9 +2200,9 @@ end
 local now = tick()
 local n = #samples
 if peakLead then
-local tp = Shot.peakFit(samples)
-if tp then
-hold = math.max(Shot.FLOOR, tp - (Shot.pingNow() + peakLead) - m0)
+local tp = Shot.peakFitSmart(samples, key)
+if tp and tp - m0 > 0.22 then
+hold = math.max(Shot.FLOOR, tp - (Shot.effPing() + peakLead) - m0 - Shot.fpsComp())
 peakAimed = true
 end
 if now - m0 >= hold - look and (peakAimed or now - m0 >= Shot.AUTO_START - look) then break end
@@ -2234,6 +2235,7 @@ end
 end
 while not manual and not ctx.ended and tick() - m0 < hold do RunService.Heartbeat:Wait() end
 local held = tick() - m0
+Shot.markShot()
 if not manual then Shot.release("remote", ctx) end
 ctx.released = true
 Shot.stats.shots = Shot.stats.shots + 1
@@ -7790,6 +7792,167 @@ end
 if S.AP then S.AP = false end
 task.spawn(Bot.scanHoops)
 end
+-- LAG SYNC: Auto Green follows ping and FPS changes
+do
+local Lag = { pings = {}, dts = {}, dtEma = 1 / 60, stable = nil, pingBase = nil, dtBase = nil }
+JH.api.Lag = Lag
+Shot.slopes = Shot.slopes or {}
+
+local function pct(list, q)
+local t = {}
+for i, v in ipairs(list) do t[i] = v end
+table.sort(t)
+return t[math.max(1, math.floor(#t * q))]
+end
+bind(RunService.Heartbeat, function(dt) Lag.dtEma = Lag.dtEma * 0.9 + dt * 0.1 end)
+task.spawn(function()
+local n = 0
+while JH.Running do
+local ok, p = pcall(function() return LP:GetNetworkPing() end)
+if ok and type(p) == "number" then
+Lag.pings[#Lag.pings + 1] = p
+if #Lag.pings > 3000 then table.remove(Lag.pings, 1) end
+local tail = {}
+for i = math.max(1, #Lag.pings - 14), #Lag.pings do tail[#tail + 1] = Lag.pings[i] end
+Lag.stable = pct(tail, 0.5)
+end
+Lag.dts[#Lag.dts + 1] = Lag.dtEma
+if #Lag.dts > 3000 then table.remove(Lag.dts, 1) end
+n = n + 1
+if n % 50 == 0 and #Lag.pings >= 150 then
+Lag.pingBase = pct(Lag.pings, 0.3)
+Lag.dtBase = pct(Lag.dts, 0.35)
+end
+task.wait(0.1)
+end
+end)
+
+-- how much worse than your normal the ping and the frame time are right now
+function Lag.pingEx()
+if not Lag.stable or not Lag.pingBase then return 0 end
+return math.max(0, Lag.stable - Lag.pingBase)
+end
+function Lag.fpsComp()
+if not S.LagSync or not Lag.dtBase then return 0 end
+return clamp((Lag.dtEma - Lag.dtBase) / 2, 0, 0.12)
+end
+function Lag.total()
+return clamp(Lag.pingEx() * (S.LagK or 2) + Lag.fpsComp(), 0, 0.25)
+end
+
+local basePingNow = Shot.pingNow
+function Shot.pingNow()
+if S.LagSync and Lag.stable then return Lag.stable end
+return basePingNow()
+end
+function Shot.effPing()
+local p = Shot.pingNow()
+if not S.LagSync then return p end
+return p + Lag.pingEx() * ((S.LagK or 2) - 1)
+end
+function Shot.fpsComp() return Lag.fpsComp() end
+function Shot.lookAhead()
+if S.LagSync then return clamp(1.25 * Lag.dtEma, 0.02, 0.2) end
+return clamp(1.3 / math.max(JH.FPS or 60, 10), 0.02, 0.05)
+end
+local basePingComp = Shot.pingComp
+function Shot.pingComp()
+local c, p = basePingComp()
+if not S.LagSync then return c, p end
+return clamp(math.max(c, Lag.total()), 0, 0.25), p
+end
+function Shot.markShot()
+Shot.lastShotFps = JH.FPS
+Shot.lastShotEx = Lag.pingEx()
+end
+
+-- the meter climbs at a steady speed per shot, so once that speed is known a laggy frame rate can still find the peak
+local function ls(pts)
+local n = #pts
+local t0 = pts[1].t
+local st, sq, stt, stq = 0, 0, 0, 0
+for _, p in ipairs(pts) do
+local x = p.t - t0
+st, sq, stt, stq = st + x, sq + p.q, stt + x * x, stq + x * p.q
+end
+local den = n * stt - st * st
+if den <= 1e-9 then return nil end
+return (n * stq - st * sq) / den
+end
+function Shot.peakFitSmart(samples, key)
+local base = Shot.peakFit(samples)
+if not S.LagSync then return base end
+local pts, lastq = {}, -1
+for _, sm in ipairs(samples) do
+if sm.q < lastq - 0.001 then break end
+lastq = sm.q
+if sm.q > 0.12 and sm.q < 0.93 then pts[#pts + 1] = sm end
+end
+local n = #pts
+if n < 2 then return base end
+local a = n >= 8 and ls(pts) or nil
+local known = Shot.slopes[key]
+local fps = JH.FPS or 60
+if a and a >= 1.2 and a <= 5 and fps >= 40 then
+known = known and (known * 0.8 + a * 0.2) or a
+Shot.slopes[key] = known
+end
+if known and (fps < 45 or n < 7) and pts[n].q > 0.25 then
+local sum, wsum = 0, 0
+for _, p in ipairs(pts) do
+local w = p.q * p.q
+sum = sum + (p.t + (Shot.PEAK_Q - p.q) / known) * w
+wsum = wsum + w
+end
+return sum / wsum
+end
+return base
+end
+
+-- built in and fixed shots have no learner, so the ping factor is learned from their verdicts
+function Shot.lagLearn(info, res, strength)
+local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+if not idx or idx == 5 or idx == 4 then return end
+local ex = Shot.lastShotEx or 0
+if ex < 0.015 or (Shot.lastShotFps or 60) < 30 then return end
+local err = (idx - 5) * 0.014
+S.LagK = clamp((S.LagK or 2) + err / ex * 0.3, 0.5, 3.5)
+saveSoon()
+end
+local baseLearn = Shot.learnRemote
+function Shot.learnRemote(info, res, strength)
+if S.LagSync and info and Shot.FINAL[info.key] and not info.manual then pcall(Shot.lagLearn, info, res, strength) end
+return baseLearn(info, res, strength)
+end
+
+local shootPage
+for _, p in ipairs(UI.pages) do
+if p.name == "Shooting" then shootPage = p end
+end
+if shootPage then
+local c = UI.Card(shootPage, "Lag sync")
+UI.Toggle(c, "Lag sync (follow my ping and FPS)", "LagSync")
+UI.Note(c, "Learns your normal ping and FPS. When either gets worse, Auto Green releases earlier by exactly that much, so the shot still lands on the green. Nothing changes while you are at your normal.")
+UI.Slider(c, "Ping compensation factor (learns by itself)", "LagK", 0.5, 3.5, 0.05, 2, "x")
+local sPing = UI.Stat(c, "Ping now")
+local sBase = UI.Stat(c, "Ping normal")
+local sFps = UI.Stat(c, "FPS now")
+local sShift = UI.Stat(c, "Release shifted by")
+task.spawn(function()
+while JH.Running do
+if Window.Visible and UI.current == shootPage then
+pcall(function()
+sPing.Text = Lag.stable and string.format("%d ms", math.floor(Lag.stable * 1000 + 0.5)) or "-"
+sBase.Text = Lag.pingBase and string.format("%d ms", math.floor(Lag.pingBase * 1000 + 0.5)) or "learning"
+sFps.Text = string.format("%d", math.floor(JH.FPS + 0.5))
+sShift.Text = S.LagSync and string.format("%d ms earlier", math.floor(Lag.total() * 1000 + 0.5)) or "off"
+end)
+end
+task.wait(0.5)
+end
+end)
+end
+end
 UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
@@ -8047,6 +8210,7 @@ local S = {
 	GfxLow = false, GfxEffects = false, GfxTextures = false, GfxShadows = false, GfxPost = false, GfxHideOthers = false, GfxCull = false,
 	GfxCullDist = 250, GfxBoost = false, GfxFpsCap = 0, PingStab = false, PingWindow = 3, FinalAdj = "",
 	ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
+	LagSync = true, LagK = 2,
 	AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
 	AR = false, ARSpeed = 1.3, ARReact = 0.05, ARRange = 70, ARJump = true, ARMagnet = true, ARMagRange = 8, ARMarker = false,
@@ -10210,7 +10374,7 @@ function Shot.remoteCore(ctx)
 	local peakAimed = false
 	local ok0, ping0 = pcall(function() return LP:GetNetworkPing() end)
 	local lead = (ok0 and ping0 or 0.04) + 0.016 + S.Nudge / 1000
-	local look = clamp(1.3 / math.max(JH.FPS or 60, 10), 0.02, 0.05)
+	local look = Shot.lookAhead()
 	while tick() - m0 < S.MaxHold do
 		if ctx.ended then
 			manual = true
@@ -10221,9 +10385,9 @@ function Shot.remoteCore(ctx)
 		-- the meter moves by itself: JHub releases when it is about to reach the aim point (by the meter, not by a clock)
 		if peakLead then
 			-- by the meter: let go one ping plus the lead before the meter reaches its peak
-			local tp = Shot.peakFit(samples)
-			if tp then
-				hold = math.max(Shot.FLOOR, tp - (Shot.pingNow() + peakLead) - m0)
+			local tp = Shot.peakFitSmart(samples, key)
+			if tp and tp - m0 > 0.22 then
+				hold = math.max(Shot.FLOOR, tp - (Shot.effPing() + peakLead) - m0 - Shot.fpsComp())
 				peakAimed = true
 			end
 			if now - m0 >= hold - look and (peakAimed or now - m0 >= Shot.AUTO_START - look) then break end
@@ -10258,6 +10422,7 @@ function Shot.remoteCore(ctx)
 	-- (a clock that does not move falls back to waiting frame by frame)
 	while not manual and not ctx.ended and tick() - m0 < hold do RunService.Heartbeat:Wait() end
 	local held = tick() - m0
+	Shot.markShot()
 	if not manual then Shot.release("remote", ctx) end
 	ctx.released = true
 	Shot.stats.shots = Shot.stats.shots + 1
@@ -16042,6 +16207,167 @@ do
 	end
 	if S.AP then S.AP = false end
 	task.spawn(Bot.scanHoops)
+end
+-- LAG SYNC: Auto Green follows ping and FPS changes
+do
+	local Lag = { pings = {}, dts = {}, dtEma = 1 / 60, stable = nil, pingBase = nil, dtBase = nil }
+	JH.api.Lag = Lag
+	Shot.slopes = Shot.slopes or {}
+
+	local function pct(list, q)
+		local t = {}
+		for i, v in ipairs(list) do t[i] = v end
+		table.sort(t)
+		return t[math.max(1, math.floor(#t * q))]
+	end
+	bind(RunService.Heartbeat, function(dt) Lag.dtEma = Lag.dtEma * 0.9 + dt * 0.1 end)
+	task.spawn(function()
+		local n = 0
+		while JH.Running do
+			local ok, p = pcall(function() return LP:GetNetworkPing() end)
+			if ok and type(p) == "number" then
+				Lag.pings[#Lag.pings + 1] = p
+				if #Lag.pings > 3000 then table.remove(Lag.pings, 1) end
+				local tail = {}
+				for i = math.max(1, #Lag.pings - 14), #Lag.pings do tail[#tail + 1] = Lag.pings[i] end
+				Lag.stable = pct(tail, 0.5)
+			end
+			Lag.dts[#Lag.dts + 1] = Lag.dtEma
+			if #Lag.dts > 3000 then table.remove(Lag.dts, 1) end
+			n = n + 1
+			if n % 50 == 0 and #Lag.pings >= 150 then
+				Lag.pingBase = pct(Lag.pings, 0.3)
+				Lag.dtBase = pct(Lag.dts, 0.35)
+			end
+			task.wait(0.1)
+		end
+	end)
+
+	-- how much worse than your normal the ping and the frame time are right now
+	function Lag.pingEx()
+		if not Lag.stable or not Lag.pingBase then return 0 end
+		return math.max(0, Lag.stable - Lag.pingBase)
+	end
+	function Lag.fpsComp()
+		if not S.LagSync or not Lag.dtBase then return 0 end
+		return clamp((Lag.dtEma - Lag.dtBase) / 2, 0, 0.12)
+	end
+	function Lag.total()
+		return clamp(Lag.pingEx() * (S.LagK or 2) + Lag.fpsComp(), 0, 0.25)
+	end
+
+	local basePingNow = Shot.pingNow
+	function Shot.pingNow()
+		if S.LagSync and Lag.stable then return Lag.stable end
+		return basePingNow()
+	end
+	function Shot.effPing()
+		local p = Shot.pingNow()
+		if not S.LagSync then return p end
+		return p + Lag.pingEx() * ((S.LagK or 2) - 1)
+	end
+	function Shot.fpsComp() return Lag.fpsComp() end
+	function Shot.lookAhead()
+		if S.LagSync then return clamp(1.25 * Lag.dtEma, 0.02, 0.2) end
+		return clamp(1.3 / math.max(JH.FPS or 60, 10), 0.02, 0.05)
+	end
+	local basePingComp = Shot.pingComp
+	function Shot.pingComp()
+		local c, p = basePingComp()
+		if not S.LagSync then return c, p end
+		return clamp(math.max(c, Lag.total()), 0, 0.25), p
+	end
+	function Shot.markShot()
+		Shot.lastShotFps = JH.FPS
+		Shot.lastShotEx = Lag.pingEx()
+	end
+
+	-- the meter climbs at a steady speed per shot, so once that speed is known a laggy frame rate can still find the peak
+	local function ls(pts)
+		local n = #pts
+		local t0 = pts[1].t
+		local st, sq, stt, stq = 0, 0, 0, 0
+		for _, p in ipairs(pts) do
+			local x = p.t - t0
+			st, sq, stt, stq = st + x, sq + p.q, stt + x * x, stq + x * p.q
+		end
+		local den = n * stt - st * st
+		if den <= 1e-9 then return nil end
+		return (n * stq - st * sq) / den
+	end
+	function Shot.peakFitSmart(samples, key)
+		local base = Shot.peakFit(samples)
+		if not S.LagSync then return base end
+		local pts, lastq = {}, -1
+		for _, sm in ipairs(samples) do
+			if sm.q < lastq - 0.001 then break end
+			lastq = sm.q
+			if sm.q > 0.12 and sm.q < 0.93 then pts[#pts + 1] = sm end
+		end
+		local n = #pts
+		if n < 2 then return base end
+		local a = n >= 8 and ls(pts) or nil
+		local known = Shot.slopes[key]
+		local fps = JH.FPS or 60
+		if a and a >= 1.2 and a <= 5 and fps >= 40 then
+			known = known and (known * 0.8 + a * 0.2) or a
+			Shot.slopes[key] = known
+		end
+		if known and (fps < 45 or n < 7) and pts[n].q > 0.25 then
+			local sum, wsum = 0, 0
+			for _, p in ipairs(pts) do
+				local w = p.q * p.q
+				sum = sum + (p.t + (Shot.PEAK_Q - p.q) / known) * w
+				wsum = wsum + w
+			end
+			return sum / wsum
+		end
+		return base
+	end
+
+	-- built in and fixed shots have no learner, so the ping factor is learned from their verdicts
+	function Shot.lagLearn(info, res, strength)
+		local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+		if not idx or idx == 5 or idx == 4 then return end
+		local ex = Shot.lastShotEx or 0
+		if ex < 0.015 or (Shot.lastShotFps or 60) < 30 then return end
+		local err = (idx - 5) * 0.014
+		S.LagK = clamp((S.LagK or 2) + err / ex * 0.3, 0.5, 3.5)
+		saveSoon()
+	end
+	local baseLearn = Shot.learnRemote
+	function Shot.learnRemote(info, res, strength)
+		if S.LagSync and info and Shot.FINAL[info.key] and not info.manual then pcall(Shot.lagLearn, info, res, strength) end
+		return baseLearn(info, res, strength)
+	end
+
+	local shootPage
+	for _, p in ipairs(UI.pages) do
+		if p.name == "Shooting" then shootPage = p end
+	end
+	if shootPage then
+		local c = UI.Card(shootPage, "Lag sync")
+		UI.Toggle(c, "Lag sync (follow my ping and FPS)", "LagSync")
+		UI.Note(c, "Learns your normal ping and FPS. When either gets worse, Auto Green releases earlier by exactly that much, so the shot still lands on the green. Nothing changes while you are at your normal.")
+		UI.Slider(c, "Ping compensation factor (learns by itself)", "LagK", 0.5, 3.5, 0.05, 2, "x")
+		local sPing = UI.Stat(c, "Ping now")
+		local sBase = UI.Stat(c, "Ping normal")
+		local sFps = UI.Stat(c, "FPS now")
+		local sShift = UI.Stat(c, "Release shifted by")
+		task.spawn(function()
+			while JH.Running do
+				if Window.Visible and UI.current == shootPage then
+					pcall(function()
+						sPing.Text = Lag.stable and string.format("%d ms", math.floor(Lag.stable * 1000 + 0.5)) or "-"
+						sBase.Text = Lag.pingBase and string.format("%d ms", math.floor(Lag.pingBase * 1000 + 0.5)) or "learning"
+						sFps.Text = string.format("%d", math.floor(JH.FPS + 0.5))
+						sShift.Text = S.LagSync and string.format("%d ms earlier", math.floor(Lag.total() * 1000 + 0.5)) or "off"
+					end)
+				end
+				task.wait(0.5)
+			end
+		end)
+	end
 end
 UI.syncAuto()
 UI.applyTheme()
