@@ -8607,6 +8607,102 @@ end
 for _, l in ipairs(UI.FloatLetters or {}) do pcall(function() l.Visible = false end) end
 end)
 end
+-- J-HUB SKIN: the artwork is the menu background, tabs sit in its rail, cards sit side by side and wrap underneath
+do
+local W, H = 720, 405
+Window.Size = UDim2.fromOffset(W, H)
+local artOn = false
+local collapsedNow = false
+local function layout()
+Main.BackgroundTransparency = 1
+pcall(function() Main:FindFirstChild("Storm").Visible = false end)
+Sheen.Visible = false
+MainStroke.Transparency = 1
+Body.Position, Body.Size = UDim2.fromScale(0, 0), UDim2.fromScale(1, 1)
+Header.Position, Header.Size = UDim2.fromScale(0.28, 0.105), UDim2.fromScale(0.70, 0.095)
+Rail.Position, Rail.Size = UDim2.fromScale(0.045, 0.40), UDim2.fromScale(0.2, 0.52)
+Content.Position, Content.Size = UDim2.fromScale(0.285, 0.25), UDim2.fromScale(0.685, 0.66)
+RailLine.Visible = false
+local badge = Header:FindFirstChild("LogoBadge")
+if badge then badge.Visible = false end
+for _, d in ipairs(Header:GetChildren()) do
+if d:IsA("TextLabel") then d.Position = UDim2.new(0, 12, 0.5, -7) end
+end
+end
+local function twoColumns()
+for _, p in ipairs(UI.pages) do
+local lay = p.frame:FindFirstChildOfClass("UIListLayout")
+if lay then
+lay.FillDirection = Enum.FillDirection.Horizontal
+lay.Wraps = true
+lay.Padding = UDim.new(0, 8)
+end
+for _, c in ipairs(p.frame:GetChildren()) do
+if c:IsA("Frame") then c.Size = UDim2.new(0.5, -4, 0, 0) end
+end
+end
+end
+layout()
+twoColumns()
+local origApply = UI.applyWindow
+function UI.applyWindow(...)
+local r = origApply(...)
+if not collapsedNow then layout() end
+return r
+end
+function UI.fitScale()
+local vp = cam().ViewportSize
+local s = math.min(vp.X * 0.94 / W, vp.Y * 0.86 / H)
+if s > 1.15 then s = 1.15 end
+WinScale.Scale = s * S.UIScale
+end
+UI.fitScale()
+
+local art
+CollapseBtn.Activated:Connect(function()
+task.wait()
+collapsedNow = collapsed
+if collapsed then
+if art then art.Visible = false end
+Main.BackgroundTransparency = 0
+Header.Position, Header.Size = UDim2.fromOffset(0, 0), UDim2.new(1, 0, 0, 46)
+Window.Size = UDim2.fromOffset(W, 46)
+else
+if art then art.Visible = true end
+Window.Size = UDim2.fromOffset(W, H)
+layout()
+end
+end)
+
+local URL = "https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/claude/claudechud-8cord-executor-wclom3/executor/jhub_ui_bg.png"
+local FILE = "JHub_ui_bg_v1.png"
+task.spawn(function()
+if type(getcustomasset) ~= "function" or type(writefile) ~= "function" then return end
+local have = false
+if type(isfile) == "function" then
+local ok, r = pcall(isfile, FILE)
+have = ok and r
+end
+if not have then
+local ok, data = pcall(function() return game:HttpGet(URL) end)
+if not ok or type(data) ~= "string" or #data < 1000 then return end
+if not pcall(writefile, FILE, data) then return end
+end
+local ok, asset = pcall(getcustomasset, FILE)
+if not ok or not asset or asset == "" then return end
+art = Instance.new("ImageLabel")
+art.Name = "JHubArt"
+art.BackgroundColor3 = Color3.new(0, 0, 0)
+art.BorderSizePixel = 0
+art.Size = UDim2.fromScale(1, 1)
+art.Image = asset
+art.ScaleType = Enum.ScaleType.Stretch
+art.ZIndex = 0
+art.Visible = not collapsedNow
+art.Parent = Main
+artOn = true
+end)
+end
 UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
@@ -17679,6 +17775,102 @@ do
 			if d:IsA("GuiObject") and d ~= img then d.Visible = false end
 		end
 		for _, l in ipairs(UI.FloatLetters or {}) do pcall(function() l.Visible = false end) end
+	end)
+end
+-- J-HUB SKIN: the artwork is the menu background, tabs sit in its rail, cards sit side by side and wrap underneath
+do
+	local W, H = 720, 405
+	Window.Size = UDim2.fromOffset(W, H)
+	local artOn = false
+	local collapsedNow = false
+	local function layout()
+		Main.BackgroundTransparency = 1
+		pcall(function() Main:FindFirstChild("Storm").Visible = false end)
+		Sheen.Visible = false
+		MainStroke.Transparency = 1
+		Body.Position, Body.Size = UDim2.fromScale(0, 0), UDim2.fromScale(1, 1)
+		Header.Position, Header.Size = UDim2.fromScale(0.28, 0.105), UDim2.fromScale(0.70, 0.095)
+		Rail.Position, Rail.Size = UDim2.fromScale(0.045, 0.40), UDim2.fromScale(0.2, 0.52)
+		Content.Position, Content.Size = UDim2.fromScale(0.285, 0.25), UDim2.fromScale(0.685, 0.66)
+		RailLine.Visible = false
+		local badge = Header:FindFirstChild("LogoBadge")
+		if badge then badge.Visible = false end
+		for _, d in ipairs(Header:GetChildren()) do
+			if d:IsA("TextLabel") then d.Position = UDim2.new(0, 12, 0.5, -7) end
+		end
+	end
+	local function twoColumns()
+		for _, p in ipairs(UI.pages) do
+			local lay = p.frame:FindFirstChildOfClass("UIListLayout")
+			if lay then
+				lay.FillDirection = Enum.FillDirection.Horizontal
+				lay.Wraps = true
+				lay.Padding = UDim.new(0, 8)
+			end
+			for _, c in ipairs(p.frame:GetChildren()) do
+				if c:IsA("Frame") then c.Size = UDim2.new(0.5, -4, 0, 0) end
+			end
+		end
+	end
+	layout()
+	twoColumns()
+	local origApply = UI.applyWindow
+	function UI.applyWindow(...)
+		local r = origApply(...)
+		if not collapsedNow then layout() end
+		return r
+	end
+	function UI.fitScale()
+		local vp = cam().ViewportSize
+		local s = math.min(vp.X * 0.94 / W, vp.Y * 0.86 / H)
+		if s > 1.15 then s = 1.15 end
+		WinScale.Scale = s * S.UIScale
+	end
+	UI.fitScale()
+
+	local art
+	CollapseBtn.Activated:Connect(function()
+		task.wait()
+		collapsedNow = collapsed
+		if collapsed then
+			if art then art.Visible = false end
+			Main.BackgroundTransparency = 0
+			Header.Position, Header.Size = UDim2.fromOffset(0, 0), UDim2.new(1, 0, 0, 46)
+			Window.Size = UDim2.fromOffset(W, 46)
+		else
+			if art then art.Visible = true end
+			Window.Size = UDim2.fromOffset(W, H)
+			layout()
+		end
+	end)
+
+	local URL = "https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/claude/claudechud-8cord-executor-wclom3/executor/jhub_ui_bg.png"
+	local FILE = "JHub_ui_bg_v1.png"
+	task.spawn(function()
+		if type(getcustomasset) ~= "function" or type(writefile) ~= "function" then return end
+		local have = false
+		if type(isfile) == "function" then
+			local ok, r = pcall(isfile, FILE)
+			have = ok and r
+		end
+		if not have then
+			local ok, data = pcall(function() return game:HttpGet(URL) end)
+			if not ok or type(data) ~= "string" or #data < 1000 then return end
+			if not pcall(writefile, FILE, data) then return end
+		end
+		local ok, asset = pcall(getcustomasset, FILE)
+		if not ok or not asset or asset == "" then return end
+		art = Instance.new("ImageLabel")
+		art.Name = "JHubArt"
+		art.BackgroundColor3 = Color3.new(0, 0, 0)
+		art.BorderSizePixel = 0
+		art.Size = UDim2.fromScale(1, 1)
+		art.Image = asset
+		art.ScaleType = Enum.ScaleType.Stretch
+		art.ZIndex = 0
+		art.Visible = not collapsedNow
+		art.Parent = Main
+		artOn = true
 	end)
 end
 UI.syncAuto()
