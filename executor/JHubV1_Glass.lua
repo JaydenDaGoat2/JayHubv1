@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.34 shot-line"
+local VERSION = "v1.35 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -230,8 +230,8 @@ for key, val in pairs(have) do parts[#parts + 1] = key .. "=" .. val end
 table.sort(parts)
 S.ShotTimes = table.concat(parts, " ")
 end
-S.AutoCal = true
-S.AutoGreen = true
+S.AutoCal = S.AutoGreen ~= false
+S.Learn = S.AutoCal
 if S.PerfectGreen == nil then S.PerfectGreen = false end
 if S.PeakLead == nil then S.PeakLead = 0.027 end
 if S.PerfectGreenPct == nil then S.PerfectGreenPct = 100 end
@@ -5902,23 +5902,29 @@ P = UI.Page("Shooting", "S")
 do
 local g = UI.Card(P, "Auto Green")
 local showLocked = false
-if showLocked then UI.Toggle(g, "Auto Green", "AutoGreen") end
+function UI.syncAuto()
+local on = S.AutoGreen ~= false
+S.AutoCal, S.Learn = on, on
+end
+UI.Toggle(g, "Auto Green", "AutoGreen", function() UI.syncAuto() end)
 UI.Dropdown(g, "Shot style (Hold or Tap)", "ShotStyle", { "Hold", "Tap" })
 UI.Slider(g, "Starting hold time", "HoldTime", 0.08, 1.6, 0.005, 3, "s")
 UI.Slider(g, "Release earlier / later", "Nudge", -150, 150, 5, 0, "ms")
 UI.Toggle(g, "Perfect green", "PerfectGreen")
 UI.Note(g, "Makes up for high ping/ms. Does nothing if you have low ping.")
 UI.Slider(g, "Perfect green strength", "PerfectGreenPct", 0, 150, 5, 0, "%")
+if showLocked then
 local ln = UI.Card(P, "Learning")
 UI.Toggle(ln, "Learn timing from results", "Learn")
-if showLocked then UI.Toggle(ln, "Auto-learn new shot animations", "AutoCal") end
-UI.Button(ln, "Forget learned animations", function()
-Shot.autoReset()
-notify("Auto Green", "Learned animations cleared", 2)
-end)
+UI.Toggle(ln, "Auto-learn new shot animations", "AutoCal")
+end
 local cal = UI.Card(P, "Auto Calibrate")
 UI.Toggle(cal, "Auto Calibrate", "AutoCalibrate")
 UI.Slider(cal, "Learn speed", "CalSpeed", 0.1, 1, 0.05, 2)
+UI.Button(cal, "Forget learned animations", function()
+Shot.autoReset()
+notify("Auto Green", "Learned animations cleared", 2)
+end)
 local at = UI.Card(P, "Auto Timing")
 UI.Toggle(at, "Auto Timing", "AutoTiming")
 UI.Slider(at, "Ping compensation", "PingComp", 0, 100, 5, 0, "%")
@@ -5928,6 +5934,7 @@ UI.restore({ "AutoGreen", "ShotStyle", "HoldTime", "Nudge", "Learn", "PerfectGre
 "ShotRatio", "PacketMul", "PacketOn" }, function()
 Shot.parseTimes()
 Shot.brackets = {}
+UI.syncAuto()
 end)
 end)
 end
@@ -6237,6 +6244,7 @@ if genv.JHubGlass == JH then genv.JHubGlass = nil end
 end
 JH.api = { S = S, UI = UI, Net = Net, Input = Input, Ball = Ball, Shot = Shot, Backup = Backup, Glide = Glide, Anim = Anim,
 Speed = Speed, Feat = Feat, Picker = Picker, Bar = Bar, Mover = Mover, Rec = Rec }
+UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
 for _, f in ipairs(UI.refresh) do pcall(f) end
@@ -6390,7 +6398,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.34 shot-line"
+local VERSION = "v1.35 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -6587,8 +6595,8 @@ if S.SettingsVer < 13 then
 	table.sort(parts)
 	S.ShotTimes = table.concat(parts, " ")
 end
-S.AutoCal = true
-S.AutoGreen = true
+S.AutoCal = S.AutoGreen ~= false
+S.Learn = S.AutoCal
 if S.PerfectGreen == nil then S.PerfectGreen = false end
 if S.PeakLead == nil then S.PeakLead = 0.027 end
 if S.PerfectGreenPct == nil then S.PerfectGreenPct = 100 end
@@ -12542,7 +12550,11 @@ P = UI.Page("Shooting", "S")
 do
 	local g = UI.Card(P, "Auto Green")
 	local showLocked = false
-	if showLocked then UI.Toggle(g, "Auto Green", "AutoGreen") end
+	function UI.syncAuto()
+		local on = S.AutoGreen ~= false
+		S.AutoCal, S.Learn = on, on
+	end
+	UI.Toggle(g, "Auto Green", "AutoGreen", function() UI.syncAuto() end)
 	UI.Dropdown(g, "Shot style (Hold or Tap)", "ShotStyle", { "Hold", "Tap" })
 	UI.Slider(g, "Starting hold time", "HoldTime", 0.08, 1.6, 0.005, 3, "s")
 	UI.Slider(g, "Release earlier / later", "Nudge", -150, 150, 5, 0, "ms")
@@ -12550,17 +12562,19 @@ do
 	UI.Note(g, "Makes up for high ping/ms. Does nothing if you have low ping.")
 	UI.Slider(g, "Perfect green strength", "PerfectGreenPct", 0, 150, 5, 0, "%")
 
-	local ln = UI.Card(P, "Learning")
-	UI.Toggle(ln, "Learn timing from results", "Learn")
-	if showLocked then UI.Toggle(ln, "Auto-learn new shot animations", "AutoCal") end
-	UI.Button(ln, "Forget learned animations", function()
-		Shot.autoReset()
-		notify("Auto Green", "Learned animations cleared", 2)
-	end)
+	if showLocked then
+		local ln = UI.Card(P, "Learning")
+		UI.Toggle(ln, "Learn timing from results", "Learn")
+		UI.Toggle(ln, "Auto-learn new shot animations", "AutoCal")
+	end
 
 	local cal = UI.Card(P, "Auto Calibrate")
 	UI.Toggle(cal, "Auto Calibrate", "AutoCalibrate")
 	UI.Slider(cal, "Learn speed", "CalSpeed", 0.1, 1, 0.05, 2)
+	UI.Button(cal, "Forget learned animations", function()
+		Shot.autoReset()
+		notify("Auto Green", "Learned animations cleared", 2)
+	end)
 
 	local at = UI.Card(P, "Auto Timing")
 	UI.Toggle(at, "Auto Timing", "AutoTiming")
@@ -12572,6 +12586,7 @@ do
 			"ShotRatio", "PacketMul", "PacketOn" }, function()
 			Shot.parseTimes()
 			Shot.brackets = {}
+			UI.syncAuto()
 		end)
 	end)
 end
@@ -12936,6 +12951,7 @@ JH.api = { S = S, UI = UI, Net = Net, Input = Input, Ball = Ball, Shot = Shot, B
 ---------------------------------------------------------------------
 -- START
 ---------------------------------------------------------------------
+UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
 for _, f in ipairs(UI.refresh) do pcall(f) end
