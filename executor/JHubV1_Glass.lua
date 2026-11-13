@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.31b shot-line"
+local VERSION = "v1.34 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -230,7 +230,8 @@ for key, val in pairs(have) do parts[#parts + 1] = key .. "=" .. val end
 table.sort(parts)
 S.ShotTimes = table.concat(parts, " ")
 end
-if S.AutoCal == nil then S.AutoCal = true end
+S.AutoCal = true
+S.AutoGreen = true
 if S.PerfectGreen == nil then S.PerfectGreen = false end
 if S.PeakLead == nil then S.PeakLead = 0.027 end
 if S.PerfectGreenPct == nil then S.PerfectGreenPct = 100 end
@@ -1844,7 +1845,7 @@ function Shot.pingComp()
 local p = Shot.pingNow()
 if not S.PerfectGreen then return 0, p end
 local comp = (p - Shot.PING_REF) * ((S.PerfectGreenPct or 100) / 100)
-return clamp(comp, -0.02, 0.2), p
+return clamp(comp, 0, 0.2), p
 end
 Shot.AUTO_START = 0.34
 Shot.AUTO_SCAN = { 0.30, 0.32, 0.34, 0.36, 0.38, 0.31, 0.33, 0.35, 0.37, 0.29, 0.39, 0.40, 0.28 }
@@ -5900,16 +5901,17 @@ end
 P = UI.Page("Shooting", "S")
 do
 local g = UI.Card(P, "Auto Green")
-UI.Toggle(g, "Auto Green", "AutoGreen")
+local showLocked = false
+if showLocked then UI.Toggle(g, "Auto Green", "AutoGreen") end
 UI.Dropdown(g, "Shot style (Hold or Tap)", "ShotStyle", { "Hold", "Tap" })
 UI.Slider(g, "Starting hold time", "HoldTime", 0.08, 1.6, 0.005, 3, "s")
 UI.Slider(g, "Release earlier / later", "Nudge", -150, 150, 5, 0, "ms")
 UI.Toggle(g, "Perfect green", "PerfectGreen")
-UI.Note(g, "Makes up for high ping")
+UI.Note(g, "Makes up for high ping/ms. Does nothing if you have low ping.")
 UI.Slider(g, "Perfect green strength", "PerfectGreenPct", 0, 150, 5, 0, "%")
 local ln = UI.Card(P, "Learning")
 UI.Toggle(ln, "Learn timing from results", "Learn")
-UI.Toggle(ln, "Auto-learn new shot animations", "AutoCal")
+if showLocked then UI.Toggle(ln, "Auto-learn new shot animations", "AutoCal") end
 UI.Button(ln, "Forget learned animations", function()
 Shot.autoReset()
 notify("Auto Green", "Learned animations cleared", 2)
@@ -6388,7 +6390,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.31b shot-line"
+local VERSION = "v1.34 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -6585,7 +6587,8 @@ if S.SettingsVer < 13 then
 	table.sort(parts)
 	S.ShotTimes = table.concat(parts, " ")
 end
-if S.AutoCal == nil then S.AutoCal = true end
+S.AutoCal = true
+S.AutoGreen = true
 if S.PerfectGreen == nil then S.PerfectGreen = false end
 if S.PeakLead == nil then S.PeakLead = 0.027 end
 if S.PerfectGreenPct == nil then S.PerfectGreenPct = 100 end
@@ -8289,7 +8292,7 @@ function Shot.pingComp()
 	local p = Shot.pingNow()
 	if not S.PerfectGreen then return 0, p end
 	local comp = (p - Shot.PING_REF) * ((S.PerfectGreenPct or 100) / 100)
-	return clamp(comp, -0.02, 0.2), p
+	return clamp(comp, 0, 0.2), p
 end
 Shot.AUTO_START = 0.34
 Shot.AUTO_SCAN = { 0.30, 0.32, 0.34, 0.36, 0.38, 0.31, 0.33, 0.35, 0.37, 0.29, 0.39, 0.40, 0.28 }
@@ -12538,17 +12541,18 @@ end
 P = UI.Page("Shooting", "S")
 do
 	local g = UI.Card(P, "Auto Green")
-	UI.Toggle(g, "Auto Green", "AutoGreen")
+	local showLocked = false
+	if showLocked then UI.Toggle(g, "Auto Green", "AutoGreen") end
 	UI.Dropdown(g, "Shot style (Hold or Tap)", "ShotStyle", { "Hold", "Tap" })
 	UI.Slider(g, "Starting hold time", "HoldTime", 0.08, 1.6, 0.005, 3, "s")
 	UI.Slider(g, "Release earlier / later", "Nudge", -150, 150, 5, 0, "ms")
 	UI.Toggle(g, "Perfect green", "PerfectGreen")
-	UI.Note(g, "Makes up for high ping")
+	UI.Note(g, "Makes up for high ping/ms. Does nothing if you have low ping.")
 	UI.Slider(g, "Perfect green strength", "PerfectGreenPct", 0, 150, 5, 0, "%")
 
 	local ln = UI.Card(P, "Learning")
 	UI.Toggle(ln, "Learn timing from results", "Learn")
-	UI.Toggle(ln, "Auto-learn new shot animations", "AutoCal")
+	if showLocked then UI.Toggle(ln, "Auto-learn new shot animations", "AutoCal") end
 	UI.Button(ln, "Forget learned animations", function()
 		Shot.autoReset()
 		notify("Auto Green", "Learned animations cleared", 2)
