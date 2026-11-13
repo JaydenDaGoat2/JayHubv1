@@ -142,7 +142,8 @@ DribbleGlideSpeed = 1, ShotGlideSpeed = 1, GatherGlideSpeed = 1,
 GfxLow = false, GfxEffects = false, GfxTextures = false, GfxShadows = false, GfxPost = false, GfxHideOthers = false, GfxCull = false,
 GfxCullDist = 250, GfxBoost = false, GfxFpsCap = 0, PingStab = false, PingWindow = 3, FinalAdj = "",
 ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
-LagSync = false, LagK = 2, PrecFit = false, PeakBin = 0.014, AdaptPlus = false,
+LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
+AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -272,8 +273,9 @@ S.ShotTimes = table.concat(parts, " ")
 end
 if S.SettingsVer < 29 then S.Codes = DEFAULTS.Codes end
 if S.SettingsVer < 31 then S.LagSync, S.PrecFit, S.AdaptPlus = false, false, false end
-S.SettingsVer = 31
-DEFAULTS.SettingsVer = 31
+if S.SettingsVer < 32 then S.LagSync, S.PrecFit, S.AdaptPlus, S.GreenMax, S.Sweep = true, true, true, true, false end
+S.SettingsVer = 32
+DEFAULTS.SettingsVer = 32
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 S.ShotTimes = S.ShotTimes
 S.RecOn = false
@@ -2025,6 +2027,7 @@ return true
 end
 function Shot.remoteHold(key, pk)
 local fin = Shot.FINAL[key]
+if fin and S.AdaptPlus then Shot.finalLoad() fin = fin + (Shot.finalAdj[key] or 0) end
 if fin then
 Shot.lastSweep = nil
 Shot.cur = { key = key, hold = fin, state = "Locked (built in)" }
@@ -2078,7 +2081,10 @@ local ch = char()
 Shot.last = { t = tick(), held = info.held, idx = info.idx, res = res, key = info.key }
 if Shot.cur and Shot.cur.key == info.key and ch then Shot.cur.anim = ch:GetAttribute("BaseAnimation") end
 end
-if info and Shot.FINAL[info.key] then return end
+if info and Shot.FINAL[info.key] then
+if S.AdaptPlus then pcall(Shot.finalLearn, info, res, strength) end
+return
+end
 if info and Shot.autoLearn(info, res, strength) then return end
 if not S.Learn or (S.Sweep and Rec.shotOn) then return end
 local key, held = info.key, info.held + (info.comp or 0)
@@ -3224,7 +3230,7 @@ g.Size = UDim2.new(0, 110, 0, 40)
 g.StudsOffset = Vector3.new(0, 3.6, 0)
 g.AlwaysOnTop = true
 g.Adornee = head
-local img = V.logoImg[key]
+local img = V.customLogo(key) or V.logoImg[key]
 if img then
 local il = Instance.new("ImageLabel")
 il.BackgroundTransparency = 1
@@ -4708,6 +4714,7 @@ local SHOT_SKIP = { Stamina = true, TakeoverFill = true, AccelerationBoost = tru
 function Rec.shotStart()
 if Rec.shotOn then return end
 Rec.shotOn = true
+if S.Sweep then notify("Shot recorder", "Sweep is ON: shots are released early and late on purpose. Turn it off for real results.", 7) end
 Rec.shotLines, Rec.shotBytes, Rec.shotT0, Rec.shotSummary, Rec.shotCtx = {}, 0, tick(), {}, nil
 Rec.shotAdd("== shot recorder " .. VERSION .. " | " .. tostring(JH.placeName) .. " | " .. tostring(JH.execName))
 local c = char()
@@ -6565,23 +6572,26 @@ end)
 end
 -- AUTO GREEN, GRAPHICS AND PING UPGRADE
 do
--- AUTO GREEN: the original learner, plus a drift watch for shots that are already locked
+-- AUTO GREEN: the original learner, plus a bias watch for shots that are already locked
 local origAutoLearn = Shot.autoLearn
 function Shot.autoLearn(info, res, strength)
 local a = Shot.auto and Shot.auto[info.key]
 if S.AdaptPlus and a and a.locked and a.mode == "peak" and not info.manual and Shot.autoActive(info.key) then
 local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 if idx then
-a.win = a.win or {}
-a.win[#a.win + 1] = (idx > 5 and 1) or (idx < 4 and -1) or 0
-if #a.win > 6 then table.remove(a.win, 1) end
-local sum = 0
-for _, v in ipairs(a.win) do sum = sum + v end
-if math.abs(sum) >= 3 then
+local off = (idx == 5 and 0) or (idx == 4 and -0.6) or (idx - 5)
+a.bin = a.bin or S.PeakBin or 0.014
 local before = a.hold
-a.hold = clamp(a.hold + (sum > 0 and 1 or -1) * 0.004, 0, 0.1)
-a.win = {}
-Shot.noteAdjust(info.key, before, a.hold, "Drifted " .. (sum > 0 and "late" or "early") .. ", nudged")
+a.b = (a.b or 0) * 0.7 + off * 0.3
+if math.abs(off) >= 2 then
+a.hold = clamp(a.hold + off * a.bin * 0.7, 0, 0.1)
+a.b = 0
+elseif math.abs(a.b) >= 0.45 then
+a.hold = clamp(a.hold + a.b * a.bin * 0.8, 0, 0.1)
+a.b = 0
+end
+if a.hold ~= before then
+Shot.noteAdjust(info.key, before, a.hold, (Shot.VERDICT[idx] or "?") .. ", re-centered")
 Shot.autoSave()
 end
 end
@@ -7769,6 +7779,8 @@ UI.Slider(g1, "Guard range", "AGRange", 10, 120, 5, 0, " studs")
 UI.Toggle(g1, "Stay in front no matter what", "AGLock")
 UI.Toggle(g1, "Face the player I guard", "AGFace")
 UI.Toggle(g1, "Sprint to catch up", "AGSprint")
+UI.Toggle(g1, "Look human (sway, hesitate, player speed)", "AGHuman")
+UI.Slider(g1, "How human", "AGHumanAmt", 0, 100, 5, 0, "%")
 UI.Note(g1, "It stands between the player and the hoop, and leads where they are going. Stay in front no matter what ignores range and reaction and chases at double speed.")
 local g2 = UI.Card(GP, "Auto block")
 UI.Toggle(g2, "Auto block", "AB")
@@ -7779,7 +7791,7 @@ UI.Toggle(g2, "Run at the shooter first", "ABChase")
 UI.Keybind(g2, "Block / jump key", function() return S.ABKey end, function(v) S.ABKey = (v ~= "" and v) or "Space" end)
 UI.Note(g2, "Blocks by jumping at the shooter. If your game blocks with another button, set it here.")
 
-local RP = UI.Page("Auto Rebound", "R")
+local RP = UI.Page("Rebound", "R")
 local r1 = UI.Card(RP, "Auto rebound")
 UI.Toggle(r1, "Auto rebound", "AR")
 UI.Slider(r1, "Speed", "ARSpeed", 0.5, 3, 0.1, 1, "x")
@@ -8011,6 +8023,9 @@ if p.name == "Shooting" then shootPage = p end
 end
 if shootPage then
 local c = UI.Card(shootPage, "Lag sync")
+UI.Toggle(c, "Auto Green MAX (best timing, all upgrades)", "GreenMax", function(v)
+for _, k in ipairs({ "LagSync", "PrecFit", "AdaptPlus" }) do UI.set(k, v, false) end
+end)
 UI.Toggle(c, "Lag sync (follow my ping and FPS)", "LagSync")
 UI.Toggle(c, "Smoother meter reading", "PrecFit")
 UI.Toggle(c, "Faster jumper adapt (experimental)", "AdaptPlus")
@@ -8129,6 +8144,184 @@ if Rec.shotOn then
 Rec.shotAdd(string.format("AUTOCAL(meter) key=%s idx=%s lead=%.4f next=%.4f locked=%s bin=%.4f", key, tostring(idx), lead, a.hold, tostring(a.locked), a.bin))
 end
 return true
+end
+end
+-- AUTO GREEN MAX EXTRAS, HUMAN GUARD, REAL LOOKS AND LOGOS
+do
+local Bot = JH.api.Bot
+local V = Feat.V
+local function verdictIdx(info, res, strength)
+return info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+end
+
+-- built in shots follow the verdicts too: a steady bias moves them, one big miss moves them at once
+Shot.finalAdj = Shot.finalAdj or {}
+Shot.finalSt = {}
+Shot.finalLoaded = false
+function Shot.finalLoad()
+if Shot.finalLoaded then return end
+Shot.finalLoaded = true
+for key, val in string.gmatch(S.FinalAdj or "", "(%S-)=([%-%d%.]+)") do
+Shot.finalAdj[key] = tonumber(val)
+end
+end
+function Shot.finalSave()
+local parts = {}
+for key, val in pairs(Shot.finalAdj) do parts[#parts + 1] = string.format("%s=%.4f", key, val) end
+table.sort(parts)
+S.FinalAdj = table.concat(parts, " ")
+saveSoon()
+end
+function Shot.finalLearn(info, res, strength)
+if info.manual then return end
+if S.LagSync and (Shot.lastShotEx or 0) >= 0.015 then return end
+local idx = verdictIdx(info, res, strength)
+if not idx then return end
+Shot.finalLoad()
+local key = info.key
+local off = (idx == 5 and 0) or (idx == 4 and -0.6) or (idx - 5)
+local st = Shot.finalSt[key]
+if not st then
+st = { b = 0 }
+Shot.finalSt[key] = st
+end
+local bin = S.PeakBin or 0.014
+local old = Shot.finalAdj[key] or 0
+local new = old
+st.b = st.b * 0.7 + off * 0.3
+if math.abs(off) >= 2 then
+new = old - off * bin * 0.7
+st.b = 0
+elseif math.abs(st.b) >= 0.45 then
+new = old - st.b * bin * 0.8
+st.b = 0
+end
+new = clamp(new, -0.05, 0.05)
+if new ~= old then
+Shot.finalAdj[key] = new
+Shot.noteAdjust(key, (Shot.FINAL[key] or 0) + old, (Shot.FINAL[key] or 0) + new, Shot.VERDICT[idx] or "?")
+Shot.finalSave()
+end
+end
+
+-- the guard looks like a player: it sways, reacts a little differently each time, sometimes hesitates and never runs faster than a player can
+function Bot.guardStep(me, others, forced)
+local t = Bot.pickTarget(others, me, forced)
+if not t then return false end
+local dist = flat(t.pos - me).Magnitude
+if dist > S.AGRange and not S.AGLock then return false end
+local now = tick()
+local amt = S.AGHuman and (S.AGHumanAmt or 50) / 100 or 0
+local w = Bot.wob
+if amt > 0 and (not w or now - w.t > 0.5 + math.random() * 0.9) then
+w = { t = now, ox = (math.random() - 0.5) * 2.4 * amt, oz = (math.random() - 0.5) * 2.4 * amt,
+sp = 1 - 0.18 * amt + math.random() * 0.3 * amt, rj = math.random() * 0.12 * amt,
+pause = (math.random() < 0.12 * amt) and (now + 0.12) or 0 }
+Bot.wob = w
+end
+local react = (S.AGLock and 0 or S.AGReact) + ((w and amt > 0) and w.rj or 0)
+if not Bot.spot or Bot.spotTarget ~= t or now - Bot.spotT >= react then
+local ppos = t.pos + t.vel * S.AGPredict
+local hoop = Bot.nearestHoop(ppos)
+local dirf = hoop and flat(hoop - ppos) or flat(t.vel)
+if dirf.Magnitude < 0.1 then dirf = flat(me - ppos) end
+if dirf.Magnitude < 0.1 then dirf = Vector3.new(0, 0, 1) end
+local spot = ppos + dirf.Unit * S.AGDist
+if w and amt > 0 then spot = spot + Vector3.new(w.ox, 0, w.oz) end
+Bot.spot, Bot.spotTarget, Bot.spotT = spot, t, now
+end
+if w and amt > 0 and w.pause > now then
+Bot.stopMove()
+if S.AGFace then Bot.faceAt(t.pos) end
+Bot.status = "Guarding " .. t.pl.Name
+return true
+end
+local to = flat(Bot.spot - me)
+local d = to.Magnitude
+local strength = S.AGStrength / 100
+local mul = S.AGSpeed * (0.7 + strength * 1.3)
+if S.AGLock then mul = mul * 2 end
+if amt > 0 then mul = math.min(mul * w.sp, (S.AGLock and (1 + 0.8 * amt) or (1 + 0.35 * amt))) end
+if d < 0.5 then
+Bot.stopMove()
+else
+local gain = S.AGLock and 1 or math.min(1, d / (4 - 2.5 * strength))
+Bot.move(to.Unit * gain, mul)
+end
+if S.AGFace then Bot.faceAt(t.pos) end
+Bot.setSprint(S.AGSprint and d > 7)
+Bot.status = "Guarding " .. t.pl.Name
+return true
+end
+
+-- your own logo pictures: paste the image number from a Roblox image link
+function V.customId(key)
+for k, id in string.gmatch(S.LogoIds or "", "(%w+)=(%d+)") do
+if k == key then return id end
+end
+return nil
+end
+function V.customLogo(key)
+local id = V.customId(key)
+return id and ("rbxassetid://" .. id) or nil
+end
+function V.setCustomId(key, text)
+local id = string.match(tostring(text or ""), "%d+")
+local parts = {}
+for k, v in string.gmatch(S.LogoIds or "", "(%w+)=(%d+)") do
+if k ~= key then parts[#parts + 1] = k .. "=" .. v end
+end
+if id then parts[#parts + 1] = key .. "=" .. id end
+S.LogoIds = table.concat(parts, " ")
+V.logoKey = nil
+saveSoon()
+end
+
+-- copy the clothes and accessories of any real Roblox account, on your screen only
+function Feat.lookAs(name, uid)
+task.spawn(function()
+local id = uid
+if not id then
+local ok, r = pcall(function() return Players:GetUserIdFromNameAsync(trim(tostring(name))) end)
+if not ok or not r then
+notify("Real look", "No Roblox player called " .. tostring(name), 4)
+return
+end
+id = r
+end
+local ok, model = pcall(function() return Players:GetCharacterAppearanceAsync(id) end)
+local c = char()
+if not ok or not model or not c then
+notify("Real look", "Could not load that look", 4)
+return
+end
+local h = c:FindFirstChildOfClass("Humanoid")
+for _, d in ipairs(c:GetChildren()) do
+if d:IsA("Accessory") or d:IsA("Shirt") or d:IsA("Pants") or d:IsA("ShirtGraphic") or d:IsA("BodyColors") then d:Destroy() end
+end
+for _, d in ipairs(model:GetChildren()) do
+if d:IsA("Accessory") then
+if h then pcall(function() h:AddAccessory(d:Clone()) end) end
+elseif d:IsA("Shirt") or d:IsA("Pants") or d:IsA("ShirtGraphic") or d:IsA("BodyColors") then
+d:Clone().Parent = c
+end
+end
+notify("Real look", "Now looking like " .. tostring(name), 3)
+end)
+end
+
+local fp
+for _, p in ipairs(UI.pages) do
+if p.name == "Features" then fp = p end
+end
+if fp then
+local lc = UI.Card(fp, "Real look")
+UI.Input(lc, "Roblox username", "LookUser", nil, "type a username")
+UI.Buttons(lc, { { "Look like this player", function() Feat.lookAs(S.LookUser) end }, { "Back to my look", function() Feat.lookAs(LP.Name, LP.UserId) end } })
+UI.Note(lc, "Copies the clothes and accessories of any real Roblox account, only on your screen. Use it for any creator or character that has a Roblox account.")
+local lg = UI.Card(fp, "Custom logo image")
+UI.Input(lg, "Image ID for the logo picked above", { get = function() return V.customId(S.Logo) or "" end, set = function(v) V.setCustomId(S.Logo, v) end }, nil, "number from the image link")
+UI.Note(lg, "Paste the number from the creator's real logo image link and it replaces the badge above your head.")
 end
 end
 UI.syncAuto()
@@ -8392,7 +8585,8 @@ local S = {
 	GfxLow = false, GfxEffects = false, GfxTextures = false, GfxShadows = false, GfxPost = false, GfxHideOthers = false, GfxCull = false,
 	GfxCullDist = 250, GfxBoost = false, GfxFpsCap = 0, PingStab = false, PingWindow = 3, FinalAdj = "",
 	ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
-	LagSync = false, LagK = 2, PrecFit = false, PeakBin = 0.014, AdaptPlus = false,
+	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
+	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 	LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 	AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -8528,8 +8722,9 @@ if S.SettingsVer < 28 then
 end
 if S.SettingsVer < 29 then S.Codes = DEFAULTS.Codes end
 if S.SettingsVer < 31 then S.LagSync, S.PrecFit, S.AdaptPlus = false, false, false end
-S.SettingsVer = 31
-DEFAULTS.SettingsVer = 31
+if S.SettingsVer < 32 then S.LagSync, S.PrecFit, S.AdaptPlus, S.GreenMax, S.Sweep = true, true, true, true, false end
+S.SettingsVer = 32
+DEFAULTS.SettingsVer = 32
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 S.ShotTimes = S.ShotTimes
 S.RecOn = false
@@ -10377,6 +10572,7 @@ function Shot.autoLearn(info, res, strength)
 end
 function Shot.remoteHold(key, pk)
 	local fin = Shot.FINAL[key]
+	if fin and S.AdaptPlus then Shot.finalLoad() fin = fin + (Shot.finalAdj[key] or 0) end
 	if fin then
 		Shot.lastSweep = nil
 		Shot.cur = { key = key, hold = fin, state = "Locked (built in)" }
@@ -10435,7 +10631,10 @@ function Shot.learnRemote(info, res, strength)
 		Shot.last = { t = tick(), held = info.held, idx = info.idx, res = res, key = info.key }
 		if Shot.cur and Shot.cur.key == info.key and ch then Shot.cur.anim = ch:GetAttribute("BaseAnimation") end
 	end
-	if info and Shot.FINAL[info.key] then return end
+	if info and Shot.FINAL[info.key] then
+	if S.AdaptPlus then pcall(Shot.finalLearn, info, res, strength) end
+	return
+	end
 	if info and Shot.autoLearn(info, res, strength) then return end
 	if not S.Learn or (S.Sweep and Rec.shotOn) then return end
 	local key, held = info.key, info.held + (info.comp or 0)
@@ -11646,7 +11845,7 @@ do
 		g.StudsOffset = Vector3.new(0, 3.6, 0)
 		g.AlwaysOnTop = true
 		g.Adornee = head
-		local img = V.logoImg[key]
+		local img = V.customLogo(key) or V.logoImg[key]
 		if img then
 			local il = Instance.new("ImageLabel")
 			il.BackgroundTransparency = 1
@@ -13181,6 +13380,7 @@ local SHOT_SKIP = { Stamina = true, TakeoverFill = true, AccelerationBoost = tru
 function Rec.shotStart()
 	if Rec.shotOn then return end
 	Rec.shotOn = true
+	if S.Sweep then notify("Shot recorder", "Sweep is ON: shots are released early and late on purpose. Turn it off for real results.", 7) end
 	Rec.shotLines, Rec.shotBytes, Rec.shotT0, Rec.shotSummary, Rec.shotCtx = {}, 0, tick(), {}, nil
 	Rec.shotAdd("== shot recorder " .. VERSION .. " | " .. tostring(JH.placeName) .. " | " .. tostring(JH.execName))
 	local c = char()
@@ -15163,23 +15363,26 @@ function Mover.watchShot(pressT)
 end
 -- AUTO GREEN, GRAPHICS AND PING UPGRADE
 do
-	-- AUTO GREEN: the original learner, plus a drift watch for shots that are already locked
+	-- AUTO GREEN: the original learner, plus a bias watch for shots that are already locked
 	local origAutoLearn = Shot.autoLearn
 	function Shot.autoLearn(info, res, strength)
 	local a = Shot.auto and Shot.auto[info.key]
 	if S.AdaptPlus and a and a.locked and a.mode == "peak" and not info.manual and Shot.autoActive(info.key) then
 	local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 	if idx then
-	a.win = a.win or {}
-	a.win[#a.win + 1] = (idx > 5 and 1) or (idx < 4 and -1) or 0
-	if #a.win > 6 then table.remove(a.win, 1) end
-	local sum = 0
-	for _, v in ipairs(a.win) do sum = sum + v end
-	if math.abs(sum) >= 3 then
+	local off = (idx == 5 and 0) or (idx == 4 and -0.6) or (idx - 5)
+	a.bin = a.bin or S.PeakBin or 0.014
 	local before = a.hold
-	a.hold = clamp(a.hold + (sum > 0 and 1 or -1) * 0.004, 0, 0.1)
-	a.win = {}
-	Shot.noteAdjust(info.key, before, a.hold, "Drifted " .. (sum > 0 and "late" or "early") .. ", nudged")
+	a.b = (a.b or 0) * 0.7 + off * 0.3
+	if math.abs(off) >= 2 then
+	a.hold = clamp(a.hold + off * a.bin * 0.7, 0, 0.1)
+	a.b = 0
+	elseif math.abs(a.b) >= 0.45 then
+	a.hold = clamp(a.hold + a.b * a.bin * 0.8, 0, 0.1)
+	a.b = 0
+	end
+	if a.hold ~= before then
+	Shot.noteAdjust(info.key, before, a.hold, (Shot.VERDICT[idx] or "?") .. ", re-centered")
 	Shot.autoSave()
 	end
 	end
@@ -16367,6 +16570,8 @@ do
 	UI.Toggle(g1, "Stay in front no matter what", "AGLock")
 	UI.Toggle(g1, "Face the player I guard", "AGFace")
 	UI.Toggle(g1, "Sprint to catch up", "AGSprint")
+	UI.Toggle(g1, "Look human (sway, hesitate, player speed)", "AGHuman")
+	UI.Slider(g1, "How human", "AGHumanAmt", 0, 100, 5, 0, "%")
 	UI.Note(g1, "It stands between the player and the hoop, and leads where they are going. Stay in front no matter what ignores range and reaction and chases at double speed.")
 	local g2 = UI.Card(GP, "Auto block")
 	UI.Toggle(g2, "Auto block", "AB")
@@ -16377,7 +16582,7 @@ do
 	UI.Keybind(g2, "Block / jump key", function() return S.ABKey end, function(v) S.ABKey = (v ~= "" and v) or "Space" end)
 	UI.Note(g2, "Blocks by jumping at the shooter. If your game blocks with another button, set it here.")
 
-	local RP = UI.Page("Auto Rebound", "R")
+	local RP = UI.Page("Rebound", "R")
 	local r1 = UI.Card(RP, "Auto rebound")
 	UI.Toggle(r1, "Auto rebound", "AR")
 	UI.Slider(r1, "Speed", "ARSpeed", 0.5, 3, 0.1, 1, "x")
@@ -16609,6 +16814,9 @@ do
 	end
 	if shootPage then
 		local c = UI.Card(shootPage, "Lag sync")
+		UI.Toggle(c, "Auto Green MAX (best timing, all upgrades)", "GreenMax", function(v)
+		for _, k in ipairs({ "LagSync", "PrecFit", "AdaptPlus" }) do UI.set(k, v, false) end
+		end)
 		UI.Toggle(c, "Lag sync (follow my ping and FPS)", "LagSync")
 		UI.Toggle(c, "Smoother meter reading", "PrecFit")
 		UI.Toggle(c, "Faster jumper adapt (experimental)", "AdaptPlus")
@@ -16728,6 +16936,184 @@ Rec.shotAdd(string.format("AUTOCAL(meter) key=%s idx=%s lead=%.4f next=%.4f lock
 end
 return true
 end
+end
+-- AUTO GREEN MAX EXTRAS, HUMAN GUARD, REAL LOOKS AND LOGOS
+do
+	local Bot = JH.api.Bot
+	local V = Feat.V
+	local function verdictIdx(info, res, strength)
+		return info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+	end
+
+	-- built in shots follow the verdicts too: a steady bias moves them, one big miss moves them at once
+	Shot.finalAdj = Shot.finalAdj or {}
+	Shot.finalSt = {}
+	Shot.finalLoaded = false
+	function Shot.finalLoad()
+		if Shot.finalLoaded then return end
+		Shot.finalLoaded = true
+		for key, val in string.gmatch(S.FinalAdj or "", "(%S-)=([%-%d%.]+)") do
+			Shot.finalAdj[key] = tonumber(val)
+		end
+	end
+	function Shot.finalSave()
+		local parts = {}
+		for key, val in pairs(Shot.finalAdj) do parts[#parts + 1] = string.format("%s=%.4f", key, val) end
+		table.sort(parts)
+		S.FinalAdj = table.concat(parts, " ")
+		saveSoon()
+	end
+	function Shot.finalLearn(info, res, strength)
+		if info.manual then return end
+		if S.LagSync and (Shot.lastShotEx or 0) >= 0.015 then return end
+		local idx = verdictIdx(info, res, strength)
+		if not idx then return end
+		Shot.finalLoad()
+		local key = info.key
+		local off = (idx == 5 and 0) or (idx == 4 and -0.6) or (idx - 5)
+		local st = Shot.finalSt[key]
+		if not st then
+			st = { b = 0 }
+			Shot.finalSt[key] = st
+		end
+		local bin = S.PeakBin or 0.014
+		local old = Shot.finalAdj[key] or 0
+		local new = old
+		st.b = st.b * 0.7 + off * 0.3
+		if math.abs(off) >= 2 then
+			new = old - off * bin * 0.7
+			st.b = 0
+		elseif math.abs(st.b) >= 0.45 then
+			new = old - st.b * bin * 0.8
+			st.b = 0
+		end
+		new = clamp(new, -0.05, 0.05)
+		if new ~= old then
+			Shot.finalAdj[key] = new
+			Shot.noteAdjust(key, (Shot.FINAL[key] or 0) + old, (Shot.FINAL[key] or 0) + new, Shot.VERDICT[idx] or "?")
+			Shot.finalSave()
+		end
+	end
+
+	-- the guard looks like a player: it sways, reacts a little differently each time, sometimes hesitates and never runs faster than a player can
+	function Bot.guardStep(me, others, forced)
+		local t = Bot.pickTarget(others, me, forced)
+		if not t then return false end
+		local dist = flat(t.pos - me).Magnitude
+		if dist > S.AGRange and not S.AGLock then return false end
+		local now = tick()
+		local amt = S.AGHuman and (S.AGHumanAmt or 50) / 100 or 0
+		local w = Bot.wob
+		if amt > 0 and (not w or now - w.t > 0.5 + math.random() * 0.9) then
+			w = { t = now, ox = (math.random() - 0.5) * 2.4 * amt, oz = (math.random() - 0.5) * 2.4 * amt,
+				sp = 1 - 0.18 * amt + math.random() * 0.3 * amt, rj = math.random() * 0.12 * amt,
+				pause = (math.random() < 0.12 * amt) and (now + 0.12) or 0 }
+			Bot.wob = w
+		end
+		local react = (S.AGLock and 0 or S.AGReact) + ((w and amt > 0) and w.rj or 0)
+		if not Bot.spot or Bot.spotTarget ~= t or now - Bot.spotT >= react then
+			local ppos = t.pos + t.vel * S.AGPredict
+			local hoop = Bot.nearestHoop(ppos)
+			local dirf = hoop and flat(hoop - ppos) or flat(t.vel)
+			if dirf.Magnitude < 0.1 then dirf = flat(me - ppos) end
+			if dirf.Magnitude < 0.1 then dirf = Vector3.new(0, 0, 1) end
+			local spot = ppos + dirf.Unit * S.AGDist
+			if w and amt > 0 then spot = spot + Vector3.new(w.ox, 0, w.oz) end
+			Bot.spot, Bot.spotTarget, Bot.spotT = spot, t, now
+		end
+		if w and amt > 0 and w.pause > now then
+			Bot.stopMove()
+			if S.AGFace then Bot.faceAt(t.pos) end
+			Bot.status = "Guarding " .. t.pl.Name
+			return true
+		end
+		local to = flat(Bot.spot - me)
+		local d = to.Magnitude
+		local strength = S.AGStrength / 100
+		local mul = S.AGSpeed * (0.7 + strength * 1.3)
+		if S.AGLock then mul = mul * 2 end
+		if amt > 0 then mul = math.min(mul * w.sp, (S.AGLock and (1 + 0.8 * amt) or (1 + 0.35 * amt))) end
+		if d < 0.5 then
+			Bot.stopMove()
+		else
+			local gain = S.AGLock and 1 or math.min(1, d / (4 - 2.5 * strength))
+			Bot.move(to.Unit * gain, mul)
+		end
+		if S.AGFace then Bot.faceAt(t.pos) end
+		Bot.setSprint(S.AGSprint and d > 7)
+		Bot.status = "Guarding " .. t.pl.Name
+		return true
+	end
+
+	-- your own logo pictures: paste the image number from a Roblox image link
+	function V.customId(key)
+		for k, id in string.gmatch(S.LogoIds or "", "(%w+)=(%d+)") do
+			if k == key then return id end
+		end
+		return nil
+	end
+	function V.customLogo(key)
+		local id = V.customId(key)
+		return id and ("rbxassetid://" .. id) or nil
+	end
+	function V.setCustomId(key, text)
+		local id = string.match(tostring(text or ""), "%d+")
+		local parts = {}
+		for k, v in string.gmatch(S.LogoIds or "", "(%w+)=(%d+)") do
+			if k ~= key then parts[#parts + 1] = k .. "=" .. v end
+		end
+		if id then parts[#parts + 1] = key .. "=" .. id end
+		S.LogoIds = table.concat(parts, " ")
+		V.logoKey = nil
+		saveSoon()
+	end
+
+	-- copy the clothes and accessories of any real Roblox account, on your screen only
+	function Feat.lookAs(name, uid)
+		task.spawn(function()
+			local id = uid
+			if not id then
+				local ok, r = pcall(function() return Players:GetUserIdFromNameAsync(trim(tostring(name))) end)
+				if not ok or not r then
+					notify("Real look", "No Roblox player called " .. tostring(name), 4)
+					return
+				end
+				id = r
+			end
+			local ok, model = pcall(function() return Players:GetCharacterAppearanceAsync(id) end)
+			local c = char()
+			if not ok or not model or not c then
+				notify("Real look", "Could not load that look", 4)
+				return
+			end
+			local h = c:FindFirstChildOfClass("Humanoid")
+			for _, d in ipairs(c:GetChildren()) do
+				if d:IsA("Accessory") or d:IsA("Shirt") or d:IsA("Pants") or d:IsA("ShirtGraphic") or d:IsA("BodyColors") then d:Destroy() end
+			end
+			for _, d in ipairs(model:GetChildren()) do
+				if d:IsA("Accessory") then
+					if h then pcall(function() h:AddAccessory(d:Clone()) end) end
+				elseif d:IsA("Shirt") or d:IsA("Pants") or d:IsA("ShirtGraphic") or d:IsA("BodyColors") then
+					d:Clone().Parent = c
+				end
+			end
+			notify("Real look", "Now looking like " .. tostring(name), 3)
+		end)
+	end
+
+	local fp
+	for _, p in ipairs(UI.pages) do
+		if p.name == "Features" then fp = p end
+	end
+	if fp then
+		local lc = UI.Card(fp, "Real look")
+		UI.Input(lc, "Roblox username", "LookUser", nil, "type a username")
+		UI.Buttons(lc, { { "Look like this player", function() Feat.lookAs(S.LookUser) end }, { "Back to my look", function() Feat.lookAs(LP.Name, LP.UserId) end } })
+		UI.Note(lc, "Copies the clothes and accessories of any real Roblox account, only on your screen. Use it for any creator or character that has a Roblox account.")
+		local lg = UI.Card(fp, "Custom logo image")
+		UI.Input(lg, "Image ID for the logo picked above", { get = function() return V.customId(S.Logo) or "" end, set = function(v) V.setCustomId(S.Logo, v) end }, nil, "number from the image link")
+		UI.Note(lg, "Paste the number from the creator's real logo image link and it replaces the badge above your head.")
+	end
 end
 UI.syncAuto()
 UI.applyTheme()
