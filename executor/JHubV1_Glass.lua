@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.13 shot-line"
+local VERSION = "v1.14 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -145,7 +145,7 @@ ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, St
 LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true,
+FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false,
 LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -6322,7 +6322,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.13  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.14  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -8052,6 +8052,7 @@ UI.Slider(c, "Fade and step back timing (later)", "FadeNudge", -30, 40, 1, 0, " 
 UI.Toggle(c, "Auto adapt: learn every shot from the first one", "AutoAdaptAll")
 UI.Toggle(c, "Instant green (works at low FPS and high ping)", "InstantGreen")
 UI.Toggle(c, "Smart steps (faster learning, no bouncing)", "SmartSteps")
+UI.Toggle(c, "Show shot contest above my head", "ContestShow")
 UI.Toggle(c, "Keep glides away from my shot", "GlideShotSafe")
 UI.Buttons(c, { { "Copy my locked timings", function() local t = Shot.exportTimings() if setclipboard then setclipboard(t) end notify("Timings", t == "" and "Nothing locked yet" or "Copied to clipboard", 3) end } })
 UI.Input(c, "Import timings", "ImportTimes", nil, "paste copied timings, then rejoin")
@@ -8794,7 +8795,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.13"
+d.Text = "JHub V1.14"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -9441,6 +9442,8 @@ end
 end
 end
 local LP = UI.Page("Locked", "L")
+UI.lockedPage = LP
+UI.lockedTools = tools
 local lay = LP.frame:FindFirstChildOfClass("UIListLayout")
 if lay then
 lay.FillDirection = Enum.FillDirection.Horizontal
@@ -9553,6 +9556,342 @@ end
 end
 return r
 end
+end
+-- ULTRA GAME RECORDER: one switch that records everything (game recorder, shot recorder, shot lab) plus every player, animation, input, control and setting
+do
+local Ultra = { on = false, conns = {}, seenAnim = setmetatable({}, { __mode = "k" }), last = {} }
+local CAS = game:GetService("ContextActionService")
+local ATTRS = { "Action", "BaseAnimation", "GatherType", "LastDribblePackage", "Stamina", "ServerVelocity", "CanMove", "meterOffset" }
+local function charOfPlayer(pl)
+return pl.Character or (workspace:FindFirstChild("Characters") and workspace.Characters:FindFirstChild(pl.Name))
+end
+local function hasBall(c)
+local af = c and c:FindFirstChild("Attributes")
+local bv = af and af:FindFirstChild("Basketball")
+return (bv and bv.Value ~= nil) and true or false
+end
+local function watchAnimator(pl, c)
+local h = c and c:FindFirstChildOfClass("Humanoid")
+local a = h and (h:FindFirstChildOfClass("Animator") or c:FindFirstChildWhichIsA("Animator", true))
+if not a or Ultra.seenAnim[a] then return end
+Ultra.seenAnim[a] = true
+Ultra.conns[#Ultra.conns + 1] = a.AnimationPlayed:Connect(function(tr)
+local id = ""
+pcall(function() id = string.gsub(tostring(tr.Animation.AnimationId), "rbxassetid://", "") end)
+Rec.add("anim", string.format("%s%s %s id=%s len=%.2f prio=%s looped=%s", pl.Name, pl == LP and " (me)" or "", tostring(tr.Name), id, tr.Length or 0,
+tostring(tr.Priority), tostring(tr.Looped)))
+end)
+end
+local function dumpOnce()
+-- controls the game has bound
+pcall(function()
+for name, info in pairs(CAS:GetAllBoundActionInfo()) do
+local kinds = {}
+for _, t in ipairs(info.inputTypes or {}) do kinds[#kinds + 1] = tostring(t) end
+Rec.add("control", string.format("bound action %s priority=%s stack=%s inputs=%s", tostring(name), tostring(info.priority), tostring(info.stackOrder), table.concat(kinds, ",")))
+end
+end)
+-- emotes and every shot or move animation the game ships
+pcall(function()
+local n = 0
+for _, d in ipairs(game:GetDescendants()) do
+if d:IsA("Animation") and tostring(d.AnimationId) ~= "" then
+n = n + 1
+Rec.add("anim-list", d:GetFullName() .. " = " .. string.gsub(tostring(d.AnimationId), "rbxassetid://", ""))
+if n >= 700 then break end
+end
+end
+end)
+-- settings: values and attributes that look like game rules
+pcall(function()
+local n = 0
+for _, d in ipairs(game:GetService("ReplicatedStorage"):GetDescendants()) do
+if d:IsA("ValueBase") then
+n = n + 1
+Rec.add("setting", d:GetFullName() .. " = " .. tostring(d.Value))
+if n >= 400 then break end
+end
+end
+for k, v in pairs(LP:GetAttributes()) do Rec.add("setting", "player attribute " .. k .. " = " .. tostring(v)) end
+for k, v in pairs(workspace:GetAttributes()) do Rec.add("setting", "workspace attribute " .. k .. " = " .. tostring(v)) end
+for k, v in pairs(game:GetService("ReplicatedStorage"):GetAttributes()) do Rec.add("setting", "storage attribute " .. k .. " = " .. tostring(v)) end
+end)
+-- hoops and court
+pcall(function()
+local n = 0
+for _, d in ipairs(workspace:GetDescendants()) do
+if d:IsA("BasePart") then
+local nm = string.lower(d.Name)
+if string.find(nm, "hoop", 1, true) or string.find(nm, "rim", 1, true) or string.find(nm, "backboard", 1, true) or string.find(nm, "goal", 1, true) then
+n = n + 1
+Rec.add("court", string.format("%s at %.1f,%.1f,%.1f size %.1f,%.1f,%.1f", d:GetFullName(), d.Position.X, d.Position.Y, d.Position.Z, d.Size.X, d.Size.Y, d.Size.Z))
+if n >= 40 then break end
+end
+end
+end
+end)
+Rec.add("build", "walkspeed=" .. tostring(hum() and hum().WalkSpeed) .. " jump=" .. tostring(hum() and hum().JumpPower) .. " hipheight=" .. tostring(hum() and hum().HipHeight))
+end
+local function sample()
+local me = hrp()
+for _, pl in ipairs(Players:GetPlayers()) do
+local c = charOfPlayer(pl)
+local root = c and (c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart)
+if root then
+watchAnimator(pl, c)
+local v = root.AssemblyLinearVelocity
+local parts = {}
+for _, k in ipairs(ATTRS) do
+local val = c:GetAttribute(k)
+if val ~= nil then parts[#parts + 1] = k .. "=" .. (type(val) == "number" and string.format("%.2f", val) or tostring(val)) end
+end
+local h = c:FindFirstChildOfClass("Humanoid")
+local st = "?"
+if h then pcall(function() st = tostring(h:GetState()) end) end
+local line = string.format("%s%s team=%s pos=%.1f,%.1f,%.1f vel=%.1f,%.1f,%.1f ball=%s state=%s %s%s", pl.Name, pl == LP and " (me)" or "",
+tostring(pl.Team and pl.Team.Name), root.Position.X, root.Position.Y, root.Position.Z, v.X, v.Y, v.Z, tostring(hasBall(c)), st,
+table.concat(parts, " "), (me and pl ~= LP) and string.format(" dist=%.1f", (root.Position - me.Position).Magnitude) or "")
+if Ultra.last[pl] ~= line or tick() - (Ultra.lastT and Ultra.lastT[pl] or 0) > 2 then
+Ultra.last[pl] = line
+Ultra.lastT = Ultra.lastT or {}
+Ultra.lastT[pl] = tick()
+Rec.add("player", line)
+end
+end
+end
+local b = Feat.findBall()
+if b and b.Parent then
+local v = b.AssemblyLinearVelocity
+Rec.add("ballpos", string.format("pos=%.1f,%.1f,%.1f vel=%.1f,%.1f,%.1f loose=%s", b.Position.X, b.Position.Y, b.Position.Z, v.X, v.Y, v.Z, tostring(Feat.ballLoose())))
+end
+end
+function Ultra.start()
+if Ultra.on then return end
+Ultra.on = true
+if not Rec.on then Rec.start() end
+pcall(Rec.shotStart)
+S.LabOn = true
+pcall(dumpOnce)
+Ultra.conns[#Ultra.conns + 1] = UIS.InputBegan:Connect(function(i, gp)
+Rec.add("input", string.format("began %s %s gui=%s", tostring(i.UserInputType), i.KeyCode ~= Enum.KeyCode.Unknown and tostring(i.KeyCode) or "", tostring(gp)))
+end)
+Ultra.conns[#Ultra.conns + 1] = UIS.InputEnded:Connect(function(i, gp)
+Rec.add("input", string.format("ended %s %s", tostring(i.UserInputType), i.KeyCode ~= Enum.KeyCode.Unknown and tostring(i.KeyCode) or ""))
+end)
+task.spawn(function()
+local n = 0
+while Ultra.on and JH.Running do
+pcall(sample)
+n = n + 1
+if n % 8 == 0 then Rec.add("perf", string.format("fps=%d ping=%d ms", math.floor((JH.FPS or 0) + 0.5), math.floor((Shot.pingNow and Shot.pingNow() or 0) * 1000 + 0.5))) end
+task.wait(0.25)
+end
+end)
+notify("Ultra recorder", "Recording everything", 3)
+end
+function Ultra.stop()
+if not Ultra.on then return end
+Ultra.on = false
+for _, c in ipairs(Ultra.conns) do pcall(function() c:Disconnect() end) end
+Ultra.conns = {}
+pcall(Rec.shotStop)
+pcall(Rec.stop)
+end
+function Ultra.report()
+local parts = { Rec.text() }
+if Shot.lab and Shot.lab.report then parts[#parts + 1] = "\n\n" .. Shot.lab.report() end
+return table.concat(parts, "\n")
+end
+local mainPage
+for _, p in ipairs(UI.pages) do
+if p.name == "Main" then mainPage = p end
+end
+if mainPage and UI.lockedTools then
+local c = UI.Card(mainPage, "Ultra Game Recorder")
+UI.Toggle(c, "Record everything", "UltraOn", function(v) if v then Ultra.start() else Ultra.stop() end end)
+UI.Note(c, "Play normally with it on: dribble, shoot, guard, steal, block, rebound, dunk, use every button once. It records every player, animation, button, setting, ball movement and shot.")
+UI.Buttons(c, {
+{ "Copy everything", function()
+local text = Ultra.report()
+pcall(function() if type(writefile) == "function" then writefile("JHub_ultra_report.txt", text) end end)
+if type(setclipboard) == "function" then
+pcall(setclipboard, text)
+notify("Ultra recorder", "Copied and saved as JHub_ultra_report.txt", 4)
+else
+notify("Ultra recorder", "Saved as JHub_ultra_report.txt in your executor folder", 4)
+end
+end },
+{ "Clear", function() pcall(Rec.clear) if Shot.lab then Shot.lab.rows, Shot.lab.stats = {}, {} end end },
+})
+c.frame.Visible = false
+table.insert(UI.lockedTools, 1, c.frame)
+end
+S.UltraOn = false
+end
+-- REBOUND AND BALL MAGNET LEAVE YOU ALONE WHILE YOU MOVE, GUARD SPEED, SHOT CONTEST ABOVE YOUR HEAD, NO STUN ONLY IN FIGHT ANIMATIONS
+do
+local Bot = JH.api.Bot
+local function stickActive()
+local h, r = hum(), Mover.body()
+if not h or not r then return false end
+local ok, intent = pcall(Mover.intent, h, r)
+return ok and intent ~= nil and intent.Magnitude > 0.15
+end
+Feat.heldT = 0
+task.spawn(function()
+while JH.Running do
+task.wait(0.1)
+if not Feat.ballLoose() then Feat.heldT = tick() end
+end
+end)
+-- a real rebound or loose ball only: not a pass, a check up, or while you are the one moving the character
+function Feat.grabOk(b)
+local r = Mover.body()
+if not r or not b then return false end
+if tick() - Feat.heldT < 0.9 then return false end
+local rebound = b.Position.Y > r.Position.Y + 5 or b.AssemblyLinearVelocity.Y < -8
+if stickActive() and not rebound then return false end
+return true
+end
+local prevGet = Feat.getBall
+function Feat.getBall(force)
+local b = Feat.findBall()
+if not b or not Feat.grabOk(b) then return false end
+return prevGet(force)
+end
+local prevReb = Bot.reboundStep
+function Bot.reboundStep(me, r)
+local b = Feat.findBall()
+if b and not Feat.grabOk(b) then
+Bot.marker(nil)
+Bot.rbT = nil
+return false
+end
+return prevReb(me, r)
+end
+
+-- guard speed: extra speed only while an opponent with the ball is close and you do not have it
+function Feat.isGuarding()
+if Ball.holding then return false end
+local me = hrp()
+if not me then return false end
+for _, pl in ipairs(Players:GetPlayers()) do
+if pl ~= LP and not (LP.Team and pl.Team == LP.Team) then
+local c = pl.Character or (workspace:FindFirstChild("Characters") and workspace.Characters:FindFirstChild(pl.Name))
+local af = c and c:FindFirstChild("Attributes")
+local bv = af and af:FindFirstChild("Basketball")
+local root = c and (c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart)
+if bv and bv.Value ~= nil and root and (root.Position - me.Position).Magnitude < 16 then return true end
+end
+end
+return false
+end
+local baseExtra = Speed.extraNow
+function Speed.extraNow()
+local e = baseExtra()
+if (S.GuardSpeed or 0) > 0 and Feat.isGuarding() then e = e + (Speed.gameWS or 16) * S.GuardSpeed / 100 end
+return e
+end
+local pp
+for _, p in ipairs(UI.pages) do
+if p.name == "Players" then pp = p end
+end
+if pp then
+local g = UI.Card(pp, "Guard speed")
+UI.Slider(g, "Extra speed while guarding", "GuardSpeed", 0, 60, 1, 0, "%")
+UI.Button(g, "Reset guard speed", function() UI.set("GuardSpeed", 0) end)
+UI.Note(g, "Only faster while you guard the player with the ball. Normal speed the rest of the time.")
+end
+
+-- no stun only inside bump, cross, steal, shot, layup and dunk animations (or while the game flags a stun)
+local NS_WORDS = { "bump", "cross", "steal", "dunk", "layup", "shot", "shoot", "push", "stun", "stagger", "knock", "ragdoll", "fall" }
+local baseNS = Bot.noStunStep
+function Bot.noStunStep()
+if not S.NoStun then return end
+local c = char()
+local active = false
+if c then
+for k, v in pairs(c:GetAttributes()) do
+local low = string.lower(k)
+if (string.find(low, "stun", 1, true) or string.find(low, "ragdoll", 1, true) or string.find(low, "stagger", 1, true)) and v then active = true break end
+end
+end
+if not active then
+local a = Anim.animator
+local ok, list = pcall(function() return a and a:GetPlayingAnimationTracks() or {} end)
+if ok then
+for _, tr in ipairs(list) do
+if Anim.has("StunIds", Anim.idOf(tr)) or matchAny(string.lower(Anim.name(tr) or ""), NS_WORDS) then active = true break end
+end
+end
+end
+if not active then return end
+return baseNS()
+end
+
+-- shot contest above your head, colored from open (green) to heavily contested (red)
+local bb, label, cached, lastScan = nil, nil, nil, 0
+local STOPS = { { 0, Color3.fromRGB(70, 235, 110) }, { 10, Color3.fromRGB(40, 175, 80) }, { 25, Color3.fromRGB(255, 225, 60) }, { 40, Color3.fromRGB(255, 150, 40) }, { 60, Color3.fromRGB(255, 60, 60) } }
+local function colorFor(n)
+if n <= STOPS[1][1] then return STOPS[1][2] end
+for i = 2, #STOPS do
+if n <= STOPS[i][1] then
+local a, b = STOPS[i - 1], STOPS[i]
+return a[2]:Lerp(b[2], (n - a[1]) / (b[1] - a[1]))
+end
+end
+return STOPS[#STOPS][2]
+end
+task.spawn(function()
+while JH.Running do
+task.wait(0.1)
+local show = S.ContestShow
+local c = char()
+local head = c and (c:FindFirstChild("Head") or c:FindFirstChild("HumanoidRootPart"))
+if show and head then
+if not cached or not cached.Parent then
+cached = nil
+if tick() - lastScan > 1 then
+lastScan = tick()
+for _, root in ipairs({ c, LP:FindFirstChild("PlayerGui") }) do
+if root then
+for _, d in ipairs(root:GetDescendants()) do
+if d:IsA("TextLabel") and string.find(d.Text, "Contested", 1, true) and not d:IsDescendantOf(gui) then cached = d break end
+end
+end
+if cached then break end
+end
+end
+end
+local n = cached and tonumber(string.match(cached.Text, "(%d+)%s*%%"))
+if n then
+if not bb then
+bb = Instance.new("BillboardGui")
+bb.Name = "JHContest"
+bb.Size = UDim2.fromOffset(150, 30)
+bb.StudsOffset = Vector3.new(0, 4.2, 0)
+bb.AlwaysOnTop = true
+label = Instance.new("TextLabel")
+label.BackgroundTransparency = 1
+label.Size = UDim2.fromScale(1, 1)
+label.Font = Enum.Font.GothamBold
+label.TextSize = 20
+label.TextStrokeTransparency = 0.3
+label.Parent = bb
+pcall(function() bb.Parent = (gethui and gethui()) or game:GetService("CoreGui") end)
+end
+bb.Adornee = head
+bb.Enabled = true
+label.Text = n .. "% contested"
+label.TextColor3 = colorFor(n)
+elseif bb then
+bb.Enabled = false
+end
+elseif bb then
+bb.Enabled = false
+end
+end
+end)
 end
 UI.syncAuto()
 UI.applyTheme()
@@ -9717,7 +10056,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.13", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.14", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -9798,7 +10137,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.13 shot-line"
+local VERSION = "v1.14 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -9904,7 +10243,7 @@ local S = {
 	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true,
+	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false,
 	LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 	AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -16421,7 +16760,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.13  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.14  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -18159,6 +18498,7 @@ do
 		UI.Toggle(c, "Auto adapt: learn every shot from the first one", "AutoAdaptAll")
 		UI.Toggle(c, "Instant green (works at low FPS and high ping)", "InstantGreen")
 		UI.Toggle(c, "Smart steps (faster learning, no bouncing)", "SmartSteps")
+		UI.Toggle(c, "Show shot contest above my head", "ContestShow")
 		UI.Toggle(c, "Keep glides away from my shot", "GlideShotSafe")
 		UI.Buttons(c, { { "Copy my locked timings", function() local t = Shot.exportTimings() if setclipboard then setclipboard(t) end notify("Timings", t == "" and "Nothing locked yet" or "Copied to clipboard", 3) end } })
 		UI.Input(c, "Import timings", "ImportTimes", nil, "paste copied timings, then rejoin")
@@ -18901,7 +19241,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.13"
+				d.Text = "JHub V1.14"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -19548,6 +19888,8 @@ do
 			end
 		end
 		local LP = UI.Page("Locked", "L")
+		UI.lockedPage = LP
+		UI.lockedTools = tools
 		local lay = LP.frame:FindFirstChildOfClass("UIListLayout")
 		if lay then
 			lay.FillDirection = Enum.FillDirection.Horizontal
@@ -19660,6 +20002,342 @@ do
 		end
 		return r
 	end
+end
+-- ULTRA GAME RECORDER: one switch that records everything (game recorder, shot recorder, shot lab) plus every player, animation, input, control and setting
+do
+	local Ultra = { on = false, conns = {}, seenAnim = setmetatable({}, { __mode = "k" }), last = {} }
+	local CAS = game:GetService("ContextActionService")
+	local ATTRS = { "Action", "BaseAnimation", "GatherType", "LastDribblePackage", "Stamina", "ServerVelocity", "CanMove", "meterOffset" }
+	local function charOfPlayer(pl)
+		return pl.Character or (workspace:FindFirstChild("Characters") and workspace.Characters:FindFirstChild(pl.Name))
+	end
+	local function hasBall(c)
+		local af = c and c:FindFirstChild("Attributes")
+		local bv = af and af:FindFirstChild("Basketball")
+		return (bv and bv.Value ~= nil) and true or false
+	end
+	local function watchAnimator(pl, c)
+		local h = c and c:FindFirstChildOfClass("Humanoid")
+		local a = h and (h:FindFirstChildOfClass("Animator") or c:FindFirstChildWhichIsA("Animator", true))
+		if not a or Ultra.seenAnim[a] then return end
+		Ultra.seenAnim[a] = true
+		Ultra.conns[#Ultra.conns + 1] = a.AnimationPlayed:Connect(function(tr)
+			local id = ""
+			pcall(function() id = string.gsub(tostring(tr.Animation.AnimationId), "rbxassetid://", "") end)
+			Rec.add("anim", string.format("%s%s %s id=%s len=%.2f prio=%s looped=%s", pl.Name, pl == LP and " (me)" or "", tostring(tr.Name), id, tr.Length or 0,
+				tostring(tr.Priority), tostring(tr.Looped)))
+		end)
+	end
+	local function dumpOnce()
+		-- controls the game has bound
+		pcall(function()
+			for name, info in pairs(CAS:GetAllBoundActionInfo()) do
+				local kinds = {}
+				for _, t in ipairs(info.inputTypes or {}) do kinds[#kinds + 1] = tostring(t) end
+				Rec.add("control", string.format("bound action %s priority=%s stack=%s inputs=%s", tostring(name), tostring(info.priority), tostring(info.stackOrder), table.concat(kinds, ",")))
+			end
+		end)
+		-- emotes and every shot or move animation the game ships
+		pcall(function()
+			local n = 0
+			for _, d in ipairs(game:GetDescendants()) do
+				if d:IsA("Animation") and tostring(d.AnimationId) ~= "" then
+					n = n + 1
+					Rec.add("anim-list", d:GetFullName() .. " = " .. string.gsub(tostring(d.AnimationId), "rbxassetid://", ""))
+					if n >= 700 then break end
+				end
+			end
+		end)
+		-- settings: values and attributes that look like game rules
+		pcall(function()
+			local n = 0
+			for _, d in ipairs(game:GetService("ReplicatedStorage"):GetDescendants()) do
+				if d:IsA("ValueBase") then
+					n = n + 1
+					Rec.add("setting", d:GetFullName() .. " = " .. tostring(d.Value))
+					if n >= 400 then break end
+				end
+			end
+			for k, v in pairs(LP:GetAttributes()) do Rec.add("setting", "player attribute " .. k .. " = " .. tostring(v)) end
+			for k, v in pairs(workspace:GetAttributes()) do Rec.add("setting", "workspace attribute " .. k .. " = " .. tostring(v)) end
+			for k, v in pairs(game:GetService("ReplicatedStorage"):GetAttributes()) do Rec.add("setting", "storage attribute " .. k .. " = " .. tostring(v)) end
+		end)
+		-- hoops and court
+		pcall(function()
+			local n = 0
+			for _, d in ipairs(workspace:GetDescendants()) do
+				if d:IsA("BasePart") then
+					local nm = string.lower(d.Name)
+					if string.find(nm, "hoop", 1, true) or string.find(nm, "rim", 1, true) or string.find(nm, "backboard", 1, true) or string.find(nm, "goal", 1, true) then
+						n = n + 1
+						Rec.add("court", string.format("%s at %.1f,%.1f,%.1f size %.1f,%.1f,%.1f", d:GetFullName(), d.Position.X, d.Position.Y, d.Position.Z, d.Size.X, d.Size.Y, d.Size.Z))
+						if n >= 40 then break end
+					end
+				end
+			end
+		end)
+		Rec.add("build", "walkspeed=" .. tostring(hum() and hum().WalkSpeed) .. " jump=" .. tostring(hum() and hum().JumpPower) .. " hipheight=" .. tostring(hum() and hum().HipHeight))
+	end
+	local function sample()
+		local me = hrp()
+		for _, pl in ipairs(Players:GetPlayers()) do
+			local c = charOfPlayer(pl)
+			local root = c and (c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart)
+			if root then
+				watchAnimator(pl, c)
+				local v = root.AssemblyLinearVelocity
+				local parts = {}
+				for _, k in ipairs(ATTRS) do
+					local val = c:GetAttribute(k)
+					if val ~= nil then parts[#parts + 1] = k .. "=" .. (type(val) == "number" and string.format("%.2f", val) or tostring(val)) end
+				end
+				local h = c:FindFirstChildOfClass("Humanoid")
+				local st = "?"
+				if h then pcall(function() st = tostring(h:GetState()) end) end
+				local line = string.format("%s%s team=%s pos=%.1f,%.1f,%.1f vel=%.1f,%.1f,%.1f ball=%s state=%s %s%s", pl.Name, pl == LP and " (me)" or "",
+					tostring(pl.Team and pl.Team.Name), root.Position.X, root.Position.Y, root.Position.Z, v.X, v.Y, v.Z, tostring(hasBall(c)), st,
+					table.concat(parts, " "), (me and pl ~= LP) and string.format(" dist=%.1f", (root.Position - me.Position).Magnitude) or "")
+				if Ultra.last[pl] ~= line or tick() - (Ultra.lastT and Ultra.lastT[pl] or 0) > 2 then
+					Ultra.last[pl] = line
+					Ultra.lastT = Ultra.lastT or {}
+					Ultra.lastT[pl] = tick()
+					Rec.add("player", line)
+				end
+			end
+		end
+		local b = Feat.findBall()
+		if b and b.Parent then
+			local v = b.AssemblyLinearVelocity
+			Rec.add("ballpos", string.format("pos=%.1f,%.1f,%.1f vel=%.1f,%.1f,%.1f loose=%s", b.Position.X, b.Position.Y, b.Position.Z, v.X, v.Y, v.Z, tostring(Feat.ballLoose())))
+		end
+	end
+	function Ultra.start()
+		if Ultra.on then return end
+		Ultra.on = true
+		if not Rec.on then Rec.start() end
+		pcall(Rec.shotStart)
+		S.LabOn = true
+		pcall(dumpOnce)
+		Ultra.conns[#Ultra.conns + 1] = UIS.InputBegan:Connect(function(i, gp)
+			Rec.add("input", string.format("began %s %s gui=%s", tostring(i.UserInputType), i.KeyCode ~= Enum.KeyCode.Unknown and tostring(i.KeyCode) or "", tostring(gp)))
+		end)
+		Ultra.conns[#Ultra.conns + 1] = UIS.InputEnded:Connect(function(i, gp)
+			Rec.add("input", string.format("ended %s %s", tostring(i.UserInputType), i.KeyCode ~= Enum.KeyCode.Unknown and tostring(i.KeyCode) or ""))
+		end)
+		task.spawn(function()
+			local n = 0
+			while Ultra.on and JH.Running do
+				pcall(sample)
+				n = n + 1
+				if n % 8 == 0 then Rec.add("perf", string.format("fps=%d ping=%d ms", math.floor((JH.FPS or 0) + 0.5), math.floor((Shot.pingNow and Shot.pingNow() or 0) * 1000 + 0.5))) end
+				task.wait(0.25)
+			end
+		end)
+		notify("Ultra recorder", "Recording everything", 3)
+	end
+	function Ultra.stop()
+		if not Ultra.on then return end
+		Ultra.on = false
+		for _, c in ipairs(Ultra.conns) do pcall(function() c:Disconnect() end) end
+		Ultra.conns = {}
+		pcall(Rec.shotStop)
+		pcall(Rec.stop)
+	end
+	function Ultra.report()
+		local parts = { Rec.text() }
+		if Shot.lab and Shot.lab.report then parts[#parts + 1] = "\n\n" .. Shot.lab.report() end
+		return table.concat(parts, "\n")
+	end
+	local mainPage
+	for _, p in ipairs(UI.pages) do
+		if p.name == "Main" then mainPage = p end
+	end
+	if mainPage and UI.lockedTools then
+		local c = UI.Card(mainPage, "Ultra Game Recorder")
+		UI.Toggle(c, "Record everything", "UltraOn", function(v) if v then Ultra.start() else Ultra.stop() end end)
+		UI.Note(c, "Play normally with it on: dribble, shoot, guard, steal, block, rebound, dunk, use every button once. It records every player, animation, button, setting, ball movement and shot.")
+		UI.Buttons(c, {
+			{ "Copy everything", function()
+				local text = Ultra.report()
+				pcall(function() if type(writefile) == "function" then writefile("JHub_ultra_report.txt", text) end end)
+				if type(setclipboard) == "function" then
+					pcall(setclipboard, text)
+					notify("Ultra recorder", "Copied and saved as JHub_ultra_report.txt", 4)
+				else
+					notify("Ultra recorder", "Saved as JHub_ultra_report.txt in your executor folder", 4)
+				end
+			end },
+			{ "Clear", function() pcall(Rec.clear) if Shot.lab then Shot.lab.rows, Shot.lab.stats = {}, {} end end },
+		})
+		c.frame.Visible = false
+		table.insert(UI.lockedTools, 1, c.frame)
+	end
+	S.UltraOn = false
+end
+-- REBOUND AND BALL MAGNET LEAVE YOU ALONE WHILE YOU MOVE, GUARD SPEED, SHOT CONTEST ABOVE YOUR HEAD, NO STUN ONLY IN FIGHT ANIMATIONS
+do
+	local Bot = JH.api.Bot
+	local function stickActive()
+		local h, r = hum(), Mover.body()
+		if not h or not r then return false end
+		local ok, intent = pcall(Mover.intent, h, r)
+		return ok and intent ~= nil and intent.Magnitude > 0.15
+	end
+	Feat.heldT = 0
+	task.spawn(function()
+		while JH.Running do
+			task.wait(0.1)
+			if not Feat.ballLoose() then Feat.heldT = tick() end
+		end
+	end)
+	-- a real rebound or loose ball only: not a pass, a check up, or while you are the one moving the character
+	function Feat.grabOk(b)
+		local r = Mover.body()
+		if not r or not b then return false end
+		if tick() - Feat.heldT < 0.9 then return false end
+		local rebound = b.Position.Y > r.Position.Y + 5 or b.AssemblyLinearVelocity.Y < -8
+		if stickActive() and not rebound then return false end
+		return true
+	end
+	local prevGet = Feat.getBall
+	function Feat.getBall(force)
+		local b = Feat.findBall()
+		if not b or not Feat.grabOk(b) then return false end
+		return prevGet(force)
+	end
+	local prevReb = Bot.reboundStep
+	function Bot.reboundStep(me, r)
+		local b = Feat.findBall()
+		if b and not Feat.grabOk(b) then
+			Bot.marker(nil)
+			Bot.rbT = nil
+			return false
+		end
+		return prevReb(me, r)
+	end
+
+	-- guard speed: extra speed only while an opponent with the ball is close and you do not have it
+	function Feat.isGuarding()
+		if Ball.holding then return false end
+		local me = hrp()
+		if not me then return false end
+		for _, pl in ipairs(Players:GetPlayers()) do
+			if pl ~= LP and not (LP.Team and pl.Team == LP.Team) then
+				local c = pl.Character or (workspace:FindFirstChild("Characters") and workspace.Characters:FindFirstChild(pl.Name))
+				local af = c and c:FindFirstChild("Attributes")
+				local bv = af and af:FindFirstChild("Basketball")
+				local root = c and (c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart)
+				if bv and bv.Value ~= nil and root and (root.Position - me.Position).Magnitude < 16 then return true end
+			end
+		end
+		return false
+	end
+	local baseExtra = Speed.extraNow
+	function Speed.extraNow()
+		local e = baseExtra()
+		if (S.GuardSpeed or 0) > 0 and Feat.isGuarding() then e = e + (Speed.gameWS or 16) * S.GuardSpeed / 100 end
+		return e
+	end
+	local pp
+	for _, p in ipairs(UI.pages) do
+		if p.name == "Players" then pp = p end
+	end
+	if pp then
+		local g = UI.Card(pp, "Guard speed")
+		UI.Slider(g, "Extra speed while guarding", "GuardSpeed", 0, 60, 1, 0, "%")
+		UI.Button(g, "Reset guard speed", function() UI.set("GuardSpeed", 0) end)
+		UI.Note(g, "Only faster while you guard the player with the ball. Normal speed the rest of the time.")
+	end
+
+	-- no stun only inside bump, cross, steal, shot, layup and dunk animations (or while the game flags a stun)
+	local NS_WORDS = { "bump", "cross", "steal", "dunk", "layup", "shot", "shoot", "push", "stun", "stagger", "knock", "ragdoll", "fall" }
+	local baseNS = Bot.noStunStep
+	function Bot.noStunStep()
+		if not S.NoStun then return end
+		local c = char()
+		local active = false
+		if c then
+			for k, v in pairs(c:GetAttributes()) do
+				local low = string.lower(k)
+				if (string.find(low, "stun", 1, true) or string.find(low, "ragdoll", 1, true) or string.find(low, "stagger", 1, true)) and v then active = true break end
+			end
+		end
+		if not active then
+			local a = Anim.animator
+			local ok, list = pcall(function() return a and a:GetPlayingAnimationTracks() or {} end)
+			if ok then
+				for _, tr in ipairs(list) do
+					if Anim.has("StunIds", Anim.idOf(tr)) or matchAny(string.lower(Anim.name(tr) or ""), NS_WORDS) then active = true break end
+				end
+			end
+		end
+		if not active then return end
+		return baseNS()
+	end
+
+	-- shot contest above your head, colored from open (green) to heavily contested (red)
+	local bb, label, cached, lastScan = nil, nil, nil, 0
+	local STOPS = { { 0, Color3.fromRGB(70, 235, 110) }, { 10, Color3.fromRGB(40, 175, 80) }, { 25, Color3.fromRGB(255, 225, 60) }, { 40, Color3.fromRGB(255, 150, 40) }, { 60, Color3.fromRGB(255, 60, 60) } }
+	local function colorFor(n)
+		if n <= STOPS[1][1] then return STOPS[1][2] end
+		for i = 2, #STOPS do
+			if n <= STOPS[i][1] then
+				local a, b = STOPS[i - 1], STOPS[i]
+				return a[2]:Lerp(b[2], (n - a[1]) / (b[1] - a[1]))
+			end
+		end
+		return STOPS[#STOPS][2]
+	end
+	task.spawn(function()
+		while JH.Running do
+			task.wait(0.1)
+			local show = S.ContestShow
+			local c = char()
+			local head = c and (c:FindFirstChild("Head") or c:FindFirstChild("HumanoidRootPart"))
+			if show and head then
+				if not cached or not cached.Parent then
+					cached = nil
+					if tick() - lastScan > 1 then
+						lastScan = tick()
+						for _, root in ipairs({ c, LP:FindFirstChild("PlayerGui") }) do
+							if root then
+								for _, d in ipairs(root:GetDescendants()) do
+									if d:IsA("TextLabel") and string.find(d.Text, "Contested", 1, true) and not d:IsDescendantOf(gui) then cached = d break end
+								end
+							end
+							if cached then break end
+						end
+					end
+				end
+				local n = cached and tonumber(string.match(cached.Text, "(%d+)%s*%%"))
+				if n then
+					if not bb then
+						bb = Instance.new("BillboardGui")
+						bb.Name = "JHContest"
+						bb.Size = UDim2.fromOffset(150, 30)
+						bb.StudsOffset = Vector3.new(0, 4.2, 0)
+						bb.AlwaysOnTop = true
+						label = Instance.new("TextLabel")
+						label.BackgroundTransparency = 1
+						label.Size = UDim2.fromScale(1, 1)
+						label.Font = Enum.Font.GothamBold
+						label.TextSize = 20
+						label.TextStrokeTransparency = 0.3
+						label.Parent = bb
+						pcall(function() bb.Parent = (gethui and gethui()) or game:GetService("CoreGui") end)
+					end
+					bb.Adornee = head
+					bb.Enabled = true
+					label.Text = n .. "% contested"
+					label.TextColor3 = colorFor(n)
+				elseif bb then
+					bb.Enabled = false
+				end
+			elseif bb then
+				bb.Enabled = false
+			end
+		end
+	end)
 end
 UI.syncAuto()
 UI.applyTheme()
