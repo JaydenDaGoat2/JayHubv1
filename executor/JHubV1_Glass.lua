@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.19 shot-line"
+local VERSION = "v1.20 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -147,6 +147,7 @@ AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
 FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6,
 AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
+AGOnlyBall = true,
 BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
 BindKey1 = "", BindArgs1 = "", BindKey2 = "", BindArgs2 = "", BindKey3 = "", BindArgs3 = "", BindKey4 = "", BindArgs4 = "", BindKey5 = "", BindArgs5 = "", BindKey6 = "", BindArgs6 = "",
 LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
@@ -6328,7 +6329,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.19  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.20  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -8801,7 +8802,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.19"
+d.Text = "JHub V1.20"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -10222,6 +10223,33 @@ if h then pcall(function() h.Jump = true end) end
 end
 end
 end
+-- AUTO GUARD ONLY GUARDS THE PLAYER WHO HAS THE BALL
+do
+local Bot = JH.api.Bot
+local prevG = Bot.guardStep
+function Bot.guardStep(me, others, forced)
+if S.AGOnlyBall ~= false then
+local handler
+for _, o in ipairs(others) do
+if o.ball and not o.mate then handler = o end
+end
+if not handler then return false end
+forced = "Ball handler"
+end
+return prevG(me, others, forced)
+end
+local gp
+for _, p in ipairs(UI.pages) do
+if p.name == "Auto Guard" then gp = p end
+end
+if gp and UI.lockedTools then
+local c = UI.Card(gp, "Who to guard")
+UI.Toggle(c, "Only guard the player who has the ball", "AGOnlyBall")
+UI.Note(c, "When nobody on the other team has the ball, auto guard stops and does nothing.")
+table.insert(UI.lockedTools, 3, c.frame)
+c.frame.Visible = false
+end
+end
 UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
@@ -10385,7 +10413,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.19", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.20", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -10466,7 +10494,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.19 shot-line"
+local VERSION = "v1.20 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -10574,6 +10602,7 @@ local S = {
 	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
 	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6,
 	AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
+	AGOnlyBall = true,
 	BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
 	BindKey1 = "", BindArgs1 = "", BindKey2 = "", BindArgs2 = "", BindKey3 = "", BindArgs3 = "", BindKey4 = "", BindArgs4 = "", BindKey5 = "", BindArgs5 = "", BindKey6 = "", BindArgs6 = "",
 	LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
@@ -17095,7 +17124,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.19  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.20  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -19576,7 +19605,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.19"
+				d.Text = "JHub V1.20"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -20995,6 +21024,33 @@ do
 			local h = hum()
 			if h then pcall(function() h.Jump = true end) end
 		end
+	end
+end
+-- AUTO GUARD ONLY GUARDS THE PLAYER WHO HAS THE BALL
+do
+	local Bot = JH.api.Bot
+	local prevG = Bot.guardStep
+	function Bot.guardStep(me, others, forced)
+		if S.AGOnlyBall ~= false then
+			local handler
+			for _, o in ipairs(others) do
+				if o.ball and not o.mate then handler = o end
+			end
+			if not handler then return false end
+			forced = "Ball handler"
+		end
+		return prevG(me, others, forced)
+	end
+	local gp
+	for _, p in ipairs(UI.pages) do
+		if p.name == "Auto Guard" then gp = p end
+	end
+	if gp and UI.lockedTools then
+		local c = UI.Card(gp, "Who to guard")
+		UI.Toggle(c, "Only guard the player who has the ball", "AGOnlyBall")
+		UI.Note(c, "When nobody on the other team has the ball, auto guard stops and does nothing.")
+		table.insert(UI.lockedTools, 3, c.frame)
+		c.frame.Visible = false
 	end
 end
 UI.syncAuto()
