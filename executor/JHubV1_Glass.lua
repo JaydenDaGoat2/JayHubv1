@@ -142,7 +142,7 @@ DribbleGlideSpeed = 1, ShotGlideSpeed = 1, GatherGlideSpeed = 1,
 GfxLow = false, GfxEffects = false, GfxTextures = false, GfxShadows = false, GfxPost = false, GfxHideOthers = false, GfxCull = false,
 GfxCullDist = 250, GfxBoost = false, GfxFpsCap = 0, PingStab = false, PingWindow = 3, FinalAdj = "",
 ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
-LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014,
+LagSync = false, LagK = 2, PrecFit = false, PeakBin = 0.014, AdaptPlus = false,
 LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -271,8 +271,9 @@ table.sort(parts)
 S.ShotTimes = table.concat(parts, " ")
 end
 if S.SettingsVer < 29 then S.Codes = DEFAULTS.Codes end
-S.SettingsVer = 30
-DEFAULTS.SettingsVer = 30
+if S.SettingsVer < 31 then S.LagSync, S.PrecFit, S.AdaptPlus = false, false, false end
+S.SettingsVer = 31
+DEFAULTS.SettingsVer = 31
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 S.ShotTimes = S.ShotTimes
 S.RecOn = false
@@ -2206,7 +2207,7 @@ local now = tick()
 local n = #samples
 if peakLead then
 local tp = Shot.peakFitSmart(samples, key)
-if tp and tp - m0 > 0.22 then
+if tp and (not S.LagSync or tp - m0 > 0.22) then
 hold = math.max(Shot.FLOOR, tp - (Shot.effPing() + peakLead) - m0 - Shot.fpsComp())
 peakAimed = true
 end
@@ -6568,7 +6569,7 @@ do
 local origAutoLearn = Shot.autoLearn
 function Shot.autoLearn(info, res, strength)
 local a = Shot.auto and Shot.auto[info.key]
-if a and a.locked and a.mode == "peak" and not info.manual and Shot.autoActive(info.key) then
+if S.AdaptPlus and a and a.locked and a.mode == "peak" and not info.manual and Shot.autoActive(info.key) then
 local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 if idx then
 a.win = a.win or {}
@@ -7910,7 +7911,7 @@ end
 function Shot.fpsComp() return Lag.fpsComp() end
 function Shot.lookAhead()
 if S.LagSync then return clamp(1.25 * Lag.dtEma, 0.02, 0.2) end
-return clamp(1.3 / math.max(JH.FPS or 60, 10), 0.02, 0.05)
+return 0.02
 end
 local basePingComp = Shot.pingComp
 function Shot.pingComp()
@@ -8012,6 +8013,7 @@ if shootPage then
 local c = UI.Card(shootPage, "Lag sync")
 UI.Toggle(c, "Lag sync (follow my ping and FPS)", "LagSync")
 UI.Toggle(c, "Smoother meter reading", "PrecFit")
+UI.Toggle(c, "Faster jumper adapt (experimental)", "AdaptPlus")
 UI.Note(c, "Learns your normal ping and FPS. When either gets worse, Auto Green releases earlier by exactly that much, so the shot still lands on the green. Nothing changes while you are at your normal.")
 UI.Slider(c, "Ping compensation factor (learns by itself)", "LagK", 0.5, 3.5, 0.05, 2, "x")
 local sPing = UI.Stat(c, "Ping now")
@@ -8051,6 +8053,7 @@ end
 
 -- a new jumper starts from a shot it is built from, else from the middle of what you have already locked
 function Shot.seedLead(key)
+if not S.AdaptPlus then return S.PeakLead or 0.027 end
 local mine, mn = idsOf(key)
 local best, bn
 local list = {}
@@ -8080,7 +8083,9 @@ end
 
 -- every verdict says which way and about how far the release was off, so the first correction already lands close,
 -- and the lock is placed in the middle of the Perfect window instead of on its edge
+local origPeakLearn = Shot.peakLearn
 function Shot.peakLearn(info, res, strength, a, key)
+if not S.AdaptPlus then return origPeakLearn(info, res, strength, a, key) end
 if a.locked then return true end
 local idx = verdictIdx(info, res, strength)
 if not idx then return true end
@@ -8387,7 +8392,7 @@ local S = {
 	GfxLow = false, GfxEffects = false, GfxTextures = false, GfxShadows = false, GfxPost = false, GfxHideOthers = false, GfxCull = false,
 	GfxCullDist = 250, GfxBoost = false, GfxFpsCap = 0, PingStab = false, PingWindow = 3, FinalAdj = "",
 	ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
-	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014,
+	LagSync = false, LagK = 2, PrecFit = false, PeakBin = 0.014, AdaptPlus = false,
 	LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
 	AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
 	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
@@ -8522,8 +8527,9 @@ if S.SettingsVer < 28 then
 	S.ShotTimes = table.concat(parts, " ")
 end
 if S.SettingsVer < 29 then S.Codes = DEFAULTS.Codes end
-S.SettingsVer = 30
-DEFAULTS.SettingsVer = 30
+if S.SettingsVer < 31 then S.LagSync, S.PrecFit, S.AdaptPlus = false, false, false end
+S.SettingsVer = 31
+DEFAULTS.SettingsVer = 31
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 S.ShotTimes = S.ShotTimes
 S.RecOn = false
@@ -10568,7 +10574,7 @@ function Shot.remoteCore(ctx)
 		if peakLead then
 			-- by the meter: let go one ping plus the lead before the meter reaches its peak
 			local tp = Shot.peakFitSmart(samples, key)
-			if tp and tp - m0 > 0.22 then
+			if tp and (not S.LagSync or tp - m0 > 0.22) then
 				hold = math.max(Shot.FLOOR, tp - (Shot.effPing() + peakLead) - m0 - Shot.fpsComp())
 				peakAimed = true
 			end
@@ -15161,7 +15167,7 @@ do
 	local origAutoLearn = Shot.autoLearn
 	function Shot.autoLearn(info, res, strength)
 	local a = Shot.auto and Shot.auto[info.key]
-	if a and a.locked and a.mode == "peak" and not info.manual and Shot.autoActive(info.key) then
+	if S.AdaptPlus and a and a.locked and a.mode == "peak" and not info.manual and Shot.autoActive(info.key) then
 	local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
 	if idx then
 	a.win = a.win or {}
@@ -16503,7 +16509,7 @@ do
 	function Shot.fpsComp() return Lag.fpsComp() end
 	function Shot.lookAhead()
 		if S.LagSync then return clamp(1.25 * Lag.dtEma, 0.02, 0.2) end
-		return clamp(1.3 / math.max(JH.FPS or 60, 10), 0.02, 0.05)
+		return 0.02
 	end
 	local basePingComp = Shot.pingComp
 	function Shot.pingComp()
@@ -16605,6 +16611,7 @@ do
 		local c = UI.Card(shootPage, "Lag sync")
 		UI.Toggle(c, "Lag sync (follow my ping and FPS)", "LagSync")
 		UI.Toggle(c, "Smoother meter reading", "PrecFit")
+		UI.Toggle(c, "Faster jumper adapt (experimental)", "AdaptPlus")
 		UI.Note(c, "Learns your normal ping and FPS. When either gets worse, Auto Green releases earlier by exactly that much, so the shot still lands on the green. Nothing changes while you are at your normal.")
 		UI.Slider(c, "Ping compensation factor (learns by itself)", "LagK", 0.5, 3.5, 0.05, 2, "x")
 		local sPing = UI.Stat(c, "Ping now")
@@ -16630,94 +16637,97 @@ do
 end
 -- AUTO ADAPT: faster and centered learning for new jumpers
 do
-	local function verdictIdx(info, res, strength)
-		return info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
-	end
-	local function idsOf(key)
-		local set, n = {}, 0
-		for id in string.gmatch(key, "%d+") do
-			set[id] = true
-			n = n + 1
-		end
-		return set, n
-	end
+local function verdictIdx(info, res, strength)
+return info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+end
+local function idsOf(key)
+local set, n = {}, 0
+for id in string.gmatch(key, "%d+") do
+set[id] = true
+n = n + 1
+end
+return set, n
+end
 
-	-- a new jumper starts from a shot it is built from, else from the middle of what you have already locked
-	function Shot.seedLead(key)
-		local mine, mn = idsOf(key)
-		local best, bn
-		local list = {}
-		for k2, a2 in pairs(Shot.auto or {}) do
-			if k2 ~= key and a2.mode == "peak" and a2.locked and a2.hold then
-				list[#list + 1] = a2.hold
-				local other, on = idsOf(k2)
-				local small, big, sn = mine, other, mn
-				if on < mn then small, big, sn = other, mine, on end
-				local all = sn > 0
-				for id in pairs(small) do
-					if not big[id] then
-						all = false
-						break
-					end
-				end
-				if all and (not bn or sn > bn) then best, bn = a2.hold, sn end
-			end
-		end
-		if best then return best end
-		if #list >= 2 then
-			table.sort(list)
-			return list[math.ceil(#list / 2)]
-		end
-		return S.PeakLead or 0.027
-	end
+-- a new jumper starts from a shot it is built from, else from the middle of what you have already locked
+function Shot.seedLead(key)
+if not S.AdaptPlus then return S.PeakLead or 0.027 end
+local mine, mn = idsOf(key)
+local best, bn
+local list = {}
+for k2, a2 in pairs(Shot.auto or {}) do
+if k2 ~= key and a2.mode == "peak" and a2.locked and a2.hold then
+list[#list + 1] = a2.hold
+local other, on = idsOf(k2)
+local small, big, sn = mine, other, mn
+if on < mn then small, big, sn = other, mine, on end
+local all = sn > 0
+for id in pairs(small) do
+if not big[id] then
+all = false
+break
+end
+end
+if all and (not bn or sn > bn) then best, bn = a2.hold, sn end
+end
+end
+if best then return best end
+if #list >= 2 then
+table.sort(list)
+return list[math.ceil(#list / 2)]
+end
+return S.PeakLead or 0.027
+end
 
-	-- every verdict says which way and about how far the release was off, so the first correction already lands close,
-	-- and the lock is placed in the middle of the Perfect window instead of on its edge
-	function Shot.peakLearn(info, res, strength, a, key)
-		if a.locked then return true end
-		local idx = verdictIdx(info, res, strength)
-		if not idx then return true end
-		if info.manual and idx ~= 5 then return true end
-		local lead = info.lead or a.hold
-		if not info.manual and math.abs(lead - a.hold) > 0.05 then return true end
-		local before = a.hold
-		a.n = (a.n or 0) + 1
-		a.bin = a.bin or S.PeakBin or 0.014
-		local prev = a.prev
-		if prev and idx ~= 5 and prev.idx ~= 5 and prev.idx ~= idx and math.abs(lead - prev.lead) > 0.002 then
-			local est = -(lead - prev.lead) / (idx - prev.idx)
-			if est > 0 then
-				a.bin = clamp(a.bin * 0.5 + est * 0.5, 0.006, 0.04)
-				S.PeakBin = clamp((S.PeakBin or 0.014) * 0.7 + a.bin * 0.3, 0.008, 0.03)
-			end
-		end
-		a.prev = { idx = idx, lead = lead }
-		local why
-		if idx == 5 then
-			local shift = 0
-			if prev and (prev.idx == 6 or prev.idx == 4) then
-				local edge = (prev.lead + lead) / 2
-				local center = (prev.idx == 6) and (edge + a.bin / 2) or (edge - a.bin / 2)
-				shift = clamp(center - lead, -a.bin / 2, a.bin / 2)
-			end
-			a.hold, a.locked = clamp(lead + shift, 0, 0.1), true
-			S.PeakLead = clamp(S.PeakLead * 0.5 + a.hold * 0.5, 0, 0.08)
-			pcall(notify, "Auto Green", string.format("Learned this shot: %.0f ms before the peak", a.hold * 1000), 3)
-			why = "Perfect, locked"
-		else
-			local off = idx - 5
-			if idx == 4 then off = -0.6 end
-			a.hold = clamp(lead + off * a.bin * 0.85, 0, 0.1)
-			S.PeakLead = clamp(S.PeakLead + (a.hold - lead) * 0.25, 0, 0.08)
-			why = (Shot.VERDICT[idx] or "?") .. (off > 0 and ", letting go earlier" or ", letting go later")
-		end
-		if math.abs(a.hold - before) > 0.0003 or a.locked then Shot.noteAdjust(key, before, a.hold, why) end
-		Shot.autoSave()
-		if Rec.shotOn then
-			Rec.shotAdd(string.format("AUTOCAL(meter) key=%s idx=%s lead=%.4f next=%.4f locked=%s bin=%.4f", key, tostring(idx), lead, a.hold, tostring(a.locked), a.bin))
-		end
-		return true
-	end
+-- every verdict says which way and about how far the release was off, so the first correction already lands close,
+-- and the lock is placed in the middle of the Perfect window instead of on its edge
+local origPeakLearn = Shot.peakLearn
+function Shot.peakLearn(info, res, strength, a, key)
+if not S.AdaptPlus then return origPeakLearn(info, res, strength, a, key) end
+if a.locked then return true end
+local idx = verdictIdx(info, res, strength)
+if not idx then return true end
+if info.manual and idx ~= 5 then return true end
+local lead = info.lead or a.hold
+if not info.manual and math.abs(lead - a.hold) > 0.05 then return true end
+local before = a.hold
+a.n = (a.n or 0) + 1
+a.bin = a.bin or S.PeakBin or 0.014
+local prev = a.prev
+if prev and idx ~= 5 and prev.idx ~= 5 and prev.idx ~= idx and math.abs(lead - prev.lead) > 0.002 then
+local est = -(lead - prev.lead) / (idx - prev.idx)
+if est > 0 then
+a.bin = clamp(a.bin * 0.5 + est * 0.5, 0.006, 0.04)
+S.PeakBin = clamp((S.PeakBin or 0.014) * 0.7 + a.bin * 0.3, 0.008, 0.03)
+end
+end
+a.prev = { idx = idx, lead = lead }
+local why
+if idx == 5 then
+local shift = 0
+if prev and (prev.idx == 6 or prev.idx == 4) then
+local edge = (prev.lead + lead) / 2
+local center = (prev.idx == 6) and (edge + a.bin / 2) or (edge - a.bin / 2)
+shift = clamp(center - lead, -a.bin / 2, a.bin / 2)
+end
+a.hold, a.locked = clamp(lead + shift, 0, 0.1), true
+S.PeakLead = clamp(S.PeakLead * 0.5 + a.hold * 0.5, 0, 0.08)
+pcall(notify, "Auto Green", string.format("Learned this shot: %.0f ms before the peak", a.hold * 1000), 3)
+why = "Perfect, locked"
+else
+local off = idx - 5
+if idx == 4 then off = -0.6 end
+a.hold = clamp(lead + off * a.bin * 0.85, 0, 0.1)
+S.PeakLead = clamp(S.PeakLead + (a.hold - lead) * 0.25, 0, 0.08)
+why = (Shot.VERDICT[idx] or "?") .. (off > 0 and ", letting go earlier" or ", letting go later")
+end
+if math.abs(a.hold - before) > 0.0003 or a.locked then Shot.noteAdjust(key, before, a.hold, why) end
+Shot.autoSave()
+if Rec.shotOn then
+Rec.shotAdd(string.format("AUTOCAL(meter) key=%s idx=%s lead=%.4f next=%.4f locked=%s bin=%.4f", key, tostring(idx), lead, a.hold, tostring(a.locked), a.bin))
+end
+return true
+end
 end
 UI.syncAuto()
 UI.applyTheme()
