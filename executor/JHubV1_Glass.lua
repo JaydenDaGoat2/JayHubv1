@@ -6336,7 +6336,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.28  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.29  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -8809,7 +8809,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.28"
+d.Text = "JHub V1.29"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -10769,6 +10769,172 @@ local orig = legacySeed(key)
 return clamp(clamp(v, orig - 0.015, orig + 0.015), 0, 0.1)
 end
 end
+-- JHUB NETWORK: chat, a shared timing pool, and a live feed for everyone running this script. Uses your own Firebase project.
+do
+local Net = {}
+Net.URL = "https://jayhubv1-default-rtdb.firebaseio.com"
+Net.lead = {}
+local function netGet(path)
+local ok, res = pcall(function() return request({ Url = Net.URL .. "/" .. path .. ".json", Method = "GET" }) end)
+if ok and res and res.Body then
+local okj, data = pcall(function() return HttpService:JSONDecode(res.Body) end)
+if okj then return data end
+end
+return nil
+end
+local function netPost(path, tbl)
+local okj, body = pcall(function() return HttpService:JSONEncode(tbl) end)
+if not okj then return end
+pcall(function() request({ Url = Net.URL .. "/" .. path .. ".json", Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = body }) end)
+end
+local function netPut(path, tbl)
+local okj, body = pcall(function() return HttpService:JSONEncode(tbl) end)
+if not okj then return end
+pcall(function() request({ Url = Net.URL .. "/" .. path .. ".json", Method = "PUT", Headers = { ["Content-Type"] = "application/json" }, Body = body }) end)
+end
+local function sanitize(k) return (string.gsub(tostring(k), "[%.%#%$%[%]/]", "_")) end
+local myName = Players.LocalPlayer.Name
+
+local mainPage
+for _, p in ipairs(UI.pages) do if p.name == "Main" then mainPage = p end end
+if mainPage then
+-- CHAT: everyone running this script can talk here
+local chat = UI.Card(mainPage, "JHub Chat (everyone on this script)")
+local chatList = new("ScrollingFrame", { Size = UDim2.new(1, 0, 0, 130), BackgroundTransparency = 1, ScrollBarThickness = 3,
+CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, LayoutOrder = nextOrder(chat), Parent = chat.frame })
+new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder, Parent = chatList })
+local chatRow = row(chat, 30)
+local chatBox = new("TextBox", { Size = UDim2.new(1, -66, 1, 0), Text = "", PlaceholderText = "Say something to everyone on JHub...",
+ClearTextOnFocus = false, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = chatRow })
+UI.text(chatBox, false)
+UI.elem(chatBox)
+UI.th(chatBox, "TextColor3", "Text")
+UI.th(chatBox, "PlaceholderColor3", "Sub")
+UI.corner(chatBox, 0.7)
+UI.stroke(chatBox, 0.5)
+new("UIPadding", { PaddingLeft = UDim.new(0, 8), Parent = chatBox })
+local chatSendBtn = new("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0),
+Size = UDim2.fromOffset(58, 26), Text = "", AutoButtonColor = false, BackgroundColor3 = WHITE, Parent = chatRow })
+UI.corner(chatSendBtn, 0.8)
+UI.grad(chatSendBtn)
+UI.label({ Text = "Send", TextSize = 13, Size = UDim2.fromScale(1, 1), TextColor3 = WHITE, Parent = chatSendBtn }, true, false)
+local function sendChat()
+local msg = chatBox.Text
+if msg and msg ~= "" then
+chatBox.Text = ""
+task.spawn(netPost, "chat", { name = myName, text = string.sub(msg, 1, 200), t = os.time() })
+end
+end
+chatBox.FocusLost:Connect(function(enter) if enter then sendChat() end end)
+chatSendBtn.Activated:Connect(sendChat)
+task.spawn(function()
+while true do
+local data = netGet("chat")
+if type(data) == "table" then
+local keys = {}
+for k in pairs(data) do keys[#keys + 1] = k end
+table.sort(keys)
+for _, c in ipairs(chatList:GetChildren()) do if c:IsA("TextLabel") then c:Destroy() end end
+for i = math.max(1, #keys - 29), #keys do
+local m = data[keys[i]]
+if type(m) == "table" then
+UI.label({ Text = string.format("%s: %s", tostring(m.name or "?"), tostring(m.text or "")), TextSize = 11,
+Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true,
+TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = i, Parent = chatList }, false, "Text")
+end
+end
+end
+task.wait(3)
+end
+end)
+
+-- LIVE FEED: every shot anyone on this script takes shows up here
+local feed = UI.Card(mainPage, "Live feed (everyone's shots)")
+local feedList = new("ScrollingFrame", { Size = UDim2.new(1, 0, 0, 100), BackgroundTransparency = 1, ScrollBarThickness = 3,
+CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, LayoutOrder = nextOrder(feed), Parent = feed.frame })
+new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder, Parent = feedList })
+task.spawn(function()
+while true do
+local data = netGet("feed")
+if type(data) == "table" then
+local keys = {}
+for k in pairs(data) do keys[#keys + 1] = k end
+table.sort(keys)
+for _, c in ipairs(feedList:GetChildren()) do if c:IsA("TextLabel") then c:Destroy() end end
+for i = math.max(1, #keys - 19), #keys do
+local m = data[keys[i]]
+if type(m) == "table" then
+UI.label({ Text = string.format("%s  |  %s  |  %s", tostring(m.name or "?"), tostring(m.shot or "?"), tostring(m.verdict or "?")),
+TextSize = 11, Size = UDim2.new(1, 0, 0, 14), TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = i, Parent = feedList }, false, "Sub")
+end
+end
+end
+task.wait(4)
+end
+end)
+
+-- UPDATE LOG
+local ulog = UI.Card(mainPage, "Update log")
+UI.Note(ulog, table.concat({
+"v1.29 - JHub network: chat, live feed, shared jumpshot timing",
+"v1.28 - 10 always-on live helps for Auto Green",
+"v1.27 - Sweep locked off at all times",
+"v1.25 - every jumpshot's game settings built in",
+"v1.24 - jumpshot mastery inside the Ultra recorder",
+"v1.23 - Dex tree, every shot setting, remote spy inside Ultra recorder",
+"v1.22 - Copy my shot report for every player",
+}, "\n"))
+end
+
+-- SHARED TIMING POOL: once a jumpshot is locked on anyone's copy, it is shared so everyone's copy converges faster
+local lastPush = {}
+local prevLearnNet = Shot.autoLearn
+function Shot.autoLearn(info, res, strength)
+local r = prevLearnNet(info, res, strength)
+if info and info.key and Shot.auto and Shot.auto[info.key] and Shot.auto[info.key].locked and not Shot.FINAL[info.key] then
+local a = Shot.auto[info.key]
+local now = tick()
+if (lastPush[info.key] or 0) + 10 < now then
+lastPush[info.key] = now
+task.spawn(netPut, "timing/" .. sanitize(info.key), { lead = a.hold, n = a.n or 0, by = myName, t = os.time() })
+end
+end
+return r
+end
+task.spawn(function()
+while true do
+local data = netGet("timing")
+if type(data) == "table" then
+local merged = {}
+for k, v in pairs(data) do
+if type(v) == "table" and type(v.lead) == "number" then merged[k] = v end
+end
+Net.lead = merged
+end
+task.wait(20)
+end
+end)
+local prevSeedNet = Shot.seedLead
+function Shot.seedLead(key)
+local v = prevSeedNet(key)
+if Shot.FINAL[key] then return v end
+local locked = Shot.auto and Shot.auto[key] and Shot.auto[key].locked
+if not locked then
+local net = Net.lead[sanitize(key)]
+if net and net.lead then v = clamp((v + net.lead) / 2, 0, 0.1) end
+end
+return v
+end
+
+-- LIVE FEED POST: fires once per completed shot
+local prevLR = Shot.learnRemote
+function Shot.learnRemote(info, res, strength)
+if info and info.key then
+task.spawn(netPost, "feed", { name = myName, shot = Shot.nameFor(info.key, info.anim), verdict = tostring(res), t = os.time() })
+end
+return prevLR(info, res, strength)
+end
+end
 UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
@@ -10932,7 +11098,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.28", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.29", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -17650,7 +17816,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.28  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.29  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -20131,7 +20297,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.28"
+				d.Text = "JHub V1.29"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -22089,6 +22255,172 @@ function Shot.seedLead(key)
 local v = prevSeed10(key)
 local orig = legacySeed(key)
 return clamp(clamp(v, orig - 0.015, orig + 0.015), 0, 0.1)
+end
+end
+-- JHUB NETWORK: chat, a shared timing pool, and a live feed for everyone running this script. Uses your own Firebase project.
+do
+local Net = {}
+Net.URL = "https://jayhubv1-default-rtdb.firebaseio.com"
+Net.lead = {}
+local function netGet(path)
+local ok, res = pcall(function() return request({ Url = Net.URL .. "/" .. path .. ".json", Method = "GET" }) end)
+if ok and res and res.Body then
+local okj, data = pcall(function() return HttpService:JSONDecode(res.Body) end)
+if okj then return data end
+end
+return nil
+end
+local function netPost(path, tbl)
+local okj, body = pcall(function() return HttpService:JSONEncode(tbl) end)
+if not okj then return end
+pcall(function() request({ Url = Net.URL .. "/" .. path .. ".json", Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = body }) end)
+end
+local function netPut(path, tbl)
+local okj, body = pcall(function() return HttpService:JSONEncode(tbl) end)
+if not okj then return end
+pcall(function() request({ Url = Net.URL .. "/" .. path .. ".json", Method = "PUT", Headers = { ["Content-Type"] = "application/json" }, Body = body }) end)
+end
+local function sanitize(k) return (string.gsub(tostring(k), "[%.%#%$%[%]/]", "_")) end
+local myName = Players.LocalPlayer.Name
+
+local mainPage
+for _, p in ipairs(UI.pages) do if p.name == "Main" then mainPage = p end end
+if mainPage then
+-- CHAT: everyone running this script can talk here
+local chat = UI.Card(mainPage, "JHub Chat (everyone on this script)")
+local chatList = new("ScrollingFrame", { Size = UDim2.new(1, 0, 0, 130), BackgroundTransparency = 1, ScrollBarThickness = 3,
+CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, LayoutOrder = nextOrder(chat), Parent = chat.frame })
+new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder, Parent = chatList })
+local chatRow = row(chat, 30)
+local chatBox = new("TextBox", { Size = UDim2.new(1, -66, 1, 0), Text = "", PlaceholderText = "Say something to everyone on JHub...",
+ClearTextOnFocus = false, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = chatRow })
+UI.text(chatBox, false)
+UI.elem(chatBox)
+UI.th(chatBox, "TextColor3", "Text")
+UI.th(chatBox, "PlaceholderColor3", "Sub")
+UI.corner(chatBox, 0.7)
+UI.stroke(chatBox, 0.5)
+new("UIPadding", { PaddingLeft = UDim.new(0, 8), Parent = chatBox })
+local chatSendBtn = new("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0),
+Size = UDim2.fromOffset(58, 26), Text = "", AutoButtonColor = false, BackgroundColor3 = WHITE, Parent = chatRow })
+UI.corner(chatSendBtn, 0.8)
+UI.grad(chatSendBtn)
+UI.label({ Text = "Send", TextSize = 13, Size = UDim2.fromScale(1, 1), TextColor3 = WHITE, Parent = chatSendBtn }, true, false)
+local function sendChat()
+local msg = chatBox.Text
+if msg and msg ~= "" then
+chatBox.Text = ""
+task.spawn(netPost, "chat", { name = myName, text = string.sub(msg, 1, 200), t = os.time() })
+end
+end
+chatBox.FocusLost:Connect(function(enter) if enter then sendChat() end end)
+chatSendBtn.Activated:Connect(sendChat)
+task.spawn(function()
+while true do
+local data = netGet("chat")
+if type(data) == "table" then
+local keys = {}
+for k in pairs(data) do keys[#keys + 1] = k end
+table.sort(keys)
+for _, c in ipairs(chatList:GetChildren()) do if c:IsA("TextLabel") then c:Destroy() end end
+for i = math.max(1, #keys - 29), #keys do
+local m = data[keys[i]]
+if type(m) == "table" then
+UI.label({ Text = string.format("%s: %s", tostring(m.name or "?"), tostring(m.text or "")), TextSize = 11,
+Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true,
+TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = i, Parent = chatList }, false, "Text")
+end
+end
+end
+task.wait(3)
+end
+end)
+
+-- LIVE FEED: every shot anyone on this script takes shows up here
+local feed = UI.Card(mainPage, "Live feed (everyone's shots)")
+local feedList = new("ScrollingFrame", { Size = UDim2.new(1, 0, 0, 100), BackgroundTransparency = 1, ScrollBarThickness = 3,
+CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, LayoutOrder = nextOrder(feed), Parent = feed.frame })
+new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder, Parent = feedList })
+task.spawn(function()
+while true do
+local data = netGet("feed")
+if type(data) == "table" then
+local keys = {}
+for k in pairs(data) do keys[#keys + 1] = k end
+table.sort(keys)
+for _, c in ipairs(feedList:GetChildren()) do if c:IsA("TextLabel") then c:Destroy() end end
+for i = math.max(1, #keys - 19), #keys do
+local m = data[keys[i]]
+if type(m) == "table" then
+UI.label({ Text = string.format("%s  |  %s  |  %s", tostring(m.name or "?"), tostring(m.shot or "?"), tostring(m.verdict or "?")),
+TextSize = 11, Size = UDim2.new(1, 0, 0, 14), TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = i, Parent = feedList }, false, "Sub")
+end
+end
+end
+task.wait(4)
+end
+end)
+
+-- UPDATE LOG
+local ulog = UI.Card(mainPage, "Update log")
+UI.Note(ulog, table.concat({
+"v1.29 - JHub network: chat, live feed, shared jumpshot timing",
+"v1.28 - 10 always-on live helps for Auto Green",
+"v1.27 - Sweep locked off at all times",
+"v1.25 - every jumpshot's game settings built in",
+"v1.24 - jumpshot mastery inside the Ultra recorder",
+"v1.23 - Dex tree, every shot setting, remote spy inside Ultra recorder",
+"v1.22 - Copy my shot report for every player",
+}, "\n"))
+end
+
+-- SHARED TIMING POOL: once a jumpshot is locked on anyone's copy, it is shared so everyone's copy converges faster
+local lastPush = {}
+local prevLearnNet = Shot.autoLearn
+function Shot.autoLearn(info, res, strength)
+local r = prevLearnNet(info, res, strength)
+if info and info.key and Shot.auto and Shot.auto[info.key] and Shot.auto[info.key].locked and not Shot.FINAL[info.key] then
+local a = Shot.auto[info.key]
+local now = tick()
+if (lastPush[info.key] or 0) + 10 < now then
+lastPush[info.key] = now
+task.spawn(netPut, "timing/" .. sanitize(info.key), { lead = a.hold, n = a.n or 0, by = myName, t = os.time() })
+end
+end
+return r
+end
+task.spawn(function()
+while true do
+local data = netGet("timing")
+if type(data) == "table" then
+local merged = {}
+for k, v in pairs(data) do
+if type(v) == "table" and type(v.lead) == "number" then merged[k] = v end
+end
+Net.lead = merged
+end
+task.wait(20)
+end
+end)
+local prevSeedNet = Shot.seedLead
+function Shot.seedLead(key)
+local v = prevSeedNet(key)
+if Shot.FINAL[key] then return v end
+local locked = Shot.auto and Shot.auto[key] and Shot.auto[key].locked
+if not locked then
+local net = Net.lead[sanitize(key)]
+if net and net.lead then v = clamp((v + net.lead) / 2, 0, 0.1) end
+end
+return v
+end
+
+-- LIVE FEED POST: fires once per completed shot
+local prevLR = Shot.learnRemote
+function Shot.learnRemote(info, res, strength)
+if info and info.key then
+task.spawn(netPost, "feed", { name = myName, shot = Shot.nameFor(info.key, info.anim), verdict = tostring(res), t = os.time() })
+end
+return prevLR(info, res, strength)
 end
 end
 UI.syncAuto()
