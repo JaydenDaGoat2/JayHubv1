@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.84"
+local VERSION = "v1.85"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -9495,6 +9495,64 @@ if S.LabOn and info then pcall(Lab.add, info, res, strength) end
 return prevLR(info, res, strength)
 end
 end
+-- SHOT INTELLIGENCE: a live readout of the per-animation timing profile system (Shot.auto/Shot.FINAL), keyed automatically
+-- by whichever jumpshot animation is actually equipped - switching jumpshots switches profiles with no setup needed
+do
+local mainPage
+for _, p in ipairs(UI.pages) do if p.name == "Main" then mainPage = p end end
+if mainPage then
+local c = UI.Card(mainPage, "Shot Intelligence")
+local sName = UI.Stat(c, "Detected jumpshot")
+local sId = UI.Stat(c, "Animation ID")
+local sStatus = UI.Stat(c, "Calibration status")
+local sConf = UI.Stat(c, "Confidence")
+local sHold = UI.Stat(c, "Active timing")
+local sKnown = UI.Stat(c, "Known profiles")
+UI.Button(c, "Copy every known shot profile", function()
+local lines = { "== JHub shot intelligence profiles ==" }
+local seen = {}
+for key in pairs(Shot.FINAL) do
+seen[key] = true
+lines[#lines + 1] = string.format("%s | %s | built-in, confirmed | hold %.3fs", Shot.nameFor(key), key, Shot.FINAL[key])
+end
+for key, a in pairs(Shot.auto or {}) do
+if not seen[key] then
+lines[#lines + 1] = string.format("%s | %s | %s | %d samples | hold %.3fs", Shot.nameFor(key), key,
+a.locked and "locked" or "learning", a.n or 0, a.hold or 0)
+end
+end
+copy(table.concat(lines, "\n"), "Shot profiles")
+end)
+UI.Note(c, "Each jumpshot animation gets its own timing profile automatically - switching jumpshots switches profiles, no setup needed. A profile needs enough consistent real shots before it is trusted (locked); until then it is still learning.")
+task.spawn(function()
+while true do
+local cur = Shot.cur
+if cur and cur.key then
+local key = cur.key
+local a = Shot.auto and Shot.auto[key]
+sName.Text = Shot.nameFor(key, cur.anim)
+sId.Text = string.sub(tostring(key), 1, 22)
+sStatus.Text = cur.state or "-"
+if Shot.FINAL[key] then
+sConf.Text = "Built-in (confirmed)"
+elseif a then
+sConf.Text = string.format("%d samples%s", a.n or 0, a.locked and ", locked" or ", learning")
+else
+sConf.Text = "No data yet"
+end
+sHold.Text = string.format("%.3fs", cur.hold or 0)
+else
+sName.Text, sId.Text, sStatus.Text, sConf.Text, sHold.Text = "-", "-", "Shoot to see it", "-", "-"
+end
+local known = 0
+for _ in pairs(Shot.FINAL) do known = known + 1 end
+for _ in pairs(Shot.auto or {}) do known = known + 1 end
+sKnown.Text = tostring(known)
+task.wait(1)
+end
+end)
+end
+end
 -- LOGO LETTERS: the menu title and the top bar use a brush marker font with a black outline and the blue, yellow and purple colors
 do
 local FONT = Enum.Font.PermanentMarker
@@ -11487,6 +11545,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.85 - new Shot Intelligence card shows the detected jumpshot, its animation ID, calibration status, confidence (sample count/locked/built-in), active timing, and how many profiles are known, plus a button to copy every profile - this is the existing per-animation timing-profile system (automatic per-jumpshot profiles, auto switching when you change jumpshots) made visible instead of hidden",
 "v1.84 - a jumpshot used to only get shared as a found best timing network-wide if someone hit a literal real Perfect on it; now any jumpshot whose adaptive learner converges with enough real samples (12+) gets shared the same way, so every jumpshot anyone actually plays eventually gets a found-and-shared best timing, not just the rare Perfects",
 "v1.83 - the Owner tab's 2011 code alone could let anyone rename themselves Owner, overwriting whoever had it; now the roles screen loads the current Owner/devs/mods instead of defaulting to you, roles stay set until someone changes them, and changing who the Owner is now needs a separate code on top of 2011",
 "v1.82 - entering the Auto Guard, Locked, or Owner tab code once now sticks - it stays unlocked after the script resets/reloads, no need to retype it",
@@ -11859,7 +11918,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.84"
+local VERSION = "v1.85"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -21664,6 +21723,64 @@ do
 		return prevLR(info, res, strength)
 	end
 end
+-- SHOT INTELLIGENCE: a live readout of the per-animation timing profile system (Shot.auto/Shot.FINAL), keyed automatically
+-- by whichever jumpshot animation is actually equipped - switching jumpshots switches profiles with no setup needed
+do
+local mainPage
+for _, p in ipairs(UI.pages) do if p.name == "Main" then mainPage = p end end
+if mainPage then
+local c = UI.Card(mainPage, "Shot Intelligence")
+local sName = UI.Stat(c, "Detected jumpshot")
+local sId = UI.Stat(c, "Animation ID")
+local sStatus = UI.Stat(c, "Calibration status")
+local sConf = UI.Stat(c, "Confidence")
+local sHold = UI.Stat(c, "Active timing")
+local sKnown = UI.Stat(c, "Known profiles")
+UI.Button(c, "Copy every known shot profile", function()
+local lines = { "== JHub shot intelligence profiles ==" }
+local seen = {}
+for key in pairs(Shot.FINAL) do
+seen[key] = true
+lines[#lines + 1] = string.format("%s | %s | built-in, confirmed | hold %.3fs", Shot.nameFor(key), key, Shot.FINAL[key])
+end
+for key, a in pairs(Shot.auto or {}) do
+if not seen[key] then
+lines[#lines + 1] = string.format("%s | %s | %s | %d samples | hold %.3fs", Shot.nameFor(key), key,
+a.locked and "locked" or "learning", a.n or 0, a.hold or 0)
+end
+end
+copy(table.concat(lines, "\n"), "Shot profiles")
+end)
+UI.Note(c, "Each jumpshot animation gets its own timing profile automatically - switching jumpshots switches profiles, no setup needed. A profile needs enough consistent real shots before it is trusted (locked); until then it is still learning.")
+task.spawn(function()
+while true do
+local cur = Shot.cur
+if cur and cur.key then
+local key = cur.key
+local a = Shot.auto and Shot.auto[key]
+sName.Text = Shot.nameFor(key, cur.anim)
+sId.Text = string.sub(tostring(key), 1, 22)
+sStatus.Text = cur.state or "-"
+if Shot.FINAL[key] then
+sConf.Text = "Built-in (confirmed)"
+elseif a then
+sConf.Text = string.format("%d samples%s", a.n or 0, a.locked and ", locked" or ", learning")
+else
+sConf.Text = "No data yet"
+end
+sHold.Text = string.format("%.3fs", cur.hold or 0)
+else
+sName.Text, sId.Text, sStatus.Text, sConf.Text, sHold.Text = "-", "-", "Shoot to see it", "-", "-"
+end
+local known = 0
+for _ in pairs(Shot.FINAL) do known = known + 1 end
+for _ in pairs(Shot.auto or {}) do known = known + 1 end
+sKnown.Text = tostring(known)
+task.wait(1)
+end
+end)
+end
+end
 -- LOGO LETTERS: the menu title and the top bar use a brush marker font with a black outline and the blue, yellow and purple colors
 do
 	local FONT = Enum.Font.PermanentMarker
@@ -23656,6 +23773,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.85 - new Shot Intelligence card shows the detected jumpshot, its animation ID, calibration status, confidence (sample count/locked/built-in), active timing, and how many profiles are known, plus a button to copy every profile - this is the existing per-animation timing-profile system (automatic per-jumpshot profiles, auto switching when you change jumpshots) made visible instead of hidden",
 "v1.84 - a jumpshot used to only get shared as a found best timing network-wide if someone hit a literal real Perfect on it; now any jumpshot whose adaptive learner converges with enough real samples (12+) gets shared the same way, so every jumpshot anyone actually plays eventually gets a found-and-shared best timing, not just the rare Perfects",
 "v1.83 - the Owner tab's 2011 code alone could let anyone rename themselves Owner, overwriting whoever had it; now the roles screen loads the current Owner/devs/mods instead of defaulting to you, roles stay set until someone changes them, and changing who the Owner is now needs a separate code on top of 2011",
 "v1.82 - entering the Auto Guard, Locked, or Owner tab code once now sticks - it stays unlocked after the script resets/reloads, no need to retype it",
