@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.54"
+local VERSION = "v1.55"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -145,7 +145,7 @@ ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, St
 LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false,
+FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false,
 AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 AGOnlyBall = true,
 BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
@@ -10390,6 +10390,26 @@ notify("Remote Guard Recorder", string.format("%.0f KB, saved as JHub_remote_gua
 end)
 end
 end
+-- AUTO GUARD BEHIND THE SAME CODE AS THE LOCKED TAB: the toggle and its settings stay hidden until 6022 is entered on the Locked tab
+do
+local gp3
+for _, p in ipairs(UI.pages) do
+if p.name == "Auto Guard" then gp3 = p end
+end
+if gp3 and UI.lockedTools then
+for _, f in ipairs(gp3.frame:GetChildren()) do
+if f:IsA("Frame") then
+for _, d in ipairs(f:GetDescendants()) do
+if d:IsA("TextLabel") and d.Text == "Auto guard" then
+f.Visible = false
+table.insert(UI.lockedTools, f)
+break
+end
+end
+end
+end
+end
+end
 -- UPDATE BUTTON: checks GitHub for the newest version and loads it
 do
 local OWNER, REPO, BRANCH = "jaydendagoat2", "jayhubv1", "claude/claudechud-8cord-executor-wclom3"
@@ -11203,6 +11223,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.55 - Auto Guard now locked behind the Locked tab code (6022), same as the other tools",
 "v1.54 - Auto Guard rebuilt plain again (CFrame + real animation, no simulated input); recorder moved onto its own tab",
 "v1.53 - added Remote Guard Recorder: catches every animation and movement state while guarding",
 "v1.52 - fixed sideways drift and stuck movement when auto guard stops being called",
@@ -11497,7 +11518,7 @@ end
 ]==]
 
 -- DISCORD GATE: the first time the script runs, a window asks for a Discord join before anything else loads
-local GATE_VERSION = "v1.54"
+local GATE_VERSION = "v1.55"
 local okGate, errGate = pcall(function()
 	local FILE = "JHub_discord_ok.txt"
 	local INVITE = "https://discord.gg/fk5TsZMrRM"
@@ -11632,7 +11653,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.54"
+local VERSION = "v1.55"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -11738,7 +11759,7 @@ local S = {
 	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false,
+	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false,
 	AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 	AGOnlyBall = true,
 	BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
@@ -22330,6 +22351,26 @@ do
 		end)
 	end
 end
+-- AUTO GUARD BEHIND THE SAME CODE AS THE LOCKED TAB: the toggle and its settings stay hidden until 6022 is entered on the Locked tab
+do
+	local gp3
+	for _, p in ipairs(UI.pages) do
+		if p.name == "Auto Guard" then gp3 = p end
+	end
+	if gp3 and UI.lockedTools then
+		for _, f in ipairs(gp3.frame:GetChildren()) do
+			if f:IsA("Frame") then
+				for _, d in ipairs(f:GetDescendants()) do
+					if d:IsA("TextLabel") and d.Text == "Auto guard" then
+						f.Visible = false
+						table.insert(UI.lockedTools, f)
+						break
+					end
+				end
+			end
+		end
+	end
+end
 -- UPDATE BUTTON: checks GitHub for the newest version and loads it
 do
 	local OWNER, REPO, BRANCH = "jaydendagoat2", "jayhubv1", "claude/claudechud-8cord-executor-wclom3"
@@ -23143,6 +23184,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.55 - Auto Guard now locked behind the Locked tab code (6022), same as the other tools",
 "v1.54 - Auto Guard rebuilt plain again (CFrame + real animation, no simulated input); recorder moved onto its own tab",
 "v1.53 - added Remote Guard Recorder: catches every animation and movement state while guarding",
 "v1.52 - fixed sideways drift and stuck movement when auto guard stops being called",
