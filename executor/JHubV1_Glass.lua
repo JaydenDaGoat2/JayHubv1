@@ -280,6 +280,7 @@ end
 if S.SettingsVer < 29 then S.Codes = DEFAULTS.Codes end
 if S.SettingsVer < 31 then S.LagSync, S.PrecFit, S.AdaptPlus = false, false, false end
 if S.SettingsVer < 32 then S.LagSync, S.PrecFit, S.AdaptPlus, S.GreenMax, S.Sweep = true, true, true, true, false end
+S.Sweep = false -- sweep stays off at all times; it deliberately misses to map timing, never wanted in real play
 if S.SettingsVer < 33 then S.FirstShot = false end
 if S.SettingsVer < 34 then S.CardTrans = 0.4 end
 if S.SettingsVer < 35 then
@@ -5984,7 +5985,13 @@ UI.Buttons(rc, { { "Copy recording", Rec.copy }, { "Clear", Rec.clear } })
 UI.Button(rc, "Copy remote spy (RSpy)", Rec.copySpy)
 local sr = UI.Card(P, "Shot recorder")
 UI.Toggle(sr, "Record shots (turn off to copy everything)", "RecShots", function(v) if v then Rec.shotStart() else Rec.shotStop() end end)
-UI.Toggle(sr, "Sweep timings while recording", "Sweep")
+UI.Toggle(sr, "Sweep timings while recording (locked off)", "Sweep", function()
+S.Sweep = false
+local list = UI.flagRefresh["Sweep"]
+if list then for _, f in ipairs(list) do pcall(f) end end
+saveSoon()
+notify("Shot recorder", "Sweep stays off. It deliberately misses shots on purpose and is not something you want running.", 5)
+end)
 UI.Button(sr, "Capture everything about shooting", Rec.captureAll)
 local gs = UI.Card(P, "Game scanner")
 UI.Buttons(gs, { { "Scan game and copy", Rec.scanGame }, { "Copy last scan", Rec.copyScan } })
@@ -6329,7 +6336,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.25  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.27  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -8802,7 +8809,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.25"
+d.Text = "JHub V1.27"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -10758,7 +10765,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.25", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.27", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -11086,6 +11093,7 @@ end
 if S.SettingsVer < 29 then S.Codes = DEFAULTS.Codes end
 if S.SettingsVer < 31 then S.LagSync, S.PrecFit, S.AdaptPlus = false, false, false end
 if S.SettingsVer < 32 then S.LagSync, S.PrecFit, S.AdaptPlus, S.GreenMax, S.Sweep = true, true, true, true, false end
+S.Sweep = false -- sweep stays off at all times; it deliberately misses to map timing, never wanted in real play
 if S.SettingsVer < 33 then S.FirstShot = false end
 if S.SettingsVer < 34 then S.CardTrans = 0.4 end
 if S.SettingsVer < 35 then
@@ -17070,7 +17078,13 @@ do
 
 	local sr = UI.Card(P, "Shot recorder")
 	UI.Toggle(sr, "Record shots (turn off to copy everything)", "RecShots", function(v) if v then Rec.shotStart() else Rec.shotStop() end end)
-	UI.Toggle(sr, "Sweep timings while recording", "Sweep")
+	UI.Toggle(sr, "Sweep timings while recording (locked off)", "Sweep", function()
+S.Sweep = false
+local list = UI.flagRefresh["Sweep"]
+if list then for _, f in ipairs(list) do pcall(f) end end
+saveSoon()
+notify("Shot recorder", "Sweep stays off. It deliberately misses shots on purpose and is not something you want running.", 5)
+end)
 	UI.Button(sr, "Capture everything about shooting", Rec.captureAll)
 
 	local gs = UI.Card(P, "Game scanner")
@@ -17469,7 +17483,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.25  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.27  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -19950,7 +19964,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.25"
+				d.Text = "JHub V1.27"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
