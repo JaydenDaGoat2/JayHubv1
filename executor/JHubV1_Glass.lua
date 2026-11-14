@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.20 shot-line"
+local VERSION = "v1.21 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -6329,7 +6329,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.20  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.21  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -8802,7 +8802,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.20"
+d.Text = "JHub V1.21"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -10250,6 +10250,75 @@ table.insert(UI.lockedTools, 3, c.frame)
 c.frame.Visible = false
 end
 end
+-- UPDATE BUTTON: checks GitHub for the newest version and loads it
+do
+local OWNER, REPO, BRANCH = "jaydendagoat2", "jayhubv1", "claude/claudechud-8cord-executor-wclom3"
+local function http(url) return game:HttpGet(url) end
+local function latestSha()
+local branch = string.gsub(BRANCH, "/", "%%2F")
+local ok, body = pcall(http, "https://api.github.com/repos/" .. OWNER .. "/" .. REPO .. "/commits/" .. branch)
+if not ok or type(body) ~= "string" then return nil end
+return string.match(body, '"sha"%s*:%s*"(%x+)"')
+end
+local function fetchNewest()
+local sha = latestSha()
+local url = sha and ("https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" .. sha .. "/executor/JHubV1_Glass.lua")
+or ("https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" .. BRANCH .. "/executor/JHubV1_Glass.lua?v=" .. tostring(os.time()))
+local ok, src = pcall(http, url)
+if not ok or type(src) ~= "string" or #src < 10000 then return nil end
+return src, string.match(src, 'local VERSION = "(v[%d%.]+)')
+end
+local mine = string.match(tostring(VERSION), "^(v[%d%.]+)") or tostring(VERSION)
+local mainPage
+for _, p in ipairs(UI.pages) do
+if p.name == "Main" then mainPage = p end
+end
+if mainPage then
+local c = UI.Card(mainPage, "Updates")
+local cur = UI.Stat(c, "This version")
+cur.Text = mine
+local newest = UI.Stat(c, "Newest version")
+newest.Text = "tap Check"
+local busy = false
+UI.Buttons(c, {
+{ "Check", function()
+if busy then return end
+busy = true
+newest.Text = "checking..."
+local src, ver = fetchNewest()
+newest.Text = ver or "could not reach GitHub"
+busy = false
+end },
+{ "Update now", function()
+if busy then return end
+busy = true
+newest.Text = "downloading..."
+local src, ver = fetchNewest()
+if not src then
+newest.Text = "could not reach GitHub"
+busy = false
+return
+end
+newest.Text = ver or "?"
+if ver == mine then
+notify("Update", "You already have the newest version (" .. mine .. ")", 4)
+busy = false
+return
+end
+local fn = loadstring(src)
+if not fn then
+notify("Update", "The download could not be read", 4)
+busy = false
+return
+end
+notify("Update", "Updating to " .. tostring(ver) .. "...", 3)
+pcall(JH.Unload)
+task.defer(fn)
+end },
+})
+UI.Note(c, "Loads the newest version from GitHub and restarts JHub. Your settings stay.")
+end
+end
 UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
@@ -10413,7 +10482,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.20", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.21", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -10494,7 +10563,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.20 shot-line"
+local VERSION = "v1.21 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -17124,7 +17193,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.20  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.21  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -19605,7 +19674,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.20"
+				d.Text = "JHub V1.21"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -21051,6 +21120,75 @@ do
 		UI.Note(c, "When nobody on the other team has the ball, auto guard stops and does nothing.")
 		table.insert(UI.lockedTools, 3, c.frame)
 		c.frame.Visible = false
+	end
+end
+-- UPDATE BUTTON: checks GitHub for the newest version and loads it
+do
+	local OWNER, REPO, BRANCH = "jaydendagoat2", "jayhubv1", "claude/claudechud-8cord-executor-wclom3"
+	local function http(url) return game:HttpGet(url) end
+	local function latestSha()
+		local branch = string.gsub(BRANCH, "/", "%%2F")
+		local ok, body = pcall(http, "https://api.github.com/repos/" .. OWNER .. "/" .. REPO .. "/commits/" .. branch)
+		if not ok or type(body) ~= "string" then return nil end
+		return string.match(body, '"sha"%s*:%s*"(%x+)"')
+	end
+	local function fetchNewest()
+		local sha = latestSha()
+		local url = sha and ("https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" .. sha .. "/executor/JHubV1_Glass.lua")
+			or ("https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" .. BRANCH .. "/executor/JHubV1_Glass.lua?v=" .. tostring(os.time()))
+		local ok, src = pcall(http, url)
+		if not ok or type(src) ~= "string" or #src < 10000 then return nil end
+		return src, string.match(src, 'local VERSION = "(v[%d%.]+)')
+	end
+	local mine = string.match(tostring(VERSION), "^(v[%d%.]+)") or tostring(VERSION)
+	local mainPage
+	for _, p in ipairs(UI.pages) do
+		if p.name == "Main" then mainPage = p end
+	end
+	if mainPage then
+		local c = UI.Card(mainPage, "Updates")
+		local cur = UI.Stat(c, "This version")
+		cur.Text = mine
+		local newest = UI.Stat(c, "Newest version")
+		newest.Text = "tap Check"
+		local busy = false
+		UI.Buttons(c, {
+			{ "Check", function()
+				if busy then return end
+				busy = true
+				newest.Text = "checking..."
+				local src, ver = fetchNewest()
+				newest.Text = ver or "could not reach GitHub"
+				busy = false
+			end },
+			{ "Update now", function()
+				if busy then return end
+				busy = true
+				newest.Text = "downloading..."
+				local src, ver = fetchNewest()
+				if not src then
+					newest.Text = "could not reach GitHub"
+					busy = false
+					return
+				end
+				newest.Text = ver or "?"
+				if ver == mine then
+					notify("Update", "You already have the newest version (" .. mine .. ")", 4)
+					busy = false
+					return
+				end
+				local fn = loadstring(src)
+				if not fn then
+					notify("Update", "The download could not be read", 4)
+					busy = false
+					return
+				end
+				notify("Update", "Updating to " .. tostring(ver) .. "...", 3)
+				pcall(JH.Unload)
+				task.defer(fn)
+			end },
+		})
+		UI.Note(c, "Loads the newest version from GitHub and restarts JHub. Your settings stay.")
 	end
 end
 UI.syncAuto()
