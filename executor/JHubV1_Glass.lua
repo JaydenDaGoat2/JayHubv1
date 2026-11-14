@@ -6343,7 +6343,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.37  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.38  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -8829,7 +8829,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.37"
+d.Text = "JHub V1.38"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -11107,6 +11107,40 @@ end
 return prevSeedHL(key)
 end
 end
+-- LIVE ADAPT, SHARPER: steps shrink the more a jumpshot has actually been seen (so it locks in fast early, then stops wobbling), and one freak result against a steady trend gets a lighter step, not a full swing
+do
+local prevGainLA = Shot.adaptGain
+local dampenKey, dampenUntil = nil, 0
+function Shot.adaptGain(key, off)
+local g = prevGainLA(key, off)
+local a = Shot.auto and Shot.auto[key]
+local n = a and a.n or 0
+local decay = 1 / (1 + 0.12 * n)
+g = g * clamp(decay, 0.2, 1)
+if key == dampenKey and tick() < dampenUntil then g = g * 0.4 end
+return g
+end
+local recent = {}
+local prevLearnLA = Shot.autoLearn
+function Shot.autoLearn(info, res, strength)
+if info and info.key and info.idx and not info.manual then
+local off = (info.idx == 5 and 0) or (info.idx == 4 and -1) or (info.idx - 5)
+local h = recent[info.key] or {}
+h[#h + 1] = off
+while #h > 3 do table.remove(h, 1) end
+recent[info.key] = h
+if #h >= 3 then
+local sum = 0
+for i = 1, #h - 1 do sum = sum + h[i] end
+local avg = sum / (#h - 1)
+if math.abs(off) >= 3 and math.abs(avg) <= 1 then
+dampenKey, dampenUntil = info.key, tick() + 1
+end
+end
+end
+return prevLearnLA(info, res, strength)
+end
+end
 UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
@@ -11270,7 +11304,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.37", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.38", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -17995,7 +18029,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.37  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.38  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -20489,7 +20523,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.37"
+				d.Text = "JHub V1.38"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -22765,6 +22799,40 @@ a.hold, a.locked, a.mode, a.greens, a.bin = net.lead, true, "peak", a.greens or 
 return a.hold
 end
 return prevSeedHL(key)
+end
+end
+-- LIVE ADAPT, SHARPER: steps shrink the more a jumpshot has actually been seen (so it locks in fast early, then stops wobbling), and one freak result against a steady trend gets a lighter step, not a full swing
+do
+local prevGainLA = Shot.adaptGain
+local dampenKey, dampenUntil = nil, 0
+function Shot.adaptGain(key, off)
+local g = prevGainLA(key, off)
+local a = Shot.auto and Shot.auto[key]
+local n = a and a.n or 0
+local decay = 1 / (1 + 0.12 * n)
+g = g * clamp(decay, 0.2, 1)
+if key == dampenKey and tick() < dampenUntil then g = g * 0.4 end
+return g
+end
+local recent = {}
+local prevLearnLA = Shot.autoLearn
+function Shot.autoLearn(info, res, strength)
+if info and info.key and info.idx and not info.manual then
+local off = (info.idx == 5 and 0) or (info.idx == 4 and -1) or (info.idx - 5)
+local h = recent[info.key] or {}
+h[#h + 1] = off
+while #h > 3 do table.remove(h, 1) end
+recent[info.key] = h
+if #h >= 3 then
+local sum = 0
+for i = 1, #h - 1 do sum = sum + h[i] end
+local avg = sum / (#h - 1)
+if math.abs(off) >= 3 and math.abs(avg) <= 1 then
+dampenKey, dampenUntil = info.key, tick() + 1
+end
+end
+end
+return prevLearnLA(info, res, strength)
 end
 end
 UI.syncAuto()
