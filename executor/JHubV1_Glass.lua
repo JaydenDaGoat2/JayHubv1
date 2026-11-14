@@ -145,7 +145,7 @@ ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, St
 LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false,
+FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, HardLock = "",
 AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 AGOnlyBall = true,
 BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
@@ -6343,7 +6343,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.36  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.37  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -8829,7 +8829,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.36"
+d.Text = "JHub V1.37"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -11060,6 +11060,52 @@ task.spawn(netPost, "feed", { name = myName, shot = Shot.nameFor(info.key, info.
 end
 return prevLR(info, res, strength)
 end
+-- PERFECT LOCK: a real Perfect freezes that exact jumpshot's timing forever, locally and shared, until you ask for it to be unlocked by name
+local function readHard()
+local t = {}
+for k in string.gmatch(S.HardLock or "", "([^,]+),") do t[k] = true end
+return t
+end
+local function addHard(key)
+local t = readHard()
+if not t[key] then
+S.HardLock = (S.HardLock or "") .. key .. ","
+saveSoon()
+end
+end
+JH.hardLocked = readHard()
+local prevLearnHL = Shot.autoLearn
+function Shot.autoLearn(info, res, strength)
+if info and info.key and JH.hardLocked[info.key] then return true end
+local r = prevLearnHL(info, res, strength)
+if info and info.key and info.idx == 5 and not info.manual and not Shot.FINAL[info.key] and not JH.hardLocked[info.key] and info.lead then
+local a = Shot.auto and Shot.auto[info.key]
+if not a then
+a = { hold = info.lead, greens = {}, locked = false, dir = 1, mode = "peak", bin = S.PeakBin }
+Shot.auto[info.key] = a
+end
+a.hold, a.locked, a.mode = info.lead, true, "peak"
+JH.hardLocked[info.key] = true
+addHard(info.key)
+task.spawn(netPut, "timing/" .. sanitize(info.key), { lead = a.hold, n = 9999, hard = true, by = myName, t = os.time() })
+notify("Timing locked", "Jumpshot " .. tostring(Shot.nameFor and Shot.nameFor(info.key) or info.key) .. " hit a real Perfect, its timing is locked forever and shared.", 5)
+end
+return r
+end
+local prevSeedHL = Shot.seedLead
+function Shot.seedLead(key)
+if JH.hardLocked[key] and Shot.auto and Shot.auto[key] then return Shot.auto[key].hold end
+local net = Net.lead[sanitize(key)]
+if net and net.hard and not JH.hardLocked[key] then
+JH.hardLocked[key] = true
+addHard(key)
+Shot.auto[key] = Shot.auto[key] or {}
+local a = Shot.auto[key]
+a.hold, a.locked, a.mode, a.greens, a.bin = net.lead, true, "peak", a.greens or {}, a.bin or S.PeakBin
+return a.hold
+end
+return prevSeedHL(key)
+end
 end
 UI.syncAuto()
 UI.applyTheme()
@@ -11224,7 +11270,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.36", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.37", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -11411,7 +11457,7 @@ local S = {
 	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false,
+	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, HardLock = "",
 	AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 	AGOnlyBall = true,
 	BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
@@ -17949,7 +17995,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.36  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.37  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -20443,7 +20489,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.36"
+				d.Text = "JHub V1.37"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -22673,6 +22719,52 @@ if info and info.key then
 task.spawn(netPost, "feed", { name = myName, shot = Shot.nameFor(info.key, info.anim), verdict = tostring(res), t = os.time() })
 end
 return prevLR(info, res, strength)
+end
+-- PERFECT LOCK: a real Perfect freezes that exact jumpshot's timing forever, locally and shared, until you ask for it to be unlocked by name
+local function readHard()
+local t = {}
+for k in string.gmatch(S.HardLock or "", "([^,]+),") do t[k] = true end
+return t
+end
+local function addHard(key)
+local t = readHard()
+if not t[key] then
+S.HardLock = (S.HardLock or "") .. key .. ","
+saveSoon()
+end
+end
+JH.hardLocked = readHard()
+local prevLearnHL = Shot.autoLearn
+function Shot.autoLearn(info, res, strength)
+if info and info.key and JH.hardLocked[info.key] then return true end
+local r = prevLearnHL(info, res, strength)
+if info and info.key and info.idx == 5 and not info.manual and not Shot.FINAL[info.key] and not JH.hardLocked[info.key] and info.lead then
+local a = Shot.auto and Shot.auto[info.key]
+if not a then
+a = { hold = info.lead, greens = {}, locked = false, dir = 1, mode = "peak", bin = S.PeakBin }
+Shot.auto[info.key] = a
+end
+a.hold, a.locked, a.mode = info.lead, true, "peak"
+JH.hardLocked[info.key] = true
+addHard(info.key)
+task.spawn(netPut, "timing/" .. sanitize(info.key), { lead = a.hold, n = 9999, hard = true, by = myName, t = os.time() })
+notify("Timing locked", "Jumpshot " .. tostring(Shot.nameFor and Shot.nameFor(info.key) or info.key) .. " hit a real Perfect, its timing is locked forever and shared.", 5)
+end
+return r
+end
+local prevSeedHL = Shot.seedLead
+function Shot.seedLead(key)
+if JH.hardLocked[key] and Shot.auto and Shot.auto[key] then return Shot.auto[key].hold end
+local net = Net.lead[sanitize(key)]
+if net and net.hard and not JH.hardLocked[key] then
+JH.hardLocked[key] = true
+addHard(key)
+Shot.auto[key] = Shot.auto[key] or {}
+local a = Shot.auto[key]
+a.hold, a.locked, a.mode, a.greens, a.bin = net.lead, true, "peak", a.greens or {}, a.bin or S.PeakBin
+return a.hold
+end
+return prevSeedHL(key)
 end
 end
 UI.syncAuto()
