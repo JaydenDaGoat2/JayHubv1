@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.76"
+local VERSION = "v1.77"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -151,7 +151,7 @@ AGOnlyBall = true,
 BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
 BindKey1 = "", BindArgs1 = "", BindKey2 = "", BindArgs2 = "", BindKey3 = "", BindArgs3 = "", BindKey4 = "", BindArgs4 = "", BindKey5 = "", BindArgs5 = "", BindKey6 = "", BindArgs6 = "",
 LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
-AG = false, AGTarget = "Ball handler", AGDist = 4, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true, WalkAnimId = "", GuardAnimId = "",
+AG = false, AGTarget = "Ball handler", AGDist = 4, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true, AGHoldToUse = false, WalkAnimId = "", GuardAnimId = "",
 AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
 AR = false, ARSpeed = 1, ARReact = 0.18, ARRange = 45, ARJump = true, ARMagnet = true, ARMagRange = 4, ARMarker = false,
 AP = false, APBuild = "Small", APPostScore = true, APAllAround = true, APOpenDist = 6, APRange = 24, APThree = true, APDrive = true, APLayups = true, APSprint = true, APMoves = true,
@@ -7871,12 +7871,19 @@ if S.AP then
 acted = Bot.play(me, others, hasBall)
 else
 if S.AR and not hasBall then acted = Bot.reboundStep(me) end
-if not acted and S.AG and not hasBall then acted = Bot.guardStep(me, others) end
+local wantGuard = S.AG and not hasBall
+if wantGuard and S.AGHoldToUse then
+local c3 = char()
+wantGuard = c3 and c3:GetAttribute("HoldingG") == true
+end
+if not acted and wantGuard then acted = Bot.guardStep(me, others) end
 end
 if not acted then
 Bot.stopMove()
 Bot.setSprint(false)
-if not S.AP then Bot.status = "Waiting" end
+if not S.AP then
+Bot.status = (S.AG and S.AGHoldToUse and not hasBall) and "Hold Guard to drive" or "Waiting"
+end
 end
 end
 task.spawn(function()
@@ -7945,6 +7952,7 @@ UI.Slider(g1, "Reaction time", "AGReact", 0, 0.5, 0.01, 2, "s")
 UI.Slider(g1, "Prediction (looks ahead)", "AGPredict", 0, 0.6, 0.02, 2, "s")
 UI.Slider(g1, "Guard range", "AGRange", 10, 120, 5, 0, " studs")
 UI.Toggle(g1, "Stay in front no matter what", "AGLock")
+UI.Toggle(g1, "Only drive while I hold the real Guard button myself", "AGHoldToUse")
 UI.Toggle(g1, "Face the player I guard", "AGFace")
 UI.Toggle(g1, "Sprint to catch up", "AGSprint")
 UI.Toggle(g1, "Look human (sway, hesitate, player speed)", "AGHuman")
@@ -8499,6 +8507,7 @@ end
 -- real guarding, rebuilt plain and simple: move the character to the spot with CFrame (same as every other bot movement in this script), hold the real Guard button so HoldingG is genuinely true, and play your own real walk/guard animation on top. No simulated keys, no simulated touches - those were freezing the camera.
 local guardHeld = false
 function Bot.setGuardHold(on)
+if S.AGHoldToUse then return end
 if on == guardHeld then return end
 Input.action("Guard", on)
 guardHeld = on
@@ -11365,6 +11374,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.77 - added an option to only drive Auto Guard while you hold the real Guard button yourself, instead of it pressing the button for you",
 "v1.76 - confirmed Mover.send also produced zero real movement (sent ok, speed stayed 0); back to CFrame for actual position, with Humanoid:Move running alongside it at the same time purely so the real walk animation plays",
 "v1.75 - diagnostics found AGRange was blocking Auto Guard from even trying to move whenever the opponent was past it (check your Guard range slider); fixed a logging bug that hid confirmed Mover.send calls; open/contested is now live while dribbling with a character highlight, not just a post-shot label",
 "v1.74 - added live diagnostics to the Remote Guard Recorder log: target, distance, calculated direction, what actually got sent, whether it was blocked, and humanoid state, no logic changed",
@@ -11725,7 +11735,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.76"
+local VERSION = "v1.77"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -11837,7 +11847,7 @@ local S = {
 	BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
 	BindKey1 = "", BindArgs1 = "", BindKey2 = "", BindArgs2 = "", BindKey3 = "", BindArgs3 = "", BindKey4 = "", BindArgs4 = "", BindKey5 = "", BindArgs5 = "", BindKey6 = "", BindArgs6 = "",
 	LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
-	AG = false, AGTarget = "Ball handler", AGDist = 4, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true, WalkAnimId = "", GuardAnimId = "",
+	AG = false, AGTarget = "Ball handler", AGDist = 4, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true, AGHoldToUse = false, WalkAnimId = "", GuardAnimId = "",
 	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
 	AR = false, ARSpeed = 1, ARReact = 0.18, ARRange = 45, ARJump = true, ARMagnet = true, ARMagRange = 4, ARMarker = false,
 	AP = false, APBuild = "Small", APPostScore = true, APAllAround = true, APOpenDist = 6, APRange = 24, APThree = true, APDrive = true, APLayups = true, APSprint = true, APMoves = true,
@@ -19905,12 +19915,19 @@ do
 			acted = Bot.play(me, others, hasBall)
 		else
 			if S.AR and not hasBall then acted = Bot.reboundStep(me) end
-			if not acted and S.AG and not hasBall then acted = Bot.guardStep(me, others) end
+			local wantGuard = S.AG and not hasBall
+			if wantGuard and S.AGHoldToUse then
+				local c3 = char()
+				wantGuard = c3 and c3:GetAttribute("HoldingG") == true
+			end
+			if not acted and wantGuard then acted = Bot.guardStep(me, others) end
 		end
 		if not acted then
 			Bot.stopMove()
 			Bot.setSprint(false)
-			if not S.AP then Bot.status = "Waiting" end
+			if not S.AP then
+				Bot.status = (S.AG and S.AGHoldToUse and not hasBall) and "Hold Guard to drive" or "Waiting"
+			end
 		end
 	end
 	task.spawn(function()
@@ -19979,6 +19996,7 @@ JH.AGContentFrames = contentFrames
 		UI.Slider(g1, "Prediction (looks ahead)", "AGPredict", 0, 0.6, 0.02, 2, "s")
 		UI.Slider(g1, "Guard range", "AGRange", 10, 120, 5, 0, " studs")
 		UI.Toggle(g1, "Stay in front no matter what", "AGLock")
+		UI.Toggle(g1, "Only drive while I hold the real Guard button myself", "AGHoldToUse")
 		UI.Toggle(g1, "Face the player I guard", "AGFace")
 		UI.Toggle(g1, "Sprint to catch up", "AGSprint")
 		UI.Toggle(g1, "Look human (sway, hesitate, player speed)", "AGHuman")
@@ -20534,6 +20552,7 @@ do
 	-- real guarding, rebuilt plain and simple: move the character to the spot with CFrame (same as every other bot movement in this script), hold the real Guard button so HoldingG is genuinely true, and play your own real walk/guard animation on top. No simulated keys, no simulated touches - those were freezing the camera.
 	local guardHeld = false
 	function Bot.setGuardHold(on)
+		if S.AGHoldToUse then return end
 		if on == guardHeld then return end
 		Input.action("Guard", on)
 		guardHeld = on
@@ -23400,6 +23419,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.77 - added an option to only drive Auto Guard while you hold the real Guard button yourself, instead of it pressing the button for you",
 "v1.76 - confirmed Mover.send also produced zero real movement (sent ok, speed stayed 0); back to CFrame for actual position, with Humanoid:Move running alongside it at the same time purely so the real walk animation plays",
 "v1.75 - diagnostics found AGRange was blocking Auto Guard from even trying to move whenever the opponent was past it (check your Guard range slider); fixed a logging bug that hid confirmed Mover.send calls; open/contested is now live while dribbling with a character highlight, not just a post-shot label",
 "v1.74 - added live diagnostics to the Remote Guard Recorder log: target, distance, calculated direction, what actually got sent, whether it was blocked, and humanoid state, no logic changed",
