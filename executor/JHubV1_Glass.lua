@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.90"
+local VERSION = "v1.91"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -9794,31 +9794,64 @@ UI.Input(lock2, "Code", { get = function() return typed2 end, set = function(v) 
 local rolesCard = UI.Card(OP, "Chat roles")
 rolesCard.frame.Visible = false
 local existing = JH.roles or {}
-local ownerName, devNames, mod1Name, mod2Name, ownerCode = tostring(existing.owner or ""), tostring(existing.devs or ""), tostring(existing.mod1 or ""), tostring(existing.mod2 or ""), ""
-UI.Input(rolesCard, "Owner name (gold text, crown, #owner)", { get = function() return ownerName end, set = function(v) ownerName = tostring(v or "") end }, nil, "owner's player name")
-UI.Input(rolesCard, "Owner code (only needed to set/change the Owner)", { get = function() return ownerCode end, set = function(v) ownerCode = tostring(v or "") end }, nil, "required to change the Owner")
-UI.Input(rolesCard, "Devs (comma separated player names)", { get = function() return devNames end, set = function(v) devNames = tostring(v or "") end }, nil, "name1, name2")
-UI.Input(rolesCard, "Mod 1 name", { get = function() return mod1Name end, set = function(v) mod1Name = tostring(v or "") end }, nil, "player name")
-UI.Input(rolesCard, "Mod 2 name", { get = function() return mod2Name end, set = function(v) mod2Name = tostring(v or "") end }, nil, "player name")
-UI.Button(rolesCard, "Save and push to everyone", function()
-local cur = JH.roles or {}
-local newOwner = cur.owner or ""
-if ownerName ~= (cur.owner or "") then
-if string.lower(string.gsub(ownerCode, "%s", "")) == "jay" then
-newOwner = ownerName
-else
-notify("Owner tab", "Wrong owner code - the Owner was not changed. Devs/mods still saved.", 4)
+local ownersList, devsList, modsList, ownerCode = tostring(existing.owners or existing.owner or ""), tostring(existing.devs or ""), tostring(existing.mods or ""), ""
+local function inList(list, name)
+if type(list) ~= "string" then return false end
+for n in string.gmatch(list, "([^,]+)") do
+if string.gsub(string.gsub(n, "^%s+", ""), "%s+$", "") == name then return true end
 end
-else
-newOwner = ownerName
+return false
 end
-ownerName, ownerCode = newOwner, ""
-local roles = { owner = newOwner, devs = devNames, mod1 = mod1Name, mod2 = mod2Name, t = os.time() }
+local function addName(list, name)
+if inList(list, name) then return list end
+return (list ~= "" and (list .. ", ") or "") .. name
+end
+local function pushRoles(newOwners)
+local roles = { owners = newOwners, devs = devsList, mods = modsList, t = os.time() }
 JH.roles = roles
 if JH.netPut then task.spawn(JH.netPut, "roles", roles) end
+end
+UI.Input(rolesCard, "Owners (comma separated - gold text, crown, #owner)", { get = function() return ownersList end, set = function(v) ownersList = tostring(v or "") end }, nil, "name1, name2")
+UI.Input(rolesCard, "Owner code (only needed to add/change an Owner)", { get = function() return ownerCode end, set = function(v) ownerCode = tostring(v or "") end }, nil, "required to touch the Owners list")
+UI.Input(rolesCard, "Devs (comma separated player names)", { get = function() return devsList end, set = function(v) devsList = tostring(v or "") end }, nil, "name1, name2")
+UI.Input(rolesCard, "Mods (comma separated player names)", { get = function() return modsList end, set = function(v) modsList = tostring(v or "") end }, nil, "name1, name2")
+UI.Button(rolesCard, "Add me as Owner", function()
+if string.lower(string.gsub(ownerCode, "%s", "")) == "jay" then
+ownersList = addName(ownersList, Players.LocalPlayer.Name)
+pushRoles(ownersList)
+notify("Owner tab", "Added you as Owner and pushed to everyone.", 4)
+else
+notify("Owner tab", "Wrong owner code.", 3)
+end
+end)
+UI.Button(rolesCard, "Add me as Dev", function()
+devsList = addName(devsList, Players.LocalPlayer.Name)
+pushRoles(ownersList)
+notify("Owner tab", "Added you as Dev and pushed to everyone.", 4)
+end)
+UI.Button(rolesCard, "Add me as Mod", function()
+modsList = addName(modsList, Players.LocalPlayer.Name)
+pushRoles(ownersList)
+notify("Owner tab", "Added you as Mod and pushed to everyone.", 4)
+end)
+UI.Button(rolesCard, "Save and push to everyone", function()
+local cur = JH.roles or {}
+local curOwners = tostring(cur.owners or cur.owner or "")
+local newOwners = ownersList
+if ownersList ~= curOwners then
+if string.lower(string.gsub(ownerCode, "%s", "")) == "jay" then
+newOwners = ownersList
+else
+newOwners = curOwners
+ownersList = curOwners
+notify("Owner tab", "Wrong owner code - the Owners list was not changed. Devs/mods still saved.", 4)
+end
+end
+ownerCode = ""
+pushRoles(newOwners)
 notify("Owner tab", "Roles saved and pushed - everyone's JHub Chat will show the badges.", 4)
 end, true)
-UI.Note(rolesCard, "Whoever is named here gets a badge next to their name in JHub Chat for everyone: the owner gets a gold crown and #owner, devs/mods get their own tag. Once set, a role stays until changed - changing the Owner needs the Owner code, not just the tab code.")
+UI.Note(rolesCard, "Anyone named here gets a badge next to their name in JHub Chat for everyone - Owners get a gold crown and #owner, Devs/Mods get their own tag. Multiple people can hold each role. Adding or changing an Owner needs the Owner code; Dev/Mod only need the tab code. 'Add me as...' fills in your own player name for you.")
 if S.OwnerUnlocked then
 task.defer(function()
 lock2.frame.Visible = false
@@ -11362,18 +11395,18 @@ if ok and type(data) == "table" then JH.roles = data end
 task.wait(5)
 end
 end)
+local function inList(list, name)
+if type(list) ~= "string" then return false end
+for n in string.gmatch(list, "([^,]+)") do
+if string.gsub(string.gsub(n, "^%s+", ""), "%s+$", "") == name then return true end
+end
+return false
+end
 local function badgeFor(name)
 local roles = JH.roles or {}
-if roles.owner and roles.owner ~= "" and name == roles.owner then
-return "\u{1F451} ", Color3.fromRGB(255, 215, 0), " #owner"
-end
-if type(roles.devs) == "string" then
-for dn in string.gmatch(roles.devs, "([^,]+)") do
-if string.gsub(dn, "^%s+", "") == name then return "\u{1F6E0} ", Color3.fromRGB(80, 220, 255), " #dev" end
-end
-end
-if roles.mod1 and roles.mod1 ~= "" and name == roles.mod1 then return "\u{1F6E1} ", Color3.fromRGB(190, 120, 255), " #mod" end
-if roles.mod2 and roles.mod2 ~= "" and name == roles.mod2 then return "\u{2B50} ", Color3.fromRGB(255, 160, 60), " #mod" end
+if inList(roles.owners, name) then return "\u{1F451} ", Color3.fromRGB(255, 215, 0), " #owner" end
+if inList(roles.devs, name) then return "\u{1F6E0} ", Color3.fromRGB(80, 220, 255), " #dev" end
+if inList(roles.mods, name) then return "\u{1F6E1} ", Color3.fromRGB(190, 120, 255), " #mod" end
 return "", nil, ""
 end
 
@@ -11459,6 +11492,31 @@ task.wait(3)
 end
 end)
 
+-- PRESENCE: how many people are currently running this script, counted from real heartbeats (not just a push count
+-- that only ever grows) - anyone whose last heartbeat is recent counts as online, stale ones age out automatically
+local presence = UI.Card(mainPage, "Running JHub right now")
+local presenceCount = UI.Stat(presence, "Players online")
+task.spawn(function()
+while true do
+pcall(netPut, "presence/" .. sanitize(myName), { t = os.time() })
+task.wait(20)
+end
+end)
+task.spawn(function()
+while true do
+local data = netGet("presence")
+if type(data) == "table" then
+local now, count = os.time(), 0
+for _, v in pairs(data) do
+if type(v) == "table" and type(v.t) == "number" and now - v.t < 60 then count = count + 1 end
+end
+presenceCount.Text = tostring(math.max(count, 1))
+else
+presenceCount.Text = "1 (you)"
+end
+task.wait(15)
+end
+end)
 -- LIVE FEED: every shot anyone on this script takes shows up here
 local feed = UI.Card(mainPage, "Live feed (everyone's shots)")
 local feedList = new("ScrollingFrame", { Size = UDim2.new(1, 0, 0, 100), BackgroundTransparency = 1, ScrollBarThickness = 3,
@@ -11487,6 +11545,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.91 - Owner/Dev/Mod are now lists, not single names, so multiple people can hold each role; added 'Add me as...' buttons that fill in your own name instead of typing it; added a live 'Players online' count on the Main tab from real heartbeats, not just an ever-growing push counter",
 "v1.90 - reverted the whole Universal Shot Intelligence addition (v1.85-v1.89): the confidence/retest piece was actually unlocking previously-good locked timing profiles when it judged recent shots inconsistent, which made real shooting worse, not just diagnostics - back to the plain v1.84 shot-timing behavior",
 "v1.84 - a jumpshot used to only get shared as a found best timing network-wide if someone hit a literal real Perfect on it; now any jumpshot whose adaptive learner converges with enough real samples (12+) gets shared the same way, so every jumpshot anyone actually plays eventually gets a found-and-shared best timing, not just the rare Perfects",
 "v1.83 - the Owner tab's 2011 code alone could let anyone rename themselves Owner, overwriting whoever had it; now the roles screen loads the current Owner/devs/mods instead of defaulting to you, roles stay set until someone changes them, and changing who the Owner is now needs a separate code on top of 2011",
@@ -11860,7 +11919,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.90"
+local VERSION = "v1.91"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -21964,31 +22023,64 @@ UI.Input(lock2, "Code", { get = function() return typed2 end, set = function(v) 
 local rolesCard = UI.Card(OP, "Chat roles")
 rolesCard.frame.Visible = false
 local existing = JH.roles or {}
-local ownerName, devNames, mod1Name, mod2Name, ownerCode = tostring(existing.owner or ""), tostring(existing.devs or ""), tostring(existing.mod1 or ""), tostring(existing.mod2 or ""), ""
-UI.Input(rolesCard, "Owner name (gold text, crown, #owner)", { get = function() return ownerName end, set = function(v) ownerName = tostring(v or "") end }, nil, "owner's player name")
-UI.Input(rolesCard, "Owner code (only needed to set/change the Owner)", { get = function() return ownerCode end, set = function(v) ownerCode = tostring(v or "") end }, nil, "required to change the Owner")
-UI.Input(rolesCard, "Devs (comma separated player names)", { get = function() return devNames end, set = function(v) devNames = tostring(v or "") end }, nil, "name1, name2")
-UI.Input(rolesCard, "Mod 1 name", { get = function() return mod1Name end, set = function(v) mod1Name = tostring(v or "") end }, nil, "player name")
-UI.Input(rolesCard, "Mod 2 name", { get = function() return mod2Name end, set = function(v) mod2Name = tostring(v or "") end }, nil, "player name")
-UI.Button(rolesCard, "Save and push to everyone", function()
-local cur = JH.roles or {}
-local newOwner = cur.owner or ""
-if ownerName ~= (cur.owner or "") then
-if string.lower(string.gsub(ownerCode, "%s", "")) == "jay" then
-newOwner = ownerName
-else
-notify("Owner tab", "Wrong owner code - the Owner was not changed. Devs/mods still saved.", 4)
+local ownersList, devsList, modsList, ownerCode = tostring(existing.owners or existing.owner or ""), tostring(existing.devs or ""), tostring(existing.mods or ""), ""
+local function inList(list, name)
+if type(list) ~= "string" then return false end
+for n in string.gmatch(list, "([^,]+)") do
+if string.gsub(string.gsub(n, "^%s+", ""), "%s+$", "") == name then return true end
 end
-else
-newOwner = ownerName
+return false
 end
-ownerName, ownerCode = newOwner, ""
-local roles = { owner = newOwner, devs = devNames, mod1 = mod1Name, mod2 = mod2Name, t = os.time() }
+local function addName(list, name)
+if inList(list, name) then return list end
+return (list ~= "" and (list .. ", ") or "") .. name
+end
+local function pushRoles(newOwners)
+local roles = { owners = newOwners, devs = devsList, mods = modsList, t = os.time() }
 JH.roles = roles
 if JH.netPut then task.spawn(JH.netPut, "roles", roles) end
+end
+UI.Input(rolesCard, "Owners (comma separated - gold text, crown, #owner)", { get = function() return ownersList end, set = function(v) ownersList = tostring(v or "") end }, nil, "name1, name2")
+UI.Input(rolesCard, "Owner code (only needed to add/change an Owner)", { get = function() return ownerCode end, set = function(v) ownerCode = tostring(v or "") end }, nil, "required to touch the Owners list")
+UI.Input(rolesCard, "Devs (comma separated player names)", { get = function() return devsList end, set = function(v) devsList = tostring(v or "") end }, nil, "name1, name2")
+UI.Input(rolesCard, "Mods (comma separated player names)", { get = function() return modsList end, set = function(v) modsList = tostring(v or "") end }, nil, "name1, name2")
+UI.Button(rolesCard, "Add me as Owner", function()
+if string.lower(string.gsub(ownerCode, "%s", "")) == "jay" then
+ownersList = addName(ownersList, Players.LocalPlayer.Name)
+pushRoles(ownersList)
+notify("Owner tab", "Added you as Owner and pushed to everyone.", 4)
+else
+notify("Owner tab", "Wrong owner code.", 3)
+end
+end)
+UI.Button(rolesCard, "Add me as Dev", function()
+devsList = addName(devsList, Players.LocalPlayer.Name)
+pushRoles(ownersList)
+notify("Owner tab", "Added you as Dev and pushed to everyone.", 4)
+end)
+UI.Button(rolesCard, "Add me as Mod", function()
+modsList = addName(modsList, Players.LocalPlayer.Name)
+pushRoles(ownersList)
+notify("Owner tab", "Added you as Mod and pushed to everyone.", 4)
+end)
+UI.Button(rolesCard, "Save and push to everyone", function()
+local cur = JH.roles or {}
+local curOwners = tostring(cur.owners or cur.owner or "")
+local newOwners = ownersList
+if ownersList ~= curOwners then
+if string.lower(string.gsub(ownerCode, "%s", "")) == "jay" then
+newOwners = ownersList
+else
+newOwners = curOwners
+ownersList = curOwners
+notify("Owner tab", "Wrong owner code - the Owners list was not changed. Devs/mods still saved.", 4)
+end
+end
+ownerCode = ""
+pushRoles(newOwners)
 notify("Owner tab", "Roles saved and pushed - everyone's JHub Chat will show the badges.", 4)
 end, true)
-UI.Note(rolesCard, "Whoever is named here gets a badge next to their name in JHub Chat for everyone: the owner gets a gold crown and #owner, devs/mods get their own tag. Once set, a role stays until changed - changing the Owner needs the Owner code, not just the tab code.")
+UI.Note(rolesCard, "Anyone named here gets a badge next to their name in JHub Chat for everyone - Owners get a gold crown and #owner, Devs/Mods get their own tag. Multiple people can hold each role. Adding or changing an Owner needs the Owner code; Dev/Mod only need the tab code. 'Add me as...' fills in your own player name for you.")
 if S.OwnerUnlocked then
 task.defer(function()
 lock2.frame.Visible = false
@@ -23532,18 +23624,18 @@ if ok and type(data) == "table" then JH.roles = data end
 task.wait(5)
 end
 end)
+local function inList(list, name)
+if type(list) ~= "string" then return false end
+for n in string.gmatch(list, "([^,]+)") do
+if string.gsub(string.gsub(n, "^%s+", ""), "%s+$", "") == name then return true end
+end
+return false
+end
 local function badgeFor(name)
 local roles = JH.roles or {}
-if roles.owner and roles.owner ~= "" and name == roles.owner then
-return "\u{1F451} ", Color3.fromRGB(255, 215, 0), " #owner"
-end
-if type(roles.devs) == "string" then
-for dn in string.gmatch(roles.devs, "([^,]+)") do
-if string.gsub(dn, "^%s+", "") == name then return "\u{1F6E0} ", Color3.fromRGB(80, 220, 255), " #dev" end
-end
-end
-if roles.mod1 and roles.mod1 ~= "" and name == roles.mod1 then return "\u{1F6E1} ", Color3.fromRGB(190, 120, 255), " #mod" end
-if roles.mod2 and roles.mod2 ~= "" and name == roles.mod2 then return "\u{2B50} ", Color3.fromRGB(255, 160, 60), " #mod" end
+if inList(roles.owners, name) then return "\u{1F451} ", Color3.fromRGB(255, 215, 0), " #owner" end
+if inList(roles.devs, name) then return "\u{1F6E0} ", Color3.fromRGB(80, 220, 255), " #dev" end
+if inList(roles.mods, name) then return "\u{1F6E1} ", Color3.fromRGB(190, 120, 255), " #mod" end
 return "", nil, ""
 end
 
@@ -23629,6 +23721,31 @@ task.wait(3)
 end
 end)
 
+-- PRESENCE: how many people are currently running this script, counted from real heartbeats (not just a push count
+-- that only ever grows) - anyone whose last heartbeat is recent counts as online, stale ones age out automatically
+local presence = UI.Card(mainPage, "Running JHub right now")
+local presenceCount = UI.Stat(presence, "Players online")
+task.spawn(function()
+while true do
+pcall(netPut, "presence/" .. sanitize(myName), { t = os.time() })
+task.wait(20)
+end
+end)
+task.spawn(function()
+while true do
+local data = netGet("presence")
+if type(data) == "table" then
+local now, count = os.time(), 0
+for _, v in pairs(data) do
+if type(v) == "table" and type(v.t) == "number" and now - v.t < 60 then count = count + 1 end
+end
+presenceCount.Text = tostring(math.max(count, 1))
+else
+presenceCount.Text = "1 (you)"
+end
+task.wait(15)
+end
+end)
 -- LIVE FEED: every shot anyone on this script takes shows up here
 local feed = UI.Card(mainPage, "Live feed (everyone's shots)")
 local feedList = new("ScrollingFrame", { Size = UDim2.new(1, 0, 0, 100), BackgroundTransparency = 1, ScrollBarThickness = 3,
@@ -23657,6 +23774,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.91 - Owner/Dev/Mod are now lists, not single names, so multiple people can hold each role; added 'Add me as...' buttons that fill in your own name instead of typing it; added a live 'Players online' count on the Main tab from real heartbeats, not just an ever-growing push counter",
 "v1.90 - reverted the whole Universal Shot Intelligence addition (v1.85-v1.89): the confidence/retest piece was actually unlocking previously-good locked timing profiles when it judged recent shots inconsistent, which made real shooting worse, not just diagnostics - back to the plain v1.84 shot-timing behavior",
 "v1.84 - a jumpshot used to only get shared as a found best timing network-wide if someone hit a literal real Perfect on it; now any jumpshot whose adaptive learner converges with enough real samples (12+) gets shared the same way, so every jumpshot anyone actually plays eventually gets a found-and-shared best timing, not just the rare Perfects",
 "v1.83 - the Owner tab's 2011 code alone could let anyone rename themselves Owner, overwriting whoever had it; now the roles screen loads the current Owner/devs/mods instead of defaulting to you, roles stay set until someone changes them, and changing who the Owner is now needs a separate code on top of 2011",
