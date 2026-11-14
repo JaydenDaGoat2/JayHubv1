@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.81"
+local VERSION = "v1.82"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -145,7 +145,7 @@ ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, St
 LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false,
+FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false,
 AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 AGOnlyBall = true,
 BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
@@ -7931,10 +7931,18 @@ UI.Input(lock, "Code", { get = function() return typed end, set = function(v) ty
 UI.Note(lock, "Auto Guard is locked. Enter the code to open it.")
 local contentFrames = {}
 JH.AGContentFrames = contentFrames
+if S.AGUnlocked then
+task.defer(function()
+lock.frame.Visible = false
+for _, f in ipairs(contentFrames) do f.Visible = true end
+end)
+end
 UI.Button(lock, "Unlock", function()
 if string.gsub(typed, "%s", "") == AG_CODE then
 lock.frame.Visible = false
 for _, f in ipairs(contentFrames) do f.Visible = true end
+S.AGUnlocked = true
+saveSoon()
 notify("Auto Guard", "Unlocked", 3)
 else
 notify("Auto Guard", "Wrong code", 3)
@@ -9750,8 +9758,7 @@ local typed = ""
 local lock = UI.Card(LP, "Locked")
 lock.frame.Size = UDim2.new(0.5, -4, 0, 0)
 UI.Input(lock, "Code", { get = function() return typed end, set = function(v) typed = tostring(v or "") end }, nil, "enter the code")
-UI.Button(lock, "Unlock", function()
-if string.gsub(typed, "%s", "") == CODE then
+local function unlockLocked()
 for i, f in ipairs(tools) do
 f.Parent = LP.frame
 f.LayoutOrder = i + 1
@@ -9759,6 +9766,13 @@ f.Size = UDim2.new(0.5, -4, 0, 0)
 f.Visible = true
 end
 lock.frame.Visible = false
+end
+if S.LockedUnlocked then task.defer(unlockLocked) end
+UI.Button(lock, "Unlock", function()
+if string.gsub(typed, "%s", "") == CODE then
+unlockLocked()
+S.LockedUnlocked = true
+saveSoon()
 notify("Locked tab", "Unlocked", 3)
 else
 notify("Locked tab", "Wrong code", 3)
@@ -9791,10 +9805,18 @@ if JH.netPut then task.spawn(JH.netPut, "roles", roles) end
 notify("Owner tab", "Roles saved and pushed - everyone's JHub Chat will show the badges.", 4)
 end, true)
 UI.Note(rolesCard, "Whoever is named here gets a badge next to their name in JHub Chat for everyone: the owner gets a gold crown and #owner, devs/mods get their own tag.")
+if S.OwnerUnlocked then
+task.defer(function()
+lock2.frame.Visible = false
+rolesCard.frame.Visible = true
+end)
+end
 UI.Button(lock2, "Unlock", function()
 if string.gsub(typed2, "%s", "") == CODE2 then
 lock2.frame.Visible = false
 rolesCard.frame.Visible = true
+S.OwnerUnlocked = true
+saveSoon()
 notify("Owner tab", "Unlocked", 3)
 else
 notify("Owner tab", "Wrong code", 3)
@@ -11451,6 +11473,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.82 - entering the Auto Guard, Locked, or Owner tab code once now sticks - it stays unlocked after the script resets/reloads, no need to retype it",
 "v1.81 - new Owner tab (code 2011) sets who gets a crown/gold/#owner or dev/mod badge in JHub Chat for everyone; chat now pops a notification for new messages; shared jumpshot timing now pushes/pulls every 2-4s instead of 10-20s so one person's locked timing reaches everyone almost instantly; calibration step/speed increased; removed the made-shot ding sound",
 "v1.80 - GuardAnimId never once beat the game\'s own real defensive animation in testing, so stopped fighting it - Auto Guard now always plays the real walk animation whenever actually moving, guarding or not",
 "v1.79 - found why Auto Rebound had a walk animation but Auto Guard did not: a wobble wrapper was marking Auto Guard as actively guarding on every single tick it ran, even mid-chase, so the walk animation never got picked - fixed",
@@ -11816,7 +11839,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.81"
+local VERSION = "v1.82"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -11922,7 +11945,7 @@ local S = {
 	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false,
+	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false,
 	AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 	AGOnlyBall = true,
 	BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
@@ -20056,10 +20079,18 @@ do
 		UI.Note(lock, "Auto Guard is locked. Enter the code to open it.")
 		local contentFrames = {}
 JH.AGContentFrames = contentFrames
+		if S.AGUnlocked then
+			task.defer(function()
+				lock.frame.Visible = false
+				for _, f in ipairs(contentFrames) do f.Visible = true end
+			end)
+		end
 		UI.Button(lock, "Unlock", function()
 			if string.gsub(typed, "%s", "") == AG_CODE then
 				lock.frame.Visible = false
 				for _, f in ipairs(contentFrames) do f.Visible = true end
+				S.AGUnlocked = true
+				saveSoon()
 				notify("Auto Guard", "Unlocked", 3)
 			else
 				notify("Auto Guard", "Wrong code", 3)
@@ -21876,15 +21907,21 @@ do
 		local lock = UI.Card(LP, "Locked")
 		lock.frame.Size = UDim2.new(0.5, -4, 0, 0)
 		UI.Input(lock, "Code", { get = function() return typed end, set = function(v) typed = tostring(v or "") end }, nil, "enter the code")
+		local function unlockLocked()
+			for i, f in ipairs(tools) do
+				f.Parent = LP.frame
+				f.LayoutOrder = i + 1
+				f.Size = UDim2.new(0.5, -4, 0, 0)
+				f.Visible = true
+			end
+			lock.frame.Visible = false
+		end
+		if S.LockedUnlocked then task.defer(unlockLocked) end
 		UI.Button(lock, "Unlock", function()
 			if string.gsub(typed, "%s", "") == CODE then
-				for i, f in ipairs(tools) do
-					f.Parent = LP.frame
-					f.LayoutOrder = i + 1
-					f.Size = UDim2.new(0.5, -4, 0, 0)
-					f.Visible = true
-				end
-				lock.frame.Visible = false
+				unlockLocked()
+				S.LockedUnlocked = true
+				saveSoon()
 				notify("Locked tab", "Unlocked", 3)
 			else
 				notify("Locked tab", "Wrong code", 3)
@@ -21917,10 +21954,18 @@ if JH.netPut then task.spawn(JH.netPut, "roles", roles) end
 notify("Owner tab", "Roles saved and pushed - everyone's JHub Chat will show the badges.", 4)
 end, true)
 UI.Note(rolesCard, "Whoever is named here gets a badge next to their name in JHub Chat for everyone: the owner gets a gold crown and #owner, devs/mods get their own tag.")
+if S.OwnerUnlocked then
+task.defer(function()
+lock2.frame.Visible = false
+rolesCard.frame.Visible = true
+end)
+end
 UI.Button(lock2, "Unlock", function()
 if string.gsub(typed2, "%s", "") == CODE2 then
 lock2.frame.Visible = false
 rolesCard.frame.Visible = true
+S.OwnerUnlocked = true
+saveSoon()
 notify("Owner tab", "Unlocked", 3)
 else
 notify("Owner tab", "Wrong code", 3)
@@ -23577,6 +23622,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.82 - entering the Auto Guard, Locked, or Owner tab code once now sticks - it stays unlocked after the script resets/reloads, no need to retype it",
 "v1.81 - new Owner tab (code 2011) sets who gets a crown/gold/#owner or dev/mod badge in JHub Chat for everyone; chat now pops a notification for new messages; shared jumpshot timing now pushes/pulls every 2-4s instead of 10-20s so one person's locked timing reaches everyone almost instantly; calibration step/speed increased; removed the made-shot ding sound",
 "v1.80 - GuardAnimId never once beat the game\'s own real defensive animation in testing, so stopped fighting it - Auto Guard now always plays the real walk animation whenever actually moving, guarding or not",
 "v1.79 - found why Auto Rebound had a walk animation but Auto Guard did not: a wobble wrapper was marking Auto Guard as actively guarding on every single tick it ran, even mid-chase, so the walk animation never got picked - fixed",
