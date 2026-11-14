@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.23 shot-line"
+local VERSION = "v1.24 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -6329,7 +6329,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.23  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.24  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -8802,7 +8802,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.23"
+d.Text = "JHub V1.24"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -9347,6 +9347,7 @@ local IDNAME = {
 ["95782467897683"] = "UnderRimCloseShot1L",
 ["107778200710432"] = "UnderRimCloseShot1R",
 }
+Shot.idName = IDNAME
 local function nameOfId(id) return IDNAME[tostring(id)] end
 local prevName = Shot.nameFor
 function Shot.nameFor(key, anim)
@@ -9567,6 +9568,7 @@ end
 -- ULTRA GAME RECORDER: one switch that records everything (game recorder, shot recorder, shot lab) plus every player, animation, input, control and setting
 do
 local Ultra = { on = false, conns = {}, seenAnim = setmetatable({}, { __mode = "k" }), last = {} }
+Shot.ultra = Ultra
 local CAS = game:GetService("ContextActionService")
 local ATTRS = { "Action", "BaseAnimation", "GatherType", "LastDribblePackage", "Stamina", "ServerVelocity", "CanMove", "meterOffset" }
 local function charOfPlayer(pl)
@@ -10442,6 +10444,7 @@ else out[#out + 1] = "  (could not be read)" end
 end
 return table.concat(out, "\n"), #mods
 end
+Shot.dexConfigText = configText
 UI.Note(card, "---- Dex and remote spy ----", "Text")
 UI.Buttons(card, {
 { "Dex: game tree", function()
@@ -10469,6 +10472,89 @@ local text = Rec.spyText()
 emit("JHub_remote_spy.txt", text, "Remote spy")
 end },
 })
+end
+end
+-- JUMPSHOT MASTERY INSIDE THE ULTRA GAME RECORDER: which jumpshots in the game have been covered, what was learned for each, and every shot setting the game stores
+do
+local function pairKey(a, b)
+local t = { tostring(a), tostring(b) }
+table.sort(t)
+return t[1] .. "+" .. t[2]
+end
+function Shot.masteryText()
+local ids = Shot.idName or {}
+local byName = {}
+for id, name in pairs(ids) do byName[name] = id end
+pcall(Shot.autoLoad)
+local lines = { "== JUMPSHOT MASTERY " .. tostring(VERSION) .. " | " .. os.date("%Y-%m-%d %H:%M:%S"), "",
+"-- every jumpshot in the game: covered? | key | learned lead | shots | perfect good early late --" }
+local covered, total = 0, 0
+local function statsOf(key)
+local a = Shot.auto and Shot.auto[key]
+local s = Shot.lab and Shot.lab.stats and Shot.lab.stats[key]
+local fin = Shot.FINAL and Shot.FINAL[key]
+return a, s, fin
+end
+for n = 1, 16 do
+for _, side in ipairs({ "L", "R" }) do
+local base, rel = byName["Jumpshot" .. n .. side .. "Base"], byName["Jumpshot" .. n .. side .. "Release"]
+if base and rel then
+total = total + 1
+local key = pairKey(base, rel)
+local a, s, fin = statsOf(key)
+local has = (a ~= nil) or (s ~= nil) or (fin ~= nil)
+if has then covered = covered + 1 end
+lines[#lines + 1] = string.format("Jumpshot %d%s | %s | key=%s | lead=%s | shots=%s | %s", n, side, has and "COVERED" or "not shot yet", key,
+a and string.format("%.4f%s", a.hold or 0, a.locked and " (locked)" or "") or (fin and string.format("built-in %.3f", fin) or "-"),
+s and tostring(s.n) or "0", s and string.format("%d %d %d %d", s.perfect, s.good, s.early, s.late) or "-")
+end
+end
+end
+lines[#lines + 1] = ""
+lines[#lines + 1] = string.format("coverage: %d of %d jumpshots have been shot or learned", covered, total)
+lines[#lines + 1] = ""
+lines[#lines + 1] = "-- every other shot type that was shot or learned --"
+for key, a in pairs(Shot.auto or {}) do
+lines[#lines + 1] = string.format("%s | key=%s | lead=%.4f%s", tostring(Shot.nameFor and Shot.nameFor(key) or key), key, a.hold or 0, a.locked and " (locked)" or "")
+end
+lines[#lines + 1] = ""
+lines[#lines + 1] = "-- learned timings in the script's own format (paste this to the developer) --"
+lines[#lines + 1] = tostring(S.AutoTimes or "")
+lines[#lines + 1] = "-- built-in shot adjustments --"
+lines[#lines + 1] = tostring(S.FinalAdj or "")
+lines[#lines + 1] = "-- shot family timings --"
+lines[#lines + 1] = tostring(S.FamLead or "")
+return table.concat(lines, "\n")
+end
+local U = Shot.ultra
+if U and U.report then
+local prev = U.report
+function U.report()
+local parts = { prev(), "\n\n" .. Shot.masteryText() }
+if Shot.dexConfigText then
+local ok, text = pcall(Shot.dexConfigText, "Config/Game/Shooting", "SHOT SETTINGS (every jumpshot)")
+parts[#parts + 1] = "\n\n" .. (ok and text or "== shot settings could not be read")
+end
+return table.concat(parts)
+end
+end
+local ultra = UI.lockedTools and UI.lockedTools[1]
+if ultra then
+local order = 0
+for _, ch in ipairs(ultra:GetChildren()) do
+if ch:IsA("GuiObject") then order = math.max(order, ch.LayoutOrder) end
+end
+local card = { frame = ultra, order = order }
+UI.Note(card, "---- Jumpshot mastery ----", "Text")
+UI.Buttons(card, {
+{ "Copy jumpshot mastery", function()
+local text = Shot.masteryText()
+pcall(function() if type(writefile) == "function" then writefile("JHub_mastery.txt", text) end end)
+if type(setclipboard) == "function" then pcall(setclipboard, text) end
+notify("Mastery", "Copied and saved as JHub_mastery.txt", 4)
+end },
+})
+UI.Note(card, "Lists all 16 jumpshots (left and right): which ones you have shot, what was learned for each, and which still need a few shots. Copy everything now also includes this and every shot setting the game stores.")
 end
 end
 UI.syncAuto()
@@ -10634,7 +10720,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.23", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.24", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -10715,7 +10801,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.23 shot-line"
+local VERSION = "v1.24 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -17345,7 +17431,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.23  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.24  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -19826,7 +19912,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.23"
+				d.Text = "JHub V1.24"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -20371,7 +20457,8 @@ do
 		["95782467897683"] = "UnderRimCloseShot1L",
 		["107778200710432"] = "UnderRimCloseShot1R",
 	}
-	local function nameOfId(id) return IDNAME[tostring(id)] end
+	Shot.idName = IDNAME
+local function nameOfId(id) return IDNAME[tostring(id)] end
 	local prevName = Shot.nameFor
 	function Shot.nameFor(key, anim)
 		local n = Shot.keyName[key] or Shot.NAMES[key]
@@ -20591,6 +20678,7 @@ end
 -- ULTRA GAME RECORDER: one switch that records everything (game recorder, shot recorder, shot lab) plus every player, animation, input, control and setting
 do
 	local Ultra = { on = false, conns = {}, seenAnim = setmetatable({}, { __mode = "k" }), last = {} }
+Shot.ultra = Ultra
 	local CAS = game:GetService("ContextActionService")
 	local ATTRS = { "Action", "BaseAnimation", "GatherType", "LastDribblePackage", "Stamina", "ServerVelocity", "CanMove", "meterOffset" }
 	local function charOfPlayer(pl)
@@ -21466,7 +21554,8 @@ do
 			end
 			return table.concat(out, "\n"), #mods
 		end
-		UI.Note(card, "---- Dex and remote spy ----", "Text")
+		Shot.dexConfigText = configText
+UI.Note(card, "---- Dex and remote spy ----", "Text")
 		UI.Buttons(card, {
 			{ "Dex: game tree", function()
 				notify("Dex", "Reading the whole game. This takes up to a minute.", 5)
@@ -21493,6 +21582,89 @@ do
 				emit("JHub_remote_spy.txt", text, "Remote spy")
 			end },
 		})
+	end
+end
+-- JUMPSHOT MASTERY INSIDE THE ULTRA GAME RECORDER: which jumpshots in the game have been covered, what was learned for each, and every shot setting the game stores
+do
+	local function pairKey(a, b)
+		local t = { tostring(a), tostring(b) }
+		table.sort(t)
+		return t[1] .. "+" .. t[2]
+	end
+	function Shot.masteryText()
+		local ids = Shot.idName or {}
+		local byName = {}
+		for id, name in pairs(ids) do byName[name] = id end
+		pcall(Shot.autoLoad)
+		local lines = { "== JUMPSHOT MASTERY " .. tostring(VERSION) .. " | " .. os.date("%Y-%m-%d %H:%M:%S"), "",
+			"-- every jumpshot in the game: covered? | key | learned lead | shots | perfect good early late --" }
+		local covered, total = 0, 0
+		local function statsOf(key)
+			local a = Shot.auto and Shot.auto[key]
+			local s = Shot.lab and Shot.lab.stats and Shot.lab.stats[key]
+			local fin = Shot.FINAL and Shot.FINAL[key]
+			return a, s, fin
+		end
+		for n = 1, 16 do
+			for _, side in ipairs({ "L", "R" }) do
+				local base, rel = byName["Jumpshot" .. n .. side .. "Base"], byName["Jumpshot" .. n .. side .. "Release"]
+				if base and rel then
+					total = total + 1
+					local key = pairKey(base, rel)
+					local a, s, fin = statsOf(key)
+					local has = (a ~= nil) or (s ~= nil) or (fin ~= nil)
+					if has then covered = covered + 1 end
+					lines[#lines + 1] = string.format("Jumpshot %d%s | %s | key=%s | lead=%s | shots=%s | %s", n, side, has and "COVERED" or "not shot yet", key,
+						a and string.format("%.4f%s", a.hold or 0, a.locked and " (locked)" or "") or (fin and string.format("built-in %.3f", fin) or "-"),
+						s and tostring(s.n) or "0", s and string.format("%d %d %d %d", s.perfect, s.good, s.early, s.late) or "-")
+				end
+			end
+		end
+		lines[#lines + 1] = ""
+		lines[#lines + 1] = string.format("coverage: %d of %d jumpshots have been shot or learned", covered, total)
+		lines[#lines + 1] = ""
+		lines[#lines + 1] = "-- every other shot type that was shot or learned --"
+		for key, a in pairs(Shot.auto or {}) do
+			lines[#lines + 1] = string.format("%s | key=%s | lead=%.4f%s", tostring(Shot.nameFor and Shot.nameFor(key) or key), key, a.hold or 0, a.locked and " (locked)" or "")
+		end
+		lines[#lines + 1] = ""
+		lines[#lines + 1] = "-- learned timings in the script's own format (paste this to the developer) --"
+		lines[#lines + 1] = tostring(S.AutoTimes or "")
+		lines[#lines + 1] = "-- built-in shot adjustments --"
+		lines[#lines + 1] = tostring(S.FinalAdj or "")
+		lines[#lines + 1] = "-- shot family timings --"
+		lines[#lines + 1] = tostring(S.FamLead or "")
+		return table.concat(lines, "\n")
+	end
+	local U = Shot.ultra
+	if U and U.report then
+		local prev = U.report
+		function U.report()
+			local parts = { prev(), "\n\n" .. Shot.masteryText() }
+			if Shot.dexConfigText then
+				local ok, text = pcall(Shot.dexConfigText, "Config/Game/Shooting", "SHOT SETTINGS (every jumpshot)")
+				parts[#parts + 1] = "\n\n" .. (ok and text or "== shot settings could not be read")
+			end
+			return table.concat(parts)
+		end
+	end
+	local ultra = UI.lockedTools and UI.lockedTools[1]
+	if ultra then
+		local order = 0
+		for _, ch in ipairs(ultra:GetChildren()) do
+			if ch:IsA("GuiObject") then order = math.max(order, ch.LayoutOrder) end
+		end
+		local card = { frame = ultra, order = order }
+		UI.Note(card, "---- Jumpshot mastery ----", "Text")
+		UI.Buttons(card, {
+			{ "Copy jumpshot mastery", function()
+				local text = Shot.masteryText()
+				pcall(function() if type(writefile) == "function" then writefile("JHub_mastery.txt", text) end end)
+				if type(setclipboard) == "function" then pcall(setclipboard, text) end
+				notify("Mastery", "Copied and saved as JHub_mastery.txt", 4)
+			end },
+		})
+		UI.Note(card, "Lists all 16 jumpshots (left and right): which ones you have shot, what was learned for each, and which still need a few shots. Copy everything now also includes this and every shot setting the game stores.")
 	end
 end
 UI.syncAuto()
