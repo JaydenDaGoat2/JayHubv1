@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.66"
+local VERSION = "v1.67"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -5302,6 +5302,15 @@ UI.stroke(b, 0.55)
 UI.label({ Text = text, TextSize = 14, Size = UDim2.fromScale(1, 1), Parent = b }, true, "Text")
 return b
 end
+local DiscordBtn = new("TextButton", { Text = "", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -92, 0.5, 0),
+	Size = UDim2.fromOffset(32, 28), AutoButtonColor = false, BackgroundColor3 = Color3.fromRGB(88, 101, 242), Parent = Header })
+UI.corner(DiscordBtn, 0.7)
+UI.label({ Text = "D", TextSize = 14, Font = Enum.Font.GothamBlack, TextColor3 = WHITE, Size = UDim2.fromScale(1, 1), Parent = DiscordBtn }, true, false)
+DiscordBtn.Activated:Connect(function()
+	local INVITE = "https://discord.gg/fk5TsZMrRM"
+	local ok = type(setclipboard) == "function" and pcall(setclipboard, INVITE)
+	notify("JHub", ok and "Discord invite copied - paste it in your browser to join." or ("Join my Discord: " .. INVITE), 5)
+end)
 local CollapseBtn = headerButton("-", -52)
 local CloseBtn = headerButton("X", -12)
 local HeadLine = new("Frame", { Position = UDim2.new(0, 10, 1, -1), Size = UDim2.new(1, -20, 0, 1), BorderSizePixel = 0,
@@ -11288,6 +11297,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.67 - removed the Discord join gate entirely, replaced with a Discord button in the top right of the menu that copies the invite link",
 "v1.66 - fixed the Discord join gate freezing the whole script for anyone whose click or isfile/writefile did not register - it no longer blocks the real menu from loading",
 "v1.65 - found it: the real walk animation id was being auto-deleted by a leftover bad-id filter, so Auto Guard could never have one; fixed and bootstrapped the confirmed real ids",
 "v1.64 - Remote Guard Recorder now also watches whoever is nearest to you, not just yourself, and logs their walk/guard animation ids too",
@@ -11593,98 +11603,6 @@ end)
 end
 ]==]
 
--- DISCORD GATE: the first time the script runs, a window asks for a Discord join before anything else loads
-local GATE_VERSION = "v1.62"
--- this used to block the whole script on the main thread for up to 10 minutes waiting for "I joined" - if isfile/writefile weren't supported on someone's executor, or the click just didn't register, the rest of JHub (the real menu, everything) would never load at all, which is exactly the "just a box" / "frozen" reports. Spawning it means the nag still shows, but the real script loads either way.
-local okGate, errGate = pcall(function()
-	local FILE = "JHub_discord_ok.txt"
-	local INVITE = "https://discord.gg/fk5TsZMrRM"
-	local seen = false
-	pcall(function() seen = type(isfile) == "function" and isfile(FILE) == true end)
-	if not seen then task.spawn(function()
-		local gui = Instance.new("ScreenGui")
-		gui.Name = "JHubDiscordGate"
-		gui.ResetOnSpawn = false
-		gui.IgnoreGuiInset = true
-		gui.DisplayOrder = 2000
-		local okP = pcall(function() gui.Parent = (gethui and gethui()) or game:GetService("CoreGui") end)
-		if not okP or not gui.Parent then gui.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui") end
-		local shade = Instance.new("TextButton")
-		shade.Text = ""
-		shade.AutoButtonColor = false
-		shade.Size = UDim2.fromScale(1, 1)
-		shade.BackgroundColor3 = Color3.new(0, 0, 0)
-		shade.BackgroundTransparency = 0.35
-		shade.BorderSizePixel = 0
-		shade.Parent = gui
-		local box = Instance.new("Frame")
-		box.AnchorPoint = Vector2.new(0.5, 0.5)
-		box.Position = UDim2.fromScale(0.5, 0.5)
-		box.Size = UDim2.fromOffset(340, 230)
-		box.BackgroundColor3 = Color3.fromRGB(6, 6, 10)
-		box.BorderSizePixel = 0
-		box.Parent = shade
-		local c = Instance.new("UICorner")
-		c.CornerRadius = UDim.new(0, 14)
-		c.Parent = box
-		local st = Instance.new("UIStroke")
-		st.Color = Color3.fromRGB(70, 140, 255)
-		st.Thickness = 2
-		st.Parent = box
-		local function label(text, size, y, h, color)
-			local l = Instance.new("TextLabel")
-			l.BackgroundTransparency = 1
-			l.Position = UDim2.new(0, 16, 0, y)
-			l.Size = UDim2.new(1, -32, 0, h)
-			l.Font = Enum.Font.GothamBold
-			l.TextSize = size
-			l.TextWrapped = true
-			l.TextColor3 = color
-			l.Text = text
-			l.Parent = box
-			return l
-		end
-		label("JHub V" .. GATE_VERSION:sub(2), 22, 14, 28, Color3.fromRGB(255, 255, 255))
-		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
-		msg.Font = Enum.Font.Gotham
-		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
-		local function button(text, x, fill)
-			local b = Instance.new("TextButton")
-			b.Text = text
-			b.Font = Enum.Font.GothamBold
-			b.TextSize = 15
-			b.TextColor3 = Color3.fromRGB(255, 255, 255)
-			b.AutoButtonColor = true
-			b.BackgroundColor3 = fill
-			b.BorderSizePixel = 0
-			b.Position = UDim2.new(0, x, 1, -64)
-			b.Size = UDim2.new(0.5, -22, 0, 44)
-			b.Parent = box
-			local bc = Instance.new("UICorner")
-			bc.CornerRadius = UDim.new(0, 10)
-			bc.Parent = b
-			return b
-		end
-		local copy = button("Copy invite", 16, Color3.fromRGB(30, 40, 90))
-		local joined = button("I joined", 170, Color3.fromRGB(120, 70, 230))
-		local done = false
-		copy.Activated:Connect(function()
-			local ok = type(setclipboard) == "function" and pcall(setclipboard, INVITE)
-			msg.Text = ok and "Invite copied. Paste it in your browser, join the server, then tap I joined." or "Copy the invite link shown above, join the server, then tap I joined."
-		end)
-		joined.Activated:Connect(function()
-			done = true
-			pcall(function() if type(writefile) == "function" then writefile(FILE, "1") end end)
-		end)
-		local waited = 0
-		while not done and gui.Parent and waited < 600 do
-			task.wait(0.1)
-			waited = waited + 0.1
-		end
-		pcall(function() gui:Destroy() end)
-	end) end
-end)
-if not okGate then warn("JHub: discord gate skipped - " .. tostring(errGate)) end
 
 local function JHubMain()
 
@@ -11730,7 +11648,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.66"
+local VERSION = "v1.67"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -17246,6 +17164,15 @@ local function headerButton(text, xoff)
 	UI.label({ Text = text, TextSize = 14, Size = UDim2.fromScale(1, 1), Parent = b }, true, "Text")
 	return b
 end
+local DiscordBtn = new("TextButton", { Text = "", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -92, 0.5, 0),
+	Size = UDim2.fromOffset(32, 28), AutoButtonColor = false, BackgroundColor3 = Color3.fromRGB(88, 101, 242), Parent = Header })
+UI.corner(DiscordBtn, 0.7)
+UI.label({ Text = "D", TextSize = 14, Font = Enum.Font.GothamBlack, TextColor3 = WHITE, Size = UDim2.fromScale(1, 1), Parent = DiscordBtn }, true, false)
+DiscordBtn.Activated:Connect(function()
+	local INVITE = "https://discord.gg/fk5TsZMrRM"
+	local ok = type(setclipboard) == "function" and pcall(setclipboard, INVITE)
+	notify("JHub", ok and "Discord invite copied - paste it in your browser to join." or ("Join my Discord: " .. INVITE), 5)
+end)
 local CollapseBtn = headerButton("-", -52)
 local CloseBtn = headerButton("X", -12)
 local HeadLine = new("Frame", { Position = UDim2.new(0, 10, 1, -1), Size = UDim2.new(1, -20, 0, 1), BorderSizePixel = 0,
@@ -23327,6 +23254,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.67 - removed the Discord join gate entirely, replaced with a Discord button in the top right of the menu that copies the invite link",
 "v1.66 - fixed the Discord join gate freezing the whole script for anyone whose click or isfile/writefile did not register - it no longer blocks the real menu from loading",
 "v1.65 - found it: the real walk animation id was being auto-deleted by a leftover bad-id filter, so Auto Guard could never have one; fixed and bootstrapped the confirmed real ids",
 "v1.64 - Remote Guard Recorder now also watches whoever is nearest to you, not just yourself, and logs their walk/guard animation ids too",
