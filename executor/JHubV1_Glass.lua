@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.89"
+local VERSION = "v1.90"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -145,7 +145,7 @@ ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, St
 LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false, ShotIntelDB = "",
+FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false,
 AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 AGOnlyBall = true,
 BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
@@ -6334,7 +6334,6 @@ while JH.Running do
 count = count + 1
 local ok, holding, source = pcall(Ball.check)
 if ok then
-if holding and not Ball.holding then Ball.holdSince = tick() end
 Ball.holding, Ball.source = holding, source
 end
 pcall(Feat.tick, count)
@@ -9496,101 +9495,6 @@ if S.LabOn and info then pcall(Lab.add, info, res, strength) end
 return prevLR(info, res, strength)
 end
 end
--- SHOT INTELLIGENCE: a live readout of the per-animation timing profile system (Shot.auto/Shot.FINAL), keyed automatically
--- by whichever jumpshot animation is actually equipped - switching jumpshots switches profiles with no setup needed
-do
-local mainPage
-for _, p in ipairs(UI.pages) do if p.name == "Main" then mainPage = p end end
-if mainPage then
-local c = UI.Card(mainPage, "Shot Intelligence")
-local sName = UI.Stat(c, "Detected jumpshot")
-local sId = UI.Stat(c, "Animation ID")
-local sStatus = UI.Stat(c, "Calibration status")
-local sConf = UI.Stat(c, "Confidence")
-local sHold = UI.Stat(c, "Active timing")
-local sSeen = UI.Stat(c, "Recognized before")
-local sTimes = UI.Stat(c, "Times seen")
-local sSit = UI.Stat(c, "Situations seen")
-local sRelease = UI.Stat(c, "Release point (of animation)")
-local sRetest = UI.Stat(c, "Needs retest")
-local sNetwork = UI.Stat(c, "Network-wide (everyone)")
-local sKnown = UI.Stat(c, "Known profiles")
-UI.Button(c, "Copy every known shot profile", function()
-local lines = { "== JHub shot intelligence profiles ==" }
-local seen = {}
-local db = (JH.ShotIntel and JH.ShotIntel.DB) or {}
-for key in pairs(Shot.FINAL) do
-seen[key] = true
-local rec = db[key]
-lines[#lines + 1] = string.format("%s | %s | built-in, confirmed | hold %.3fs | seen %dx%s", Shot.nameFor(key), key, Shot.FINAL[key],
-rec and rec.timesSeen or 0, (rec and rec.needsRetest) and " | NEEDS RETEST" or "")
-end
-for key, a in pairs(Shot.auto or {}) do
-if not seen[key] then
-local rec = db[key]
-lines[#lines + 1] = string.format("%s | %s | %s | %d samples | hold %.3fs | seen %dx%s", Shot.nameFor(key), key,
-a.locked and "locked" or "learning", a.n or 0, a.hold or 0, rec and rec.timesSeen or 0,
-(rec and rec.needsRetest) and " | NEEDS RETEST" or (rec and not rec.identified) and " | unidentified animation" or "")
-end
-end
-copy(table.concat(lines, "\n"), "Shot profiles")
-end)
-UI.Note(c, "Each jumpshot animation gets its own timing profile automatically - switching jumpshots switches profiles, no setup needed. A profile needs enough consistent real shots before it is trusted (locked); until then it is still learning. If a locked profile starts missing consistently, it is automatically unlocked and flagged to retest instead of staying trusted forever. Situations seen also tracks real shot distance (close/mid/three) and catch-and-shoot vs off-the-dribble, from actual position and ball-hold data. Network-wide shows what everyone else running JHub has seen on this same jumpshot, shared the same way the timing pool is - but it never overwrites your own profile, it's just shown alongside it.")
-task.spawn(function()
-while true do
-local cur = Shot.cur
-local db = (JH.ShotIntel and JH.ShotIntel.DB) or {}
-if cur and cur.key then
-local key = cur.key
-local a = Shot.auto and Shot.auto[key]
-local rec = db[key]
-sName.Text = Shot.nameFor(key, cur.anim)
-sId.Text = string.sub(tostring(key), 1, 22)
-sStatus.Text = cur.state or "-"
-if Shot.FINAL[key] then
-sConf.Text = "Built-in (confirmed)"
-elseif a then
-sConf.Text = string.format("%d samples%s", a.n or 0, a.locked and ", locked" or ", learning")
-else
-sConf.Text = "No data yet"
-end
-sHold.Text = string.format("%.3fs", cur.hold or 0)
-sSeen.Text = rec and "Yes" or "No"
-sTimes.Text = rec and tostring(rec.timesSeen or 0) or "0"
-if rec and rec.sits and next(rec.sits) then
-local parts = {}
-for sitName, cnt in pairs(rec.sits) do parts[#parts + 1] = sitName .. " x" .. cnt end
-table.sort(parts)
-sSit.Text = table.concat(parts, ", ")
-else
-sSit.Text = "-"
-end
-sRetest.Text = (rec and rec.needsRetest) and "Yes - flagged" or "No"
-if rec and rec.releaseAvg then
-sRelease.Text = string.format("%.0f%% (range %.0f-%.0f%%)", rec.releaseAvg * 100, rec.releaseLo * 100, rec.releaseHi * 100)
-else
-sRelease.Text = "No track data yet"
-end
-if rec and not rec.identified then sStatus.Text = "Unidentified animation" end
-local net = JH.ShotIntel and JH.ShotIntel.Network and JH.ShotIntel.Network[key]
-if net then
-sNetwork.Text = string.format("%d players, %d shots total%s", net.contributors or 0, net.timesSeen or 0, net.needsRetest and " | NEEDS RETEST" or "")
-else
-sNetwork.Text = "No data from other players yet"
-end
-else
-sName.Text, sId.Text, sStatus.Text, sConf.Text, sHold.Text = "-", "-", "Shoot to see it", "-", "-"
-sSeen.Text, sTimes.Text, sSit.Text, sRetest.Text, sRelease.Text, sNetwork.Text = "-", "-", "-", "-", "-", "-"
-end
-local known = 0
-for _ in pairs(Shot.FINAL) do known = known + 1 end
-for _ in pairs(Shot.auto or {}) do known = known + 1 end
-sKnown.Text = tostring(known)
-task.wait(1)
-end
-end)
-end
-end
 -- LOGO LETTERS: the menu title and the top bar use a brush marker font with a black outline and the blue, yellow and purple colors
 do
 local FONT = Enum.Font.PermanentMarker
@@ -11583,11 +11487,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
-"v1.89 - Shot Intelligence now shares to the network: each client pushes its own profile stats under its own name (times seen, situations, release-point range, retest flags), and everyone pulls an aggregated view shown as Network-wide on the card - additive only, nobody's push ever overwrites anyone else's own profile data",
-"v1.88 - added real Release-Point Analysis: tracks where in the actual animation (held/track.Length, speed and framerate independent) the release really happens, as a rolling range per profile, shown as Release point on the Shot Intelligence card. Still did not add fake prep/upward/extension/follow-through phase labels since the game exposes no keyframe markers to back those - this one's real, that one still isn't",
-"v1.87 - Shot Intelligence now tags real shot distance (close/mid/three, from actual position vs the hoop) and catch-and-shoot vs off-the-dribble (from how long you'd actually had the ball) per profile - still metadata only, the timing learner itself stays per-animation so this doesn't fragment it. Did not add fake animation-phase detection (prep/release/follow-through) - the game doesn't expose keyframe data to back it, so it's skipped rather than faked",
-"v1.86 - Universal Shot Intelligence: every jumpshot animation now gets a persisted profile (name, length, times seen, situations seen, first/last seen, identified or not), a locked profile that starts missing consistently is automatically unlocked and flagged to retest instead of staying trusted forever, and an animation that cannot be identified is labeled as such instead of silently reusing another profile's data - all shown on the Shot Intelligence card",
-"v1.85 - new Shot Intelligence card shows the detected jumpshot, its animation ID, calibration status, confidence (sample count/locked/built-in), active timing, and how many profiles are known, plus a button to copy every profile - this is the existing per-animation timing-profile system (automatic per-jumpshot profiles, auto switching when you change jumpshots) made visible instead of hidden",
+"v1.90 - reverted the whole Universal Shot Intelligence addition (v1.85-v1.89): the confidence/retest piece was actually unlocking previously-good locked timing profiles when it judged recent shots inconsistent, which made real shooting worse, not just diagnostics - back to the plain v1.84 shot-timing behavior",
 "v1.84 - a jumpshot used to only get shared as a found best timing network-wide if someone hit a literal real Perfect on it; now any jumpshot whose adaptive learner converges with enough real samples (12+) gets shared the same way, so every jumpshot anyone actually plays eventually gets a found-and-shared best timing, not just the rare Perfects",
 "v1.83 - the Owner tab's 2011 code alone could let anyone rename themselves Owner, overwriting whoever had it; now the roles screen loads the current Owner/devs/mods instead of defaulting to you, roles stay set until someone changes them, and changing who the Owner is now needs a separate code on top of 2011",
 "v1.82 - entering the Auto Guard, Locked, or Owner tab code once now sticks - it stays unlocked after the script resets/reloads, no need to retype it",
@@ -11740,183 +11640,6 @@ a.hold, a.locked, a.mode, a.greens, a.bin = net.lead, true, "peak", a.greens or 
 return a.hold
 end
 return prevSeedHL(key)
-end
--- UNIVERSAL SHOT INTELLIGENCE: a per-animation profile database (Shot ID Scanner + Animation Recognition Engine + Profile
--- Database) built on top of the real per-key data that already flows through every shot (Shot.keyOf/Shot.holdFor/Shot.remoteKey
--- already derive a key from the actual equipped animation, dedup automatically, and already switch profiles automatically
--- when the equipped jumpshot changes - that part needed no new code). What's added here: a persisted record per discovered
--- animation (name, length, times seen, situations seen, first/last seen - the Profile Database), a Confidence and Validation
--- System that watches a locked profile's recent results and flags it for retesting if it starts missing consistently instead
--- of trusting it forever, and explicit handling for animations that can't be identified instead of silently reusing another
--- profile's data.
-do
-local ShotIntel = {}
-JH.ShotIntel = ShotIntel
-local ok0, data0 = pcall(function() return HttpService:JSONDecode(S.ShotIntelDB or "") end)
-ShotIntel.DB = (ok0 and type(data0) == "table") and data0 or {}
-local dbDirty = false
-task.spawn(function()
-while true do
-if dbDirty then
-dbDirty = false
-local ok, body = pcall(function() return HttpService:JSONEncode(ShotIntel.DB) end)
-if ok then S.ShotIntelDB = body saveSoon() end
-end
-task.wait(5)
-end
-end)
--- NETWORK SHARING: each client pushes its OWN per-profile stats under its own name, never overwriting anyone else's
--- entry (spec requirement: one client's unverified observations must never overwrite another client's established
--- profile). ShotIntel.Network holds the aggregated view (sum of times seen/situations across every contributor, widest
--- release-point range seen, retest flag if ANY contributor raised one) - purely additive, display-only, never written
--- back into the local ShotIntel.DB used by the learner/confidence system.
-ShotIntel.Network = {}
-local function sanitizeKey(k) return (string.gsub(tostring(k), "[%.%#%$%[%]/]", "_")) end
-local myName2 = Players.LocalPlayer.Name
-local lastPushedShotIntel = {}
-task.spawn(function()
-while true do
-if JH.netPut then
-for key, rec in pairs(ShotIntel.DB) do
-local now = tick()
-if (lastPushedShotIntel[key] or 0) + 15 < now then
-lastPushedShotIntel[key] = now
-task.spawn(JH.netPut, "shotintel/" .. sanitizeKey(key) .. "/" .. sanitizeKey(myName2), {
-name = Shot.nameFor(key), timesSeen = rec.timesSeen or 0, sits = rec.sits or {},
-releaseAvg = rec.releaseAvg, releaseLo = rec.releaseLo, releaseHi = rec.releaseHi,
-needsRetest = rec.needsRetest == true, identified = rec.identified ~= false, t = os.time(),
-})
-end
-end
-end
-task.wait(3)
-end
-end)
-task.spawn(function()
-while true do
-if JH.netGet then
-local ok, data = pcall(JH.netGet, "shotintel")
-if ok and type(data) == "table" then
-local agg = {}
-for key, contributors in pairs(data) do
-if type(contributors) == "table" then
-local merged = { name = nil, timesSeen = 0, sits = {}, releaseLo = 1, releaseHi = 0, releaseSum = 0, releaseN = 0, needsRetest = false, contributors = 0 }
-for _, c in pairs(contributors) do
-if type(c) == "table" then
-merged.contributors = merged.contributors + 1
-merged.name = merged.name or c.name
-merged.timesSeen = merged.timesSeen + (tonumber(c.timesSeen) or 0)
-if type(c.sits) == "table" then
-for sitName, cnt in pairs(c.sits) do merged.sits[sitName] = (merged.sits[sitName] or 0) + (tonumber(cnt) or 0) end
-end
-if c.releaseLo then merged.releaseLo = math.min(merged.releaseLo, c.releaseLo) end
-if c.releaseHi then merged.releaseHi = math.max(merged.releaseHi, c.releaseHi) end
-if c.releaseAvg then merged.releaseSum, merged.releaseN = merged.releaseSum + c.releaseAvg, merged.releaseN + 1 end
-if c.needsRetest then merged.needsRetest = true end
-end
-end
-if merged.releaseN > 0 then merged.releaseAvg = merged.releaseSum / merged.releaseN end
-agg[key] = merged
-end
-end
-ShotIntel.Network = agg
-end
-end
-task.wait(10)
-end
-end)
--- CONFIDENCE AND VALIDATION SYSTEM: per-key ring buffer of recent verdicts, kept in memory only (not persisted, lightweight)
-local recent = {}
-ShotIntel.lastKey = nil
--- SHOT CLASSIFICATION ENGINE + RELEASE-POINT ANALYSIS + AUTOMATIC SHOT DETECTION feed into the same record below
-local function record(info, res, strength)
-if not (info and info.key) then return end
-local key = info.key
-local identified = string.sub(key, 1, 4) ~= "sit:"
-local rec = ShotIntel.DB[key]
-if not rec then
-rec = { id = key, name = Shot.nameFor(key, info.anim), length = (info.track and info.track.Length) or 0,
-firstSeen = os.time(), lastSeen = os.time(), timesSeen = 0, sits = {}, ver = 1, identified = identified, needsRetest = false }
-ShotIntel.DB[key] = rec
-end
-rec.lastSeen = os.time()
-rec.timesSeen = (rec.timesSeen or 0) + 1
-if info.sit then rec.sits[info.sit] = (rec.sits[info.sit] or 0) + 1 end
--- SHOT CLASSIFICATION ENGINE, continued: real distance-to-hoop and catch-vs-pullup tags, from actual position/ball-hold
--- data (not guessed categories) - kept as metadata on the profile, not separate learners, since the timing itself is
--- still keyed per animation only (mixing situations into the learner itself was explicitly what the spec warned against)
-do
-local okc, r = pcall(hrp)
-if okc and r then
-local okh, hoop = pcall(Bot.nearestHoop, r.Position)
-if okh and hoop then
-local dist = (r.Position - hoop).Magnitude
-local bucket = dist < 15 and "close" or (dist < 25 and "mid" or "three")
-rec.sits[bucket] = (rec.sits[bucket] or 0) + 1
-end
-end
-if Ball.holdSince then
-local heldFor = tick() - Ball.holdSince
-local tag = heldFor < 0.35 and "catch-and-shoot" or "off-the-dribble"
-rec.sits[tag] = (rec.sits[tag] or 0) + 1
-end
-end
--- RELEASE-POINT ANALYSIS: real release point as a fraction of the animation's own length (held/track.Length), which is
--- speed/framerate independent by construction - not a guessed phase label, just where in the real playback the release
--- actually happened. Only possible when a real track is available (the remote capture path doesn't expose one); honest
--- about that gap rather than guessing. Kept as a rolling window so a drifting release point is visible, not just a locked number.
-if info.track and (info.track.Length or 0) > 0.05 and info.held then
-local ratio = clamp(info.held / info.track.Length, 0, 1)
-local buf2 = rec.releasePoints
-if not buf2 then buf2 = {} rec.releasePoints = buf2 end
-table.insert(buf2, 1, ratio)
-while #buf2 > 20 do table.remove(buf2) end
-local sum, lo, hi = 0, 1, 0
-for _, v in ipairs(buf2) do
-sum = sum + v
-lo = math.min(lo, v)
-hi = math.max(hi, v)
-end
-rec.releaseAvg, rec.releaseLo, rec.releaseHi = sum / #buf2, lo, hi
-end
-if not rec.identified and identified then rec.identified = true end
-if ShotIntel.lastKey ~= key then
-ShotIntel.switched = { from = ShotIntel.lastKey, to = key, t = tick() }
-ShotIntel.lastKey = key
-end
-local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
-if idx then
-local buf = recent[key]
-if not buf then buf = {} recent[key] = buf end
-table.insert(buf, 1, idx)
-while #buf > 10 do table.remove(buf) end
-local a = Shot.auto and Shot.auto[key]
-if a and a.locked and #buf >= 5 then
-local offSide = 0
-for i = 1, math.min(5, #buf) do if math.abs(buf[i] - 5) >= 2 then offSide = offSide + 1 end end
-if offSide >= 3 then
-a.locked = false
-rec.needsRetest = true
-notify("Shot Intelligence", "Timing for " .. tostring(rec.name) .. " started missing consistently - unlocked for retesting.", 4)
-elseif rec.needsRetest and offSide == 0 then
-rec.needsRetest = false
-end
-end
-end
-dbDirty = true
-end
-local prevLR2 = Shot.learnRemote
-function Shot.learnRemote(info, res, strength)
-local r = prevLR2(info, res, strength)
-pcall(record, info, res, strength)
-return r
-end
-local prevLT2 = Shot.learnTiming
-function Shot.learnTiming(info, res, strength)
-local r = prevLT2(info, res, strength)
-pcall(record, info, res, strength)
-return r
-end
 end
 -- SHARED BINDS: a dribble move learned on anyone's copy is pushed to the network and picked up by everyone else who hasn't learned it yet
 function JH.onBindLearned(name, args)
@@ -12137,7 +11860,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.89"
+local VERSION = "v1.90"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -12243,7 +11966,7 @@ local S = {
 	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false, ShotIntelDB = "",
+	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false,
 	AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 	AGOnlyBall = true,
 	BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
@@ -18771,7 +18494,6 @@ task.spawn(function()
 		count = count + 1
 		local ok, holding, source = pcall(Ball.check)
 		if ok then
-			if holding and not Ball.holding then Ball.holdSince = tick() end
 			Ball.holding, Ball.source = holding, source
 		end
 		pcall(Feat.tick, count)
@@ -21943,101 +21665,6 @@ do
 		return prevLR(info, res, strength)
 	end
 end
--- SHOT INTELLIGENCE: a live readout of the per-animation timing profile system (Shot.auto/Shot.FINAL), keyed automatically
--- by whichever jumpshot animation is actually equipped - switching jumpshots switches profiles with no setup needed
-do
-local mainPage
-for _, p in ipairs(UI.pages) do if p.name == "Main" then mainPage = p end end
-if mainPage then
-local c = UI.Card(mainPage, "Shot Intelligence")
-local sName = UI.Stat(c, "Detected jumpshot")
-local sId = UI.Stat(c, "Animation ID")
-local sStatus = UI.Stat(c, "Calibration status")
-local sConf = UI.Stat(c, "Confidence")
-local sHold = UI.Stat(c, "Active timing")
-local sSeen = UI.Stat(c, "Recognized before")
-local sTimes = UI.Stat(c, "Times seen")
-local sSit = UI.Stat(c, "Situations seen")
-local sRelease = UI.Stat(c, "Release point (of animation)")
-local sRetest = UI.Stat(c, "Needs retest")
-local sNetwork = UI.Stat(c, "Network-wide (everyone)")
-local sKnown = UI.Stat(c, "Known profiles")
-UI.Button(c, "Copy every known shot profile", function()
-local lines = { "== JHub shot intelligence profiles ==" }
-local seen = {}
-local db = (JH.ShotIntel and JH.ShotIntel.DB) or {}
-for key in pairs(Shot.FINAL) do
-seen[key] = true
-local rec = db[key]
-lines[#lines + 1] = string.format("%s | %s | built-in, confirmed | hold %.3fs | seen %dx%s", Shot.nameFor(key), key, Shot.FINAL[key],
-rec and rec.timesSeen or 0, (rec and rec.needsRetest) and " | NEEDS RETEST" or "")
-end
-for key, a in pairs(Shot.auto or {}) do
-if not seen[key] then
-local rec = db[key]
-lines[#lines + 1] = string.format("%s | %s | %s | %d samples | hold %.3fs | seen %dx%s", Shot.nameFor(key), key,
-a.locked and "locked" or "learning", a.n or 0, a.hold or 0, rec and rec.timesSeen or 0,
-(rec and rec.needsRetest) and " | NEEDS RETEST" or (rec and not rec.identified) and " | unidentified animation" or "")
-end
-end
-copy(table.concat(lines, "\n"), "Shot profiles")
-end)
-UI.Note(c, "Each jumpshot animation gets its own timing profile automatically - switching jumpshots switches profiles, no setup needed. A profile needs enough consistent real shots before it is trusted (locked); until then it is still learning. If a locked profile starts missing consistently, it is automatically unlocked and flagged to retest instead of staying trusted forever. Situations seen also tracks real shot distance (close/mid/three) and catch-and-shoot vs off-the-dribble, from actual position and ball-hold data. Network-wide shows what everyone else running JHub has seen on this same jumpshot, shared the same way the timing pool is - but it never overwrites your own profile, it's just shown alongside it.")
-task.spawn(function()
-while true do
-local cur = Shot.cur
-local db = (JH.ShotIntel and JH.ShotIntel.DB) or {}
-if cur and cur.key then
-local key = cur.key
-local a = Shot.auto and Shot.auto[key]
-local rec = db[key]
-sName.Text = Shot.nameFor(key, cur.anim)
-sId.Text = string.sub(tostring(key), 1, 22)
-sStatus.Text = cur.state or "-"
-if Shot.FINAL[key] then
-sConf.Text = "Built-in (confirmed)"
-elseif a then
-sConf.Text = string.format("%d samples%s", a.n or 0, a.locked and ", locked" or ", learning")
-else
-sConf.Text = "No data yet"
-end
-sHold.Text = string.format("%.3fs", cur.hold or 0)
-sSeen.Text = rec and "Yes" or "No"
-sTimes.Text = rec and tostring(rec.timesSeen or 0) or "0"
-if rec and rec.sits and next(rec.sits) then
-local parts = {}
-for sitName, cnt in pairs(rec.sits) do parts[#parts + 1] = sitName .. " x" .. cnt end
-table.sort(parts)
-sSit.Text = table.concat(parts, ", ")
-else
-sSit.Text = "-"
-end
-sRetest.Text = (rec and rec.needsRetest) and "Yes - flagged" or "No"
-if rec and rec.releaseAvg then
-sRelease.Text = string.format("%.0f%% (range %.0f-%.0f%%)", rec.releaseAvg * 100, rec.releaseLo * 100, rec.releaseHi * 100)
-else
-sRelease.Text = "No track data yet"
-end
-if rec and not rec.identified then sStatus.Text = "Unidentified animation" end
-local net = JH.ShotIntel and JH.ShotIntel.Network and JH.ShotIntel.Network[key]
-if net then
-sNetwork.Text = string.format("%d players, %d shots total%s", net.contributors or 0, net.timesSeen or 0, net.needsRetest and " | NEEDS RETEST" or "")
-else
-sNetwork.Text = "No data from other players yet"
-end
-else
-sName.Text, sId.Text, sStatus.Text, sConf.Text, sHold.Text = "-", "-", "Shoot to see it", "-", "-"
-sSeen.Text, sTimes.Text, sSit.Text, sRetest.Text, sRelease.Text, sNetwork.Text = "-", "-", "-", "-", "-", "-"
-end
-local known = 0
-for _ in pairs(Shot.FINAL) do known = known + 1 end
-for _ in pairs(Shot.auto or {}) do known = known + 1 end
-sKnown.Text = tostring(known)
-task.wait(1)
-end
-end)
-end
-end
 -- LOGO LETTERS: the menu title and the top bar use a brush marker font with a black outline and the blue, yellow and purple colors
 do
 	local FONT = Enum.Font.PermanentMarker
@@ -24030,11 +23657,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
-"v1.89 - Shot Intelligence now shares to the network: each client pushes its own profile stats under its own name (times seen, situations, release-point range, retest flags), and everyone pulls an aggregated view shown as Network-wide on the card - additive only, nobody's push ever overwrites anyone else's own profile data",
-"v1.88 - added real Release-Point Analysis: tracks where in the actual animation (held/track.Length, speed and framerate independent) the release really happens, as a rolling range per profile, shown as Release point on the Shot Intelligence card. Still did not add fake prep/upward/extension/follow-through phase labels since the game exposes no keyframe markers to back those - this one's real, that one still isn't",
-"v1.87 - Shot Intelligence now tags real shot distance (close/mid/three, from actual position vs the hoop) and catch-and-shoot vs off-the-dribble (from how long you'd actually had the ball) per profile - still metadata only, the timing learner itself stays per-animation so this doesn't fragment it. Did not add fake animation-phase detection (prep/release/follow-through) - the game doesn't expose keyframe data to back it, so it's skipped rather than faked",
-"v1.86 - Universal Shot Intelligence: every jumpshot animation now gets a persisted profile (name, length, times seen, situations seen, first/last seen, identified or not), a locked profile that starts missing consistently is automatically unlocked and flagged to retest instead of staying trusted forever, and an animation that cannot be identified is labeled as such instead of silently reusing another profile's data - all shown on the Shot Intelligence card",
-"v1.85 - new Shot Intelligence card shows the detected jumpshot, its animation ID, calibration status, confidence (sample count/locked/built-in), active timing, and how many profiles are known, plus a button to copy every profile - this is the existing per-animation timing-profile system (automatic per-jumpshot profiles, auto switching when you change jumpshots) made visible instead of hidden",
+"v1.90 - reverted the whole Universal Shot Intelligence addition (v1.85-v1.89): the confidence/retest piece was actually unlocking previously-good locked timing profiles when it judged recent shots inconsistent, which made real shooting worse, not just diagnostics - back to the plain v1.84 shot-timing behavior",
 "v1.84 - a jumpshot used to only get shared as a found best timing network-wide if someone hit a literal real Perfect on it; now any jumpshot whose adaptive learner converges with enough real samples (12+) gets shared the same way, so every jumpshot anyone actually plays eventually gets a found-and-shared best timing, not just the rare Perfects",
 "v1.83 - the Owner tab's 2011 code alone could let anyone rename themselves Owner, overwriting whoever had it; now the roles screen loads the current Owner/devs/mods instead of defaulting to you, roles stay set until someone changes them, and changing who the Owner is now needs a separate code on top of 2011",
 "v1.82 - entering the Auto Guard, Locked, or Owner tab code once now sticks - it stays unlocked after the script resets/reloads, no need to retype it",
@@ -24187,183 +23810,6 @@ a.hold, a.locked, a.mode, a.greens, a.bin = net.lead, true, "peak", a.greens or 
 return a.hold
 end
 return prevSeedHL(key)
-end
--- UNIVERSAL SHOT INTELLIGENCE: a per-animation profile database (Shot ID Scanner + Animation Recognition Engine + Profile
--- Database) built on top of the real per-key data that already flows through every shot (Shot.keyOf/Shot.holdFor/Shot.remoteKey
--- already derive a key from the actual equipped animation, dedup automatically, and already switch profiles automatically
--- when the equipped jumpshot changes - that part needed no new code). What's added here: a persisted record per discovered
--- animation (name, length, times seen, situations seen, first/last seen - the Profile Database), a Confidence and Validation
--- System that watches a locked profile's recent results and flags it for retesting if it starts missing consistently instead
--- of trusting it forever, and explicit handling for animations that can't be identified instead of silently reusing another
--- profile's data.
-do
-local ShotIntel = {}
-JH.ShotIntel = ShotIntel
-local ok0, data0 = pcall(function() return HttpService:JSONDecode(S.ShotIntelDB or "") end)
-ShotIntel.DB = (ok0 and type(data0) == "table") and data0 or {}
-local dbDirty = false
-task.spawn(function()
-while true do
-if dbDirty then
-dbDirty = false
-local ok, body = pcall(function() return HttpService:JSONEncode(ShotIntel.DB) end)
-if ok then S.ShotIntelDB = body saveSoon() end
-end
-task.wait(5)
-end
-end)
--- NETWORK SHARING: each client pushes its OWN per-profile stats under its own name, never overwriting anyone else's
--- entry (spec requirement: one client's unverified observations must never overwrite another client's established
--- profile). ShotIntel.Network holds the aggregated view (sum of times seen/situations across every contributor, widest
--- release-point range seen, retest flag if ANY contributor raised one) - purely additive, display-only, never written
--- back into the local ShotIntel.DB used by the learner/confidence system.
-ShotIntel.Network = {}
-local function sanitizeKey(k) return (string.gsub(tostring(k), "[%.%#%$%[%]/]", "_")) end
-local myName2 = Players.LocalPlayer.Name
-local lastPushedShotIntel = {}
-task.spawn(function()
-while true do
-if JH.netPut then
-for key, rec in pairs(ShotIntel.DB) do
-local now = tick()
-if (lastPushedShotIntel[key] or 0) + 15 < now then
-lastPushedShotIntel[key] = now
-task.spawn(JH.netPut, "shotintel/" .. sanitizeKey(key) .. "/" .. sanitizeKey(myName2), {
-name = Shot.nameFor(key), timesSeen = rec.timesSeen or 0, sits = rec.sits or {},
-releaseAvg = rec.releaseAvg, releaseLo = rec.releaseLo, releaseHi = rec.releaseHi,
-needsRetest = rec.needsRetest == true, identified = rec.identified ~= false, t = os.time(),
-})
-end
-end
-end
-task.wait(3)
-end
-end)
-task.spawn(function()
-while true do
-if JH.netGet then
-local ok, data = pcall(JH.netGet, "shotintel")
-if ok and type(data) == "table" then
-local agg = {}
-for key, contributors in pairs(data) do
-if type(contributors) == "table" then
-local merged = { name = nil, timesSeen = 0, sits = {}, releaseLo = 1, releaseHi = 0, releaseSum = 0, releaseN = 0, needsRetest = false, contributors = 0 }
-for _, c in pairs(contributors) do
-if type(c) == "table" then
-merged.contributors = merged.contributors + 1
-merged.name = merged.name or c.name
-merged.timesSeen = merged.timesSeen + (tonumber(c.timesSeen) or 0)
-if type(c.sits) == "table" then
-for sitName, cnt in pairs(c.sits) do merged.sits[sitName] = (merged.sits[sitName] or 0) + (tonumber(cnt) or 0) end
-end
-if c.releaseLo then merged.releaseLo = math.min(merged.releaseLo, c.releaseLo) end
-if c.releaseHi then merged.releaseHi = math.max(merged.releaseHi, c.releaseHi) end
-if c.releaseAvg then merged.releaseSum, merged.releaseN = merged.releaseSum + c.releaseAvg, merged.releaseN + 1 end
-if c.needsRetest then merged.needsRetest = true end
-end
-end
-if merged.releaseN > 0 then merged.releaseAvg = merged.releaseSum / merged.releaseN end
-agg[key] = merged
-end
-end
-ShotIntel.Network = agg
-end
-end
-task.wait(10)
-end
-end)
--- CONFIDENCE AND VALIDATION SYSTEM: per-key ring buffer of recent verdicts, kept in memory only (not persisted, lightweight)
-local recent = {}
-ShotIntel.lastKey = nil
--- SHOT CLASSIFICATION ENGINE + RELEASE-POINT ANALYSIS + AUTOMATIC SHOT DETECTION feed into the same record below
-local function record(info, res, strength)
-if not (info and info.key) then return end
-local key = info.key
-local identified = string.sub(key, 1, 4) ~= "sit:"
-local rec = ShotIntel.DB[key]
-if not rec then
-rec = { id = key, name = Shot.nameFor(key, info.anim), length = (info.track and info.track.Length) or 0,
-firstSeen = os.time(), lastSeen = os.time(), timesSeen = 0, sits = {}, ver = 1, identified = identified, needsRetest = false }
-ShotIntel.DB[key] = rec
-end
-rec.lastSeen = os.time()
-rec.timesSeen = (rec.timesSeen or 0) + 1
-if info.sit then rec.sits[info.sit] = (rec.sits[info.sit] or 0) + 1 end
--- SHOT CLASSIFICATION ENGINE, continued: real distance-to-hoop and catch-vs-pullup tags, from actual position/ball-hold
--- data (not guessed categories) - kept as metadata on the profile, not separate learners, since the timing itself is
--- still keyed per animation only (mixing situations into the learner itself was explicitly what the spec warned against)
-do
-local okc, r = pcall(hrp)
-if okc and r then
-local okh, hoop = pcall(Bot.nearestHoop, r.Position)
-if okh and hoop then
-local dist = (r.Position - hoop).Magnitude
-local bucket = dist < 15 and "close" or (dist < 25 and "mid" or "three")
-rec.sits[bucket] = (rec.sits[bucket] or 0) + 1
-end
-end
-if Ball.holdSince then
-local heldFor = tick() - Ball.holdSince
-local tag = heldFor < 0.35 and "catch-and-shoot" or "off-the-dribble"
-rec.sits[tag] = (rec.sits[tag] or 0) + 1
-end
-end
--- RELEASE-POINT ANALYSIS: real release point as a fraction of the animation's own length (held/track.Length), which is
--- speed/framerate independent by construction - not a guessed phase label, just where in the real playback the release
--- actually happened. Only possible when a real track is available (the remote capture path doesn't expose one); honest
--- about that gap rather than guessing. Kept as a rolling window so a drifting release point is visible, not just a locked number.
-if info.track and (info.track.Length or 0) > 0.05 and info.held then
-local ratio = clamp(info.held / info.track.Length, 0, 1)
-local buf2 = rec.releasePoints
-if not buf2 then buf2 = {} rec.releasePoints = buf2 end
-table.insert(buf2, 1, ratio)
-while #buf2 > 20 do table.remove(buf2) end
-local sum, lo, hi = 0, 1, 0
-for _, v in ipairs(buf2) do
-sum = sum + v
-lo = math.min(lo, v)
-hi = math.max(hi, v)
-end
-rec.releaseAvg, rec.releaseLo, rec.releaseHi = sum / #buf2, lo, hi
-end
-if not rec.identified and identified then rec.identified = true end
-if ShotIntel.lastKey ~= key then
-ShotIntel.switched = { from = ShotIntel.lastKey, to = key, t = tick() }
-ShotIntel.lastKey = key
-end
-local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
-if idx then
-local buf = recent[key]
-if not buf then buf = {} recent[key] = buf end
-table.insert(buf, 1, idx)
-while #buf > 10 do table.remove(buf) end
-local a = Shot.auto and Shot.auto[key]
-if a and a.locked and #buf >= 5 then
-local offSide = 0
-for i = 1, math.min(5, #buf) do if math.abs(buf[i] - 5) >= 2 then offSide = offSide + 1 end end
-if offSide >= 3 then
-a.locked = false
-rec.needsRetest = true
-notify("Shot Intelligence", "Timing for " .. tostring(rec.name) .. " started missing consistently - unlocked for retesting.", 4)
-elseif rec.needsRetest and offSide == 0 then
-rec.needsRetest = false
-end
-end
-end
-dbDirty = true
-end
-local prevLR2 = Shot.learnRemote
-function Shot.learnRemote(info, res, strength)
-local r = prevLR2(info, res, strength)
-pcall(record, info, res, strength)
-return r
-end
-local prevLT2 = Shot.learnTiming
-function Shot.learnTiming(info, res, strength)
-local r = prevLT2(info, res, strength)
-pcall(record, info, res, strength)
-return r
-end
 end
 -- SHARED BINDS: a dribble move learned on anyone's copy is pushed to the network and picked up by everyone else who hasn't learned it yet
 function JH.onBindLearned(name, args)
