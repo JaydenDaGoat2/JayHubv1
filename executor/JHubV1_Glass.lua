@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.77"
+local VERSION = "v1.78"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -7515,20 +7515,23 @@ bind(RunService.Stepped, function(_, dt)
 	if not r then return end
 	local now = tick()
 	local moving = Bot.cmd and now - Bot.cmdT < 0.35 and Bot.cmd.Magnitude > 0.05
-	-- CFrame is the only thing confirmed to actually move the character in this game (both Humanoid:Move and firing the real MoveDirection remote produced zero real displacement in testing). Drive position with it, and run Humanoid:Move alongside with the same direction purely so the game's own Animate script picks the real walk animation off Humanoid.MoveDirection - that part doesn't need to move you itself, it just needs to be set so the animation system reacts to it.
-	local h2 = hum()
+	-- Humanoid:Move produced zero effect on animation too (confirmed: the real guard/defensive animation only shows up because it's tied directly to the HoldingG attribute by the game's own systems, not because of anything we send through Humanoid.MoveDirection - same "this game doesn't react to MoveDirection" finding as the movement side). CFrame drives position; load and play the confirmed real walk animation ourselves on top of it.
 	if moving then
 		r.CFrame = r.CFrame + Bot.cmd * Speed.gameWS * Bot.mul * dt
 		Mover.sync(r)
-		if h2 then
-			h2.AutoRotate = false
-			h2:Move(Bot.cmd, false)
+		local guarding = now - (Bot.guardingNow or 0) < 0.3
+		local id = (guarding and S.GuardAnimId and S.GuardAnimId ~= "") and S.GuardAnimId or S.WalkAnimId
+		if id ~= activeId then
+			if activeTrack then pcall(function() activeTrack:Stop(0.1) end) end
+			activeTrack = trackFor(id)
+			activeId = id
 		end
-	else
-		if h2 then
-			h2:Move(Vector3.new(), false)
-			if h2.AutoRotate == false then h2.AutoRotate = true end
+		if activeTrack then
+			activeTrack.Speed = math.clamp(Bot.mul or 1, 0.6, 1.8)
+			if not activeTrack.IsPlaying then activeTrack:Play(0.15) end
 		end
+	elseif activeTrack and activeTrack.IsPlaying then
+		activeTrack:Stop(0.15)
 	end
 if Bot.face and now - Bot.faceT < 0.35 then
 local p = r.Position
@@ -11374,6 +11377,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.78 - Humanoid:Move did nothing for the walk animation either (same reason it did nothing for movement) - now manually plays the confirmed real walk/guard animation on top of CFrame movement",
 "v1.77 - added an option to only drive Auto Guard while you hold the real Guard button yourself, instead of it pressing the button for you",
 "v1.76 - confirmed Mover.send also produced zero real movement (sent ok, speed stayed 0); back to CFrame for actual position, with Humanoid:Move running alongside it at the same time purely so the real walk animation plays",
 "v1.75 - diagnostics found AGRange was blocking Auto Guard from even trying to move whenever the opponent was past it (check your Guard range slider); fixed a logging bug that hid confirmed Mover.send calls; open/contested is now live while dribbling with a character highlight, not just a post-shot label",
@@ -11735,7 +11739,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.77"
+local VERSION = "v1.78"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -19559,20 +19563,23 @@ do
 		if not r then return end
 		local now = tick()
 		local moving = Bot.cmd and now - Bot.cmdT < 0.35 and Bot.cmd.Magnitude > 0.05
-		-- CFrame is the only thing confirmed to actually move the character in this game (both Humanoid:Move and firing the real MoveDirection remote produced zero real displacement in testing). Drive position with it, and run Humanoid:Move alongside with the same direction purely so the game's own Animate script picks the real walk animation off Humanoid.MoveDirection - that part doesn't need to move you itself, it just needs to be set so the animation system reacts to it.
-		local h2 = hum()
+		-- Humanoid:Move produced zero effect on animation too (confirmed: the real guard/defensive animation only shows up because it's tied directly to the HoldingG attribute by the game's own systems, not because of anything we send through Humanoid.MoveDirection - same "this game doesn't react to MoveDirection" finding as the movement side). CFrame drives position; load and play the confirmed real walk animation ourselves on top of it.
 		if moving then
 			r.CFrame = r.CFrame + Bot.cmd * Speed.gameWS * Bot.mul * dt
 			Mover.sync(r)
-			if h2 then
-				h2.AutoRotate = false
-				h2:Move(Bot.cmd, false)
+			local guarding = now - (Bot.guardingNow or 0) < 0.3
+			local id = (guarding and S.GuardAnimId and S.GuardAnimId ~= "") and S.GuardAnimId or S.WalkAnimId
+			if id ~= activeId then
+				if activeTrack then pcall(function() activeTrack:Stop(0.1) end) end
+				activeTrack = trackFor(id)
+				activeId = id
 			end
-		else
-			if h2 then
-				h2:Move(Vector3.new(), false)
-				if h2.AutoRotate == false then h2.AutoRotate = true end
+			if activeTrack then
+				activeTrack.Speed = math.clamp(Bot.mul or 1, 0.6, 1.8)
+				if not activeTrack.IsPlaying then activeTrack:Play(0.15) end
 			end
+		elseif activeTrack and activeTrack.IsPlaying then
+			activeTrack:Stop(0.15)
 		end
 		if Bot.face and now - Bot.faceT < 0.35 then
 			local p = r.Position
@@ -23419,6 +23426,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.78 - Humanoid:Move did nothing for the walk animation either (same reason it did nothing for movement) - now manually plays the confirmed real walk/guard animation on top of CFrame movement",
 "v1.77 - added an option to only drive Auto Guard while you hold the real Guard button yourself, instead of it pressing the button for you",
 "v1.76 - confirmed Mover.send also produced zero real movement (sent ok, speed stayed 0); back to CFrame for actual position, with Humanoid:Move running alongside it at the same time purely so the real walk animation plays",
 "v1.75 - diagnostics found AGRange was blocking Auto Guard from even trying to move whenever the opponent was past it (check your Guard range slider); fixed a logging bug that hid confirmed Mover.send calls; open/contested is now live while dribbling with a character highlight, not just a post-shot label",
