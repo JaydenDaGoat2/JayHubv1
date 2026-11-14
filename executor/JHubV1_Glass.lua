@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.59"
+local VERSION = "v1.60"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -7846,6 +7846,7 @@ local lock = UI.Card(GP, "Auto Guard (locked)")
 UI.Input(lock, "Code", { get = function() return typed end, set = function(v) typed = tostring(v or "") end }, nil, "enter the code")
 UI.Note(lock, "Auto Guard is locked. Enter the code to open it.")
 local contentFrames = {}
+JH.AGContentFrames = contentFrames
 UI.Button(lock, "Unlock", function()
 if string.gsub(typed, "%s", "") == AG_CODE then
 lock.frame.Visible = false
@@ -10153,7 +10154,7 @@ for _, p in ipairs(UI.pages) do
 if p.name == "Auto Guard" then gp = p end
 if p.name == "Auto Grind" then ap = p end
 end
-if gp and UI.lockedTools then
+if gp then
 local c1 = UI.Card(gp, "Guard mistakes")
 UI.Toggle(c1, "Make mistakes sometimes", "AGMistakes")
 UI.Slider(c1, "How often", "AGMistakeAmt", 0, 60, 1, 0, "%")
@@ -10166,14 +10167,20 @@ UI.Slider(c3, "Steal distance", "ASRange", 3, 9, 0.5, 1, " studs")
 UI.Slider(c3, "Steal chance", "ASChance", 10, 100, 5, 0, "%")
 UI.Slider(c3, "Steal reaction time", "ASReact", 0, 0.5, 0.01, 2, "s")
 UI.Keybind(c3, "Steal key (empty uses the on-screen button)", function() return S.ASKey end, function(v) S.ASKey = v end)
-for _, page in ipairs({ gp, ap }) do
-if page then
-for _, f in ipairs(page.frame:GetChildren()) do
+if JH.AGContentFrames then
+c1.frame.Visible = false
+c2.frame.Visible = false
+c3.frame.Visible = false
+table.insert(JH.AGContentFrames, c1.frame)
+table.insert(JH.AGContentFrames, c2.frame)
+table.insert(JH.AGContentFrames, c3.frame)
+end
+end
+if ap and UI.lockedTools then
+for _, f in ipairs(ap.frame:GetChildren()) do
 if f:IsA("Frame") then
 f.Visible = false
 table.insert(UI.lockedTools, f)
-end
-end
 end
 end
 end
@@ -11206,6 +11213,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.60 - found the real cause of the blank Auto Guard tab: a leftover block re-hid every card on it",
 "v1.59 - fixed the in-script update checker pointing at the wrong, stale branch",
 "v1.58 - removed the lock code from the visible update log",
 "v1.57 - found it: a leftover line was hiding the Auto Guard tab and force-disabling it every load",
@@ -11505,7 +11513,7 @@ end
 ]==]
 
 -- DISCORD GATE: the first time the script runs, a window asks for a Discord join before anything else loads
-local GATE_VERSION = "v1.59"
+local GATE_VERSION = "v1.60"
 local okGate, errGate = pcall(function()
 	local FILE = "JHub_discord_ok.txt"
 	local INVITE = "https://discord.gg/fk5TsZMrRM"
@@ -11640,7 +11648,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.59"
+local VERSION = "v1.60"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -19794,6 +19802,7 @@ do
 		UI.Input(lock, "Code", { get = function() return typed end, set = function(v) typed = tostring(v or "") end }, nil, "enter the code")
 		UI.Note(lock, "Auto Guard is locked. Enter the code to open it.")
 		local contentFrames = {}
+JH.AGContentFrames = contentFrames
 		UI.Button(lock, "Unlock", function()
 			if string.gsub(typed, "%s", "") == AG_CODE then
 				lock.frame.Visible = false
@@ -22101,7 +22110,7 @@ do
 		if p.name == "Auto Guard" then gp = p end
 		if p.name == "Auto Grind" then ap = p end
 	end
-	if gp and UI.lockedTools then
+	if gp then
 		local c1 = UI.Card(gp, "Guard mistakes")
 		UI.Toggle(c1, "Make mistakes sometimes", "AGMistakes")
 		UI.Slider(c1, "How often", "AGMistakeAmt", 0, 60, 1, 0, "%")
@@ -22114,14 +22123,20 @@ do
 		UI.Slider(c3, "Steal chance", "ASChance", 10, 100, 5, 0, "%")
 		UI.Slider(c3, "Steal reaction time", "ASReact", 0, 0.5, 0.01, 2, "s")
 		UI.Keybind(c3, "Steal key (empty uses the on-screen button)", function() return S.ASKey end, function(v) S.ASKey = v end)
-		for _, page in ipairs({ gp, ap }) do
-			if page then
-				for _, f in ipairs(page.frame:GetChildren()) do
-					if f:IsA("Frame") then
-						f.Visible = false
-						table.insert(UI.lockedTools, f)
-					end
-				end
+		if JH.AGContentFrames then
+			c1.frame.Visible = false
+			c2.frame.Visible = false
+			c3.frame.Visible = false
+			table.insert(JH.AGContentFrames, c1.frame)
+			table.insert(JH.AGContentFrames, c2.frame)
+			table.insert(JH.AGContentFrames, c3.frame)
+		end
+	end
+	if ap and UI.lockedTools then
+		for _, f in ipairs(ap.frame:GetChildren()) do
+			if f:IsA("Frame") then
+				f.Visible = false
+				table.insert(UI.lockedTools, f)
 			end
 		end
 	end
@@ -23154,6 +23169,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.60 - found the real cause of the blank Auto Guard tab: a leftover block re-hid every card on it",
 "v1.59 - fixed the in-script update checker pointing at the wrong, stale branch",
 "v1.58 - removed the lock code from the visible update log",
 "v1.57 - found it: a leftover line was hiding the Auto Guard tab and force-disabling it every load",
