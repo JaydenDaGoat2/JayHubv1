@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.43"
+local VERSION = "v1.44"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -145,7 +145,7 @@ ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, St
 LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, HardLock = "",
+FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "",
 AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 AGOnlyBall = true,
 BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
@@ -10608,6 +10608,81 @@ end },
 })
 end
 end
+-- GUARD RECORDER INSIDE THE ULTRA GAME RECORDER: records your own real guarding (state, animation, distance) and reports the learned walk animation id
+do
+local ultra = UI.lockedTools and UI.lockedTools[1]
+if ultra then
+local order = 0
+for _, ch in ipairs(ultra:GetChildren()) do
+if ch:IsA("GuiObject") then order = math.max(order, ch.LayoutOrder) end
+end
+local card = { frame = ultra, order = order }
+local function emit(file, text, what)
+pcall(function() if type(writefile) == "function" then writefile(file, text) end end)
+local clip = text
+if #clip > 900000 then clip = string.sub(clip, 1, 900000) .. "\n-- (cut here, the rest is in the file " .. file .. ")" end
+if type(setclipboard) == "function" then pcall(setclipboard, clip) end
+notify("Dex", string.format("%s: %.0f KB, saved as %s%s", what, #text / 1024, file, type(setclipboard) == "function" and " and copied" or ""), 6)
+end
+JH.guardLog = JH.guardLog or {}
+local function nearestOther()
+local r = Mover.body()
+if not r then return nil end
+local best, bd
+for _, pl in ipairs(Players:GetPlayers()) do
+if pl ~= LP and pl.Character then
+local hrp = pl.Character:FindFirstChild("HumanoidRootPart")
+if hrp then
+local d = flat(hrp.Position - r.Position).Magnitude
+if not bd or d < bd then best, bd = pl, d end
+end
+end
+end
+return best, bd
+end
+local lastLog = 0
+bind(RunService.Heartbeat, function()
+if not S.GuardSpyOn then return end
+local now = tick()
+if now - lastLog < 0.5 then return end
+lastLog = now
+local h = hum()
+if not h then return end
+local _, dist = nearestOther()
+local tracks = {}
+for _, tr in ipairs(h:GetPlayingAnimationTracks()) do
+local id = tr.Animation and tr.Animation.AnimationId or "?"
+tracks[#tracks + 1] = string.format("%s(%s,%s)", id, tr.Priority.Name, tostring(tr.Looped))
+end
+table.insert(JH.guardLog, string.format("%s  state=%s  moveDir=%.2f  dist=%.1f  guarding=%s  tracks=%s",
+os.date("%H:%M:%S"), h:GetState().Name, h.MoveDirection.Magnitude, dist or -1, tostring(Bot.status or ""), #tracks > 0 and table.concat(tracks, " | ") or "none"))
+if #JH.guardLog > 300 then table.remove(JH.guardLog, 1) end
+end)
+UI.Toggle(card, "Record guarding", "GuardSpyOn", function(v)
+if v then
+JH.guardLog = {}
+notify("Guard recorder", "Recording. Play normally, guard someone for a bit, then tap Copy guard log.", 5)
+else
+notify("Guard recorder", "Stopped. Tap Copy guard log to get the report.", 4)
+end
+end)
+UI.Buttons(card, {
+{ "Copy guard log", function()
+local log = JH.guardLog or {}
+local lines = { "== GUARD RECORDER " .. tostring(VERSION) .. " | " .. os.date("%Y-%m-%d %H:%M:%S"),
+"Learned walk animation id: " .. tostring(S.WalkAnimId ~= "" and S.WalkAnimId or "(not learned yet, walk for real once)"),
+string.format("Guard settings: dist=%s react=%s predict=%s range=%s guardSpeed=%s", tostring(S.AGDist), tostring(S.AGReact), tostring(S.AGPredict), tostring(S.AGRange), tostring(S.GuardSpeed)),
+"" }
+if #log == 0 then
+lines[#lines + 1] = "(nothing recorded yet, turn Record guarding on and guard someone for a bit)"
+else
+for _, l in ipairs(log) do lines[#lines + 1] = l end
+end
+emit("JHub_guard_log.txt", table.concat(lines, "\n"), "Guard log")
+end },
+})
+end
+end
 -- JUMPSHOT MASTERY INSIDE THE ULTRA GAME RECORDER: which jumpshots in the game have been covered, what was learned for each, and every shot setting the game stores
 do
 local function pairKey(a, b)
@@ -11019,6 +11094,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.44 - guard recorder: records your real guarding and reports the learned walk animation id",
 "v1.43 - fixed a frozen black/blue screen on first run for some users (Discord gate crash)",
 "v1.42 - walk animation is learned from your own real walk instead of a guessed id",
 "v1.41 - auto guard uses your real walk animation and Players-tab guard speed only",
@@ -11302,7 +11378,7 @@ end
 ]==]
 
 -- DISCORD GATE: the first time the script runs, a window asks for a Discord join before anything else loads
-local GATE_VERSION = "v1.43"
+local GATE_VERSION = "v1.44"
 local okGate, errGate = pcall(function()
 	local FILE = "JHub_discord_ok.txt"
 	local INVITE = "https://discord.gg/fk5TsZMrRM"
@@ -11437,7 +11513,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.43"
+local VERSION = "v1.44"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -11543,7 +11619,7 @@ local S = {
 	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, HardLock = "",
+	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "",
 	AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 	AGOnlyBall = true,
 	BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
@@ -22354,6 +22430,81 @@ UI.Note(card, "---- Dex and remote spy ----", "Text")
 			})
 	end
 end
+-- GUARD RECORDER INSIDE THE ULTRA GAME RECORDER: records your own real guarding (state, animation, distance) and reports the learned walk animation id
+do
+	local ultra = UI.lockedTools and UI.lockedTools[1]
+	if ultra then
+		local order = 0
+		for _, ch in ipairs(ultra:GetChildren()) do
+			if ch:IsA("GuiObject") then order = math.max(order, ch.LayoutOrder) end
+		end
+		local card = { frame = ultra, order = order }
+		local function emit(file, text, what)
+			pcall(function() if type(writefile) == "function" then writefile(file, text) end end)
+			local clip = text
+			if #clip > 900000 then clip = string.sub(clip, 1, 900000) .. "\n-- (cut here, the rest is in the file " .. file .. ")" end
+			if type(setclipboard) == "function" then pcall(setclipboard, clip) end
+			notify("Dex", string.format("%s: %.0f KB, saved as %s%s", what, #text / 1024, file, type(setclipboard) == "function" and " and copied" or ""), 6)
+		end
+		JH.guardLog = JH.guardLog or {}
+		local function nearestOther()
+			local r = Mover.body()
+			if not r then return nil end
+			local best, bd
+			for _, pl in ipairs(Players:GetPlayers()) do
+				if pl ~= LP and pl.Character then
+					local hrp = pl.Character:FindFirstChild("HumanoidRootPart")
+					if hrp then
+						local d = flat(hrp.Position - r.Position).Magnitude
+						if not bd or d < bd then best, bd = pl, d end
+					end
+				end
+			end
+			return best, bd
+		end
+		local lastLog = 0
+		bind(RunService.Heartbeat, function()
+			if not S.GuardSpyOn then return end
+			local now = tick()
+			if now - lastLog < 0.5 then return end
+			lastLog = now
+			local h = hum()
+			if not h then return end
+			local _, dist = nearestOther()
+			local tracks = {}
+			for _, tr in ipairs(h:GetPlayingAnimationTracks()) do
+				local id = tr.Animation and tr.Animation.AnimationId or "?"
+				tracks[#tracks + 1] = string.format("%s(%s,%s)", id, tr.Priority.Name, tostring(tr.Looped))
+			end
+			table.insert(JH.guardLog, string.format("%s  state=%s  moveDir=%.2f  dist=%.1f  guarding=%s  tracks=%s",
+				os.date("%H:%M:%S"), h:GetState().Name, h.MoveDirection.Magnitude, dist or -1, tostring(Bot.status or ""), #tracks > 0 and table.concat(tracks, " | ") or "none"))
+			if #JH.guardLog > 300 then table.remove(JH.guardLog, 1) end
+		end)
+		UI.Toggle(card, "Record guarding", "GuardSpyOn", function(v)
+			if v then
+				JH.guardLog = {}
+				notify("Guard recorder", "Recording. Play normally, guard someone for a bit, then tap Copy guard log.", 5)
+			else
+				notify("Guard recorder", "Stopped. Tap Copy guard log to get the report.", 4)
+			end
+		end)
+		UI.Buttons(card, {
+		{ "Copy guard log", function()
+			local log = JH.guardLog or {}
+			local lines = { "== GUARD RECORDER " .. tostring(VERSION) .. " | " .. os.date("%Y-%m-%d %H:%M:%S"),
+				"Learned walk animation id: " .. tostring(S.WalkAnimId ~= "" and S.WalkAnimId or "(not learned yet, walk for real once)"),
+				string.format("Guard settings: dist=%s react=%s predict=%s range=%s guardSpeed=%s", tostring(S.AGDist), tostring(S.AGReact), tostring(S.AGPredict), tostring(S.AGRange), tostring(S.GuardSpeed)),
+				"" }
+			if #log == 0 then
+				lines[#lines + 1] = "(nothing recorded yet, turn Record guarding on and guard someone for a bit)"
+			else
+				for _, l in ipairs(log) do lines[#lines + 1] = l end
+			end
+			emit("JHub_guard_log.txt", table.concat(lines, "\n"), "Guard log")
+		end },
+		})
+	end
+end
 -- JUMPSHOT MASTERY INSIDE THE ULTRA GAME RECORDER: which jumpshots in the game have been covered, what was learned for each, and every shot setting the game stores
 do
 	local function pairKey(a, b)
@@ -22765,6 +22916,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.44 - guard recorder: records your real guarding and reports the learned walk animation id",
 "v1.43 - fixed a frozen black/blue screen on first run for some users (Discord gate crash)",
 "v1.42 - walk animation is learned from your own real walk instead of a guessed id",
 "v1.41 - auto guard uses your real walk animation and Players-tab guard speed only",
