@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.51"
+local VERSION = "v1.52"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -8333,8 +8333,8 @@ local radius = math.max(obj.AbsoluteSize.X, obj.AbsoluteSize.Y)
 local x, y = center.X, center.Y
 if dir.Magnitude > 0.05 then
 local cam = workspace.CurrentCamera
-local look = cam and flat(cam.CFrame.LookVector) or Vector3.new(0, 0, -1)
-local right = cam and flat(cam.CFrame.RightVector) or Vector3.new(1, 0, 0)
+local look = (cam and flat(cam.CFrame.LookVector).Magnitude > 0.01) and flat(cam.CFrame.LookVector).Unit or Vector3.new(0, 0, -1)
+local right = (cam and flat(cam.CFrame.RightVector).Magnitude > 0.01) and flat(cam.CFrame.RightVector).Unit or Vector3.new(1, 0, 0)
 x = center.X + dir:Dot(right) * radius
 y = center.Y - dir:Dot(look) * radius
 end
@@ -8354,8 +8354,8 @@ function Bot.followReal(dir)
 if IS_MOBILE and stickTo(dir) then return end
 if UIS.KeyboardEnabled then
 local cam = workspace.CurrentCamera
-local look = cam and flat(cam.CFrame.LookVector) or Vector3.new(0, 0, -1)
-local right = cam and flat(cam.CFrame.RightVector) or Vector3.new(1, 0, 0)
+local look = (cam and flat(cam.CFrame.LookVector).Magnitude > 0.01) and flat(cam.CFrame.LookVector).Unit or Vector3.new(0, 0, -1)
+local right = (cam and flat(cam.CFrame.RightVector).Magnitude > 0.01) and flat(cam.CFrame.RightVector).Unit or Vector3.new(1, 0, 0)
 local fwd, strafe = dir:Dot(look), dir:Dot(right)
 local keys = {}
 if dir.Magnitude > 0.1 then
@@ -8373,8 +8373,12 @@ releaseKeys()
 stickRelease()
 Bot.stopMove()
 end
+-- if guardStep stops being called at all - you picked up the ball, auto guard turned off, nobody to guard - nothing else would ever release the held key or joystick push, so it keeps walking in whatever direction it was last given forever
 bind(RunService.Heartbeat, function()
-if not S.AG and guardHeld then Bot.setGuardHold(false) Bot.followRealStop() end
+if guardHeld and (not S.AG or tick() - (Bot.lastGuardTick or 0) > 0.3) then
+Bot.setGuardHold(false)
+Bot.followRealStop()
+end
 end)
 -- the guard looks like a player: it sways, reacts a little differently each time, sometimes hesitates and never runs faster than a player can
 function Bot.guardStep(me, others, forced)
@@ -8402,6 +8406,7 @@ local spot = ppos + dirf.Unit * S.AGDist
 if w and amt > 0 then spot = spot + Vector3.new(w.ox, 0, w.oz) end
 Bot.spot, Bot.spotTarget, Bot.spotT = spot, t, now
 end
+Bot.lastGuardTick = tick()
 Bot.setGuardHold(true)
 if w and amt > 0 and w.pause > now then
 Bot.followRealStop()
@@ -11217,6 +11222,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.52 - fixed sideways drift and stuck movement when auto guard stops being called",
 "v1.51 - Auto Guard rebuilt: holds real Guard button, follows with real keys/joystick",
 "v1.50 - Auto Guard holds the real Guard button instead of crafting remote calls",
 "v1.49 - fixed HoldG toggling itself back off every frame before the server caught up",
@@ -11508,7 +11514,7 @@ end
 ]==]
 
 -- DISCORD GATE: the first time the script runs, a window asks for a Discord join before anything else loads
-local GATE_VERSION = "v1.51"
+local GATE_VERSION = "v1.52"
 local okGate, errGate = pcall(function()
 	local FILE = "JHub_discord_ok.txt"
 	local INVITE = "https://discord.gg/fk5TsZMrRM"
@@ -11643,7 +11649,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.51"
+local VERSION = "v1.52"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -20284,8 +20290,8 @@ do
 		local x, y = center.X, center.Y
 		if dir.Magnitude > 0.05 then
 			local cam = workspace.CurrentCamera
-			local look = cam and flat(cam.CFrame.LookVector) or Vector3.new(0, 0, -1)
-			local right = cam and flat(cam.CFrame.RightVector) or Vector3.new(1, 0, 0)
+			local look = (cam and flat(cam.CFrame.LookVector).Magnitude > 0.01) and flat(cam.CFrame.LookVector).Unit or Vector3.new(0, 0, -1)
+			local right = (cam and flat(cam.CFrame.RightVector).Magnitude > 0.01) and flat(cam.CFrame.RightVector).Unit or Vector3.new(1, 0, 0)
 			x = center.X + dir:Dot(right) * radius
 			y = center.Y - dir:Dot(look) * radius
 		end
@@ -20305,8 +20311,8 @@ do
 		if IS_MOBILE and stickTo(dir) then return end
 		if UIS.KeyboardEnabled then
 			local cam = workspace.CurrentCamera
-			local look = cam and flat(cam.CFrame.LookVector) or Vector3.new(0, 0, -1)
-			local right = cam and flat(cam.CFrame.RightVector) or Vector3.new(1, 0, 0)
+			local look = (cam and flat(cam.CFrame.LookVector).Magnitude > 0.01) and flat(cam.CFrame.LookVector).Unit or Vector3.new(0, 0, -1)
+			local right = (cam and flat(cam.CFrame.RightVector).Magnitude > 0.01) and flat(cam.CFrame.RightVector).Unit or Vector3.new(1, 0, 0)
 			local fwd, strafe = dir:Dot(look), dir:Dot(right)
 			local keys = {}
 			if dir.Magnitude > 0.1 then
@@ -20353,7 +20359,8 @@ do
 			if w and amt > 0 then spot = spot + Vector3.new(w.ox, 0, w.oz) end
 			Bot.spot, Bot.spotTarget, Bot.spotT = spot, t, now
 		end
-		Bot.setGuardHold(true)
+		Bot.lastGuardTick = tick()
+Bot.setGuardHold(true)
 		if w and amt > 0 and w.pause > now then
 			Bot.followRealStop()
 			if S.AGFace then Bot.faceAt(t.pos) end
@@ -23168,6 +23175,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.52 - fixed sideways drift and stuck movement when auto guard stops being called",
 "v1.51 - Auto Guard rebuilt: holds real Guard button, follows with real keys/joystick",
 "v1.50 - Auto Guard holds the real Guard button instead of crafting remote calls",
 "v1.49 - fixed HoldG toggling itself back off every frame before the server caught up",
