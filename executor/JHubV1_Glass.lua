@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.73"
+local VERSION = "v1.74"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -7378,12 +7378,19 @@ if dir.Magnitude > 1 then dir = dir.Unit end
 Bot.cmd, Bot.cmdT, Bot.mul = dir, tick(), mul or 1
 Mover.override, Mover.overrideT = dir, tick()
 -- this game is server-authoritative and never reads Humanoid.MoveDirection/Humanoid:Move at all (confirmed back in v1.45's "this game does not use MoveDirection" finding, re-confirmed by Humanoid:Move producing zero real displacement) - the only thing that actually moves a character here is the same MoveDirection RemoteEvent the game's own control script fires, which Mover.send already drives for other features like Glide. Fire it directly instead of waiting on the passive Mover.override hook to catch a call that may not come often enough while idle.
-pcall(Mover.send, dir * (mul or 1))
+local sentVec = dir * (mul or 1)
+local ok = pcall(Mover.send, sentVec)
+Bot.dbg = Bot.dbg or {}
+Bot.dbg.sentVia, Bot.dbg.sentVec, Bot.dbg.sentOk, Bot.dbg.sentAt = "Mover.send", sentVec, ok, tick()
+local h3 = hum()
+Bot.dbg.humState = h3 and h3:GetState().Name or "no humanoid"
 end
 function Bot.stopMove()
 Bot.cmd = nil
 Mover.override = nil
-pcall(Mover.send, Vector3.new())
+local ok = pcall(Mover.send, Vector3.new())
+Bot.dbg = Bot.dbg or {}
+Bot.dbg.sentVia, Bot.dbg.sentVec, Bot.dbg.sentOk, Bot.dbg.sentAt = "Mover.send(stop)", Vector3.new(), ok, tick()
 end
 function Bot.faceAt(pos)
 local r = Mover.body()
@@ -8016,9 +8023,16 @@ end
 elseif roppHum then
 hookOpp(nil)
 end
-table.insert(JH.rguardMoveLog, string.format("%s  move  state=%s  speed=%.1f  holdingG=%s  action=%s  guarding=%s  playing=%s  opp=%s  oppDist=%s  oppPlaying=%s",
+local dbg = Bot.dbg or {}
+local dbgLine = string.format("dbgTarget=%s dbgDist=%s dbgDir=%s dbgSent=%s dbgSentOk=%s dbgSentVia=%s dbgHumState=%s dbgBlockedReason=%s",
+tostring(dbg.target or "none"),
+dbg.dist and string.format("%.1f", dbg.dist) or "?",
+dbg.dir and string.format("(%.2f,%.2f,%.2f)", dbg.dir.X, dbg.dir.Y, dbg.dir.Z) or "?",
+dbg.sentVec and string.format("(%.2f,%.2f,%.2f)", dbg.sentVec.X, dbg.sentVec.Y, dbg.sentVec.Z) or "?",
+tostring(dbg.sentOk), tostring(dbg.sentVia), tostring(dbg.humState), tostring(dbg.reason or "none"))
+table.insert(JH.rguardMoveLog, string.format("%s  move  state=%s  speed=%.1f  holdingG=%s  action=%s  guarding=%s  playing=%s  opp=%s  oppDist=%s  oppPlaying=%s  %s",
 os.date("%H:%M:%S"), h:GetState().Name, speed, tostring(c2 and c2:GetAttribute("HoldingG")), tostring(c2 and c2:GetAttribute("Action")), tostring(Bot.status or ""),
-#tracks > 0 and table.concat(tracks, " | ") or "none", oppName, nearestDist and string.format("%.1f", nearestDist) or "?", #oppTracks > 0 and table.concat(oppTracks, " | ") or "none"))
+#tracks > 0 and table.concat(tracks, " | ") or "none", oppName, nearestDist and string.format("%.1f", nearestDist) or "?", #oppTracks > 0 and table.concat(oppTracks, " | ") or "none", dbgLine))
 if #JH.rguardMoveLog > 200 then table.remove(JH.rguardMoveLog, 1) end
 end)
 UI.Button(rc, "Copy remote guard log", function()
@@ -8480,9 +8494,15 @@ end)
 -- the guard looks like a player: it sways, reacts a little differently each time, sometimes hesitates and never runs faster than a player can
 function Bot.guardStep(me, others, forced)
 local t = Bot.pickTarget(others, me, forced)
-if not t then return false end
+if not t then
+Bot.dbg = { reason = "no target found" }
+return false
+end
 local dist = flat(t.pos - me).Magnitude
-if dist > S.AGRange and not S.AGLock then return false end
+if dist > S.AGRange and not S.AGLock then
+Bot.dbg = { target = t.pl.Name, targetPos = t.pos, dist = dist, reason = string.format("out of AGRange (%.0f > %.0f) and AGLock is off", dist, S.AGRange) }
+return false
+end
 local now = tick()
 local amt = S.AGHuman and (S.AGHumanAmt or 50) / 100 or 0
 local w = Bot.wob
@@ -8508,18 +8528,24 @@ local mul = 1 + (S.GuardSpeed or 0) / 100
 if amt > 0 then mul = math.min(mul * w.sp, (S.AGLock and (1 + 0.8 * amt) or (1 + 0.35 * amt))) end
 if w and amt > 0 and w.pause > now then
 Bot.stopMove()
+Bot.dbg = { target = t.pl.Name, targetPos = t.pos, spot = Bot.spot, dir = Vector3.new(), reason = "human-wobble pause" }
 if S.AGFace then Bot.faceAt(t.pos) end
 Bot.status = "Guarding " .. t.pl.Name
 return true
 end
 local to = flat(Bot.spot - me)
 local d = to.Magnitude
+local dir
 if d < 0.5 then
 Bot.stopMove()
+dir = Vector3.new()
 else
 local gain = S.AGLock and 1 or math.min(1, d / 3)
-Bot.move(to.Unit * gain, mul)
+dir = to.Unit * gain
+Bot.move(dir, mul)
 end
+Bot.dbg = { target = t.pl.Name, targetPos = t.pos, spot = Bot.spot, dist = d, dir = dir,
+reason = d < 0.5 and "within 0.5 studs of ideal spot, stopped" or nil }
 if S.AGFace then Bot.faceAt(t.pos) end
 Bot.status = "Guarding " .. t.pl.Name
 return true
@@ -11316,6 +11342,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.74 - added live diagnostics to the Remote Guard Recorder log: target, distance, calculated direction, what actually got sent, whether it was blocked, and humanoid state, no logic changed",
 "v1.73 - found the real reason Auto Guard never followed: this game is server-authoritative and ignores Humanoid:Move entirely - movement now fires the same MoveDirection remote the game itself uses",
 "v1.72 - Auto Guard target lock now sticks to the same opponent (with hysteresis) instead of re-picking best every tick, and velocity is read from the real AssemblyLinearVelocity (now including AI) instead of estimated",
 "v1.71 - back on Humanoid:Move for good: re-read the last log correctly - speed=0 was the guard distance dead-zone working as intended, not a stall; movement is smooth, animations are the game\'s own, target lock/tracking unchanged",
@@ -11673,7 +11700,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.73"
+local VERSION = "v1.74"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -19360,12 +19387,19 @@ do
 		Bot.cmd, Bot.cmdT, Bot.mul = dir, tick(), mul or 1
 		Mover.override, Mover.overrideT = dir, tick()
 		-- this game is server-authoritative and never reads Humanoid.MoveDirection/Humanoid:Move at all (confirmed back in v1.45's "this game does not use MoveDirection" finding, re-confirmed by Humanoid:Move producing zero real displacement) - the only thing that actually moves a character here is the same MoveDirection RemoteEvent the game's own control script fires, which Mover.send already drives for other features like Glide. Fire it directly instead of waiting on the passive Mover.override hook to catch a call that may not come often enough while idle.
-		pcall(Mover.send, dir * (mul or 1))
+		local sentVec = dir * (mul or 1)
+		local ok = pcall(Mover.send, sentVec)
+		Bot.dbg = Bot.dbg or {}
+		Bot.dbg.sentVia, Bot.dbg.sentVec, Bot.dbg.sentOk, Bot.dbg.sentAt = "Mover.send", sentVec, ok, tick()
+		local h3 = hum()
+		Bot.dbg.humState = h3 and h3:GetState().Name or "no humanoid"
 	end
 	function Bot.stopMove()
 		Bot.cmd = nil
 		Mover.override = nil
-		pcall(Mover.send, Vector3.new())
+		local ok = pcall(Mover.send, Vector3.new())
+		Bot.dbg = Bot.dbg or {}
+		Bot.dbg.sentVia, Bot.dbg.sentVec, Bot.dbg.sentOk, Bot.dbg.sentAt = "Mover.send(stop)", Vector3.new(), ok, tick()
 	end
 	function Bot.faceAt(pos)
 		local r = Mover.body()
@@ -19999,9 +20033,16 @@ JH.AGContentFrames = contentFrames
 			elseif roppHum then
 				hookOpp(nil)
 			end
-			table.insert(JH.rguardMoveLog, string.format("%s  move  state=%s  speed=%.1f  holdingG=%s  action=%s  guarding=%s  playing=%s  opp=%s  oppDist=%s  oppPlaying=%s",
+			local dbg = Bot.dbg or {}
+			local dbgLine = string.format("dbgTarget=%s dbgDist=%s dbgDir=%s dbgSent=%s dbgSentOk=%s dbgSentVia=%s dbgHumState=%s dbgBlockedReason=%s",
+				tostring(dbg.target or "none"),
+				dbg.dist and string.format("%.1f", dbg.dist) or "?",
+				dbg.dir and string.format("(%.2f,%.2f,%.2f)", dbg.dir.X, dbg.dir.Y, dbg.dir.Z) or "?",
+				dbg.sentVec and string.format("(%.2f,%.2f,%.2f)", dbg.sentVec.X, dbg.sentVec.Y, dbg.sentVec.Z) or "?",
+				tostring(dbg.sentOk), tostring(dbg.sentVia), tostring(dbg.humState), tostring(dbg.reason or "none"))
+			table.insert(JH.rguardMoveLog, string.format("%s  move  state=%s  speed=%.1f  holdingG=%s  action=%s  guarding=%s  playing=%s  opp=%s  oppDist=%s  oppPlaying=%s  %s",
 				os.date("%H:%M:%S"), h:GetState().Name, speed, tostring(c2 and c2:GetAttribute("HoldingG")), tostring(c2 and c2:GetAttribute("Action")), tostring(Bot.status or ""),
-				#tracks > 0 and table.concat(tracks, " | ") or "none", oppName, nearestDist and string.format("%.1f", nearestDist) or "?", #oppTracks > 0 and table.concat(oppTracks, " | ") or "none"))
+				#tracks > 0 and table.concat(tracks, " | ") or "none", oppName, nearestDist and string.format("%.1f", nearestDist) or "?", #oppTracks > 0 and table.concat(oppTracks, " | ") or "none", dbgLine))
 			if #JH.rguardMoveLog > 200 then table.remove(JH.rguardMoveLog, 1) end
 		end)
 		UI.Button(rc, "Copy remote guard log", function()
@@ -20463,9 +20504,15 @@ do
 	-- the guard looks like a player: it sways, reacts a little differently each time, sometimes hesitates and never runs faster than a player can
 	function Bot.guardStep(me, others, forced)
 		local t = Bot.pickTarget(others, me, forced)
-		if not t then return false end
+		if not t then
+			Bot.dbg = { reason = "no target found" }
+			return false
+		end
 		local dist = flat(t.pos - me).Magnitude
-		if dist > S.AGRange and not S.AGLock then return false end
+		if dist > S.AGRange and not S.AGLock then
+			Bot.dbg = { target = t.pl.Name, targetPos = t.pos, dist = dist, reason = string.format("out of AGRange (%.0f > %.0f) and AGLock is off", dist, S.AGRange) }
+			return false
+		end
 		local now = tick()
 		local amt = S.AGHuman and (S.AGHumanAmt or 50) / 100 or 0
 		local w = Bot.wob
@@ -20491,18 +20538,24 @@ do
 		if amt > 0 then mul = math.min(mul * w.sp, (S.AGLock and (1 + 0.8 * amt) or (1 + 0.35 * amt))) end
 		if w and amt > 0 and w.pause > now then
 			Bot.stopMove()
+			Bot.dbg = { target = t.pl.Name, targetPos = t.pos, spot = Bot.spot, dir = Vector3.new(), reason = "human-wobble pause" }
 			if S.AGFace then Bot.faceAt(t.pos) end
 			Bot.status = "Guarding " .. t.pl.Name
 			return true
 		end
 		local to = flat(Bot.spot - me)
 		local d = to.Magnitude
+		local dir
 		if d < 0.5 then
 			Bot.stopMove()
+			dir = Vector3.new()
 		else
 			local gain = S.AGLock and 1 or math.min(1, d / 3)
-			Bot.move(to.Unit * gain, mul)
+			dir = to.Unit * gain
+			Bot.move(dir, mul)
 		end
+		Bot.dbg = { target = t.pl.Name, targetPos = t.pos, spot = Bot.spot, dist = d, dir = dir,
+			reason = d < 0.5 and "within 0.5 studs of ideal spot, stopped" or nil }
 		if S.AGFace then Bot.faceAt(t.pos) end
 		Bot.status = "Guarding " .. t.pl.Name
 		return true
@@ -23299,6 +23352,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.74 - added live diagnostics to the Remote Guard Recorder log: target, distance, calculated direction, what actually got sent, whether it was blocked, and humanoid state, no logic changed",
 "v1.73 - found the real reason Auto Guard never followed: this game is server-authoritative and ignores Humanoid:Move entirely - movement now fires the same MoveDirection remote the game itself uses",
 "v1.72 - Auto Guard target lock now sticks to the same opponent (with hysteresis) instead of re-picking best every tick, and velocity is read from the real AssemblyLinearVelocity (now including AI) instead of estimated",
 "v1.71 - back on Humanoid:Move for good: re-read the last log correctly - speed=0 was the guard distance dead-zone working as intended, not a stall; movement is smooth, animations are the game\'s own, target lock/tracking unchanged",
