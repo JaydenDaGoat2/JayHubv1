@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.49"
+local VERSION = "v1.50"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -145,7 +145,7 @@ ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, St
 LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "",
+FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "",
 AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 AGOnlyBall = true,
 BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
@@ -545,7 +545,7 @@ if not o then return nil end
 end
 return o
 end
-local ACTION_WORDS = { Shoot = { "shoot", "shot" }, Sprint = { "sprint", "run" } }
+local ACTION_WORDS = { Shoot = { "shoot", "shot" }, Sprint = { "sprint", "run" }, Guard = { "guard" } }
 function Input.findButton(action)
 if action == "Shoot" and S.ShootButtonPath ~= "" then
 local b = Input.resolve(S.ShootButtonPath)
@@ -7843,7 +7843,8 @@ local g1 = UI.Card(GP, "Auto guard")
 UI.Toggle(g1, "Auto guard", "AG")
 UI.Dropdown(g1, "Who to guard", "AGTarget", { "Ball handler", "Closest to me", "Closest to hoop" })
 UI.Slider(g1, "Guard distance (studs in front)", "AGDist", 1, 12, 0.5, 1)
-UI.Note(g1, "Guarding now moves like a real player: it presses the real Guard button and sends real stick input, so the game controls the speed and animation itself. Guard speed in the Players tab no longer applies to Auto Guard.")
+UI.Note(g1, "Holds the real Guard button while guarding, same as a real player, and uses Guard speed from the Players tab for how fast it closes out.")
+UI.Keybind(g1, "Guard key (keyboard, only if there is no on-screen Guard button)", function() return S.GuardKey end, function(v) S.GuardKey = v end)
 UI.Slider(g1, "Reaction time", "AGReact", 0, 0.5, 0.01, 2, "s")
 UI.Slider(g1, "Prediction (looks ahead)", "AGPredict", 0, 0.6, 0.02, 2, "s")
 UI.Slider(g1, "Guard range", "AGRange", 10, 120, 5, 0, " studs")
@@ -8289,34 +8290,12 @@ Shot.finalSave()
 end
 end
 
--- real guarding in this game is server-driven: the real Guard button fires HoldG and the server takes over movement/animation from MoveDirection input, the same as any real player. Auto Guard does the same two calls instead of sliding the character itself, so the game's own physics and Defensive animations play exactly as they do for a human.
-local holdGRemote, moveDirRemote, guardHeld, guardHeldSeeded
-local function findRemote(name)
-local d = game:GetService("ReplicatedStorage"):FindFirstChild(name, true)
-return (d and d:IsA("RemoteEvent")) and d or nil
-end
+-- hold the real Guard button (the same way Sprint is already held) so the game's own input handling flips HoldingG itself - no remote to craft or get wrong. Positioning stays on our own CFrame follow, same as any other bot movement.
+local guardHeld = false
 function Bot.setGuardHold(on)
-if not guardHeldSeeded then
-local c = char()
-guardHeld = c and c:GetAttribute("HoldingG") == true
-guardHeldSeeded = true
-end
 if on == guardHeld then return end
-holdGRemote = holdGRemote or findRemote("HoldG")
-if holdGRemote then
-Mover.selfFire = true
-pcall(function() holdGRemote:FireServer({}) end)
-Mover.selfFire = false
-end
+Input.action("Guard", on)
 guardHeld = on
-end
-function Bot.guardMove(dir)
-moveDirRemote = moveDirRemote or findRemote("MoveDirection")
-if not moveDirRemote then return false end
-Mover.selfFire = true
-pcall(function() moveDirRemote:FireServer(dir) end)
-Mover.selfFire = false
-return true
 end
 bind(RunService.Heartbeat, function()
 if not S.AG and guardHeld then Bot.setGuardHold(false) end
@@ -8348,8 +8327,10 @@ if w and amt > 0 then spot = spot + Vector3.new(w.ox, 0, w.oz) end
 Bot.spot, Bot.spotTarget, Bot.spotT = spot, t, now
 end
 Bot.setGuardHold(true)
+local mul = 1 + (S.GuardSpeed or 0) / 100
+if amt > 0 then mul = math.min(mul * w.sp, (S.AGLock and (1 + 0.8 * amt) or (1 + 0.35 * amt))) end
 if w and amt > 0 and w.pause > now then
-Bot.guardMove(Vector3.new())
+Bot.stopMove()
 if S.AGFace then Bot.faceAt(t.pos) end
 Bot.status = "Guarding " .. t.pl.Name
 return true
@@ -8357,10 +8338,10 @@ end
 local to = flat(Bot.spot - me)
 local d = to.Magnitude
 if d < 0.5 then
-Bot.guardMove(Vector3.new())
+Bot.stopMove()
 else
 local gain = S.AGLock and 1 or math.min(1, d / 3)
-Bot.guardMove(to.Unit * gain * (w and amt > 0 and w.sp or 1))
+Bot.move(to.Unit * gain, mul)
 end
 if S.AGFace then Bot.faceAt(t.pos) end
 Bot.status = "Guarding " .. t.pl.Name
@@ -11162,6 +11143,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.50 - Auto Guard holds the real Guard button instead of crafting remote calls",
 "v1.49 - fixed HoldG toggling itself back off every frame before the server caught up",
 "v1.48 - Auto Guard now presses the real Guard button and lets the server drive movement",
 "v1.47 - learns your real defensive slide animation separately from your walk",
@@ -11451,7 +11433,7 @@ end
 ]==]
 
 -- DISCORD GATE: the first time the script runs, a window asks for a Discord join before anything else loads
-local GATE_VERSION = "v1.49"
+local GATE_VERSION = "v1.50"
 local okGate, errGate = pcall(function()
 	local FILE = "JHub_discord_ok.txt"
 	local INVITE = "https://discord.gg/fk5TsZMrRM"
@@ -11586,7 +11568,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.49"
+local VERSION = "v1.50"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -11692,7 +11674,7 @@ local S = {
 	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "",
+	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "",
 	AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 	AGOnlyBall = true,
 	BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
@@ -12118,7 +12100,7 @@ function Input.resolve(path)
 	end
 	return o
 end
-local ACTION_WORDS = { Shoot = { "shoot", "shot" }, Sprint = { "sprint", "run" } }
+local ACTION_WORDS = { Shoot = { "shoot", "shot" }, Sprint = { "sprint", "run" }, Guard = { "guard" } }
 -- scanning every PlayerGui descendant is expensive, so results are cached briefly
 function Input.findButton(action)
 	if action == "Shoot" and S.ShootButtonPath ~= "" then
@@ -19737,7 +19719,8 @@ do
 	UI.Toggle(g1, "Auto guard", "AG")
 	UI.Dropdown(g1, "Who to guard", "AGTarget", { "Ball handler", "Closest to me", "Closest to hoop" })
 	UI.Slider(g1, "Guard distance (studs in front)", "AGDist", 1, 12, 0.5, 1)
-	UI.Note(g1, "Guarding now moves like a real player: it presses the real Guard button and sends real stick input, so the game controls the speed and animation itself. Guard speed in the Players tab no longer applies to Auto Guard.")
+	UI.Note(g1, "Holds the real Guard button while guarding, same as a real player, and uses Guard speed from the Players tab for how fast it closes out.")
+UI.Keybind(g1, "Guard key (keyboard, only if there is no on-screen Guard button)", function() return S.GuardKey end, function(v) S.GuardKey = v end)
 	UI.Slider(g1, "Reaction time", "AGReact", 0, 0.5, 0.01, 2, "s")
 	UI.Slider(g1, "Prediction (looks ahead)", "AGPredict", 0, 0.6, 0.02, 2, "s")
 	UI.Slider(g1, "Guard range", "AGRange", 10, 120, 5, 0, " studs")
@@ -20183,34 +20166,12 @@ do
 		end
 	end
 
-	-- real guarding in this game is server-driven: the real Guard button fires HoldG and the server takes over movement/animation from MoveDirection input, the same as any real player. Auto Guard does the same two calls instead of sliding the character itself, so the game's own physics and Defensive animations play exactly as they do for a human.
-	local holdGRemote, moveDirRemote, guardHeld, guardHeldSeeded
-	local function findRemote(name)
-		local d = game:GetService("ReplicatedStorage"):FindFirstChild(name, true)
-		return (d and d:IsA("RemoteEvent")) and d or nil
-	end
+	-- hold the real Guard button (the same way Sprint is already held) so the game's own input handling flips HoldingG itself - no remote to craft or get wrong. Positioning stays on our own CFrame follow, same as any other bot movement.
+	local guardHeld = false
 	function Bot.setGuardHold(on)
-		if not guardHeldSeeded then
-			local c = char()
-			guardHeld = c and c:GetAttribute("HoldingG") == true
-			guardHeldSeeded = true
-		end
 		if on == guardHeld then return end
-		holdGRemote = holdGRemote or findRemote("HoldG")
-		if holdGRemote then
-			Mover.selfFire = true
-			pcall(function() holdGRemote:FireServer({}) end)
-			Mover.selfFire = false
-		end
+		Input.action("Guard", on)
 		guardHeld = on
-	end
-	function Bot.guardMove(dir)
-		moveDirRemote = moveDirRemote or findRemote("MoveDirection")
-		if not moveDirRemote then return false end
-		Mover.selfFire = true
-		pcall(function() moveDirRemote:FireServer(dir) end)
-		Mover.selfFire = false
-		return true
 	end
 	bind(RunService.Heartbeat, function()
 		if not S.AG and guardHeld then Bot.setGuardHold(false) end
@@ -20242,8 +20203,10 @@ do
 			Bot.spot, Bot.spotTarget, Bot.spotT = spot, t, now
 		end
 		Bot.setGuardHold(true)
+		local mul = 1 + (S.GuardSpeed or 0) / 100
+		if amt > 0 then mul = math.min(mul * w.sp, (S.AGLock and (1 + 0.8 * amt) or (1 + 0.35 * amt))) end
 		if w and amt > 0 and w.pause > now then
-			Bot.guardMove(Vector3.new())
+			Bot.stopMove()
 			if S.AGFace then Bot.faceAt(t.pos) end
 			Bot.status = "Guarding " .. t.pl.Name
 			return true
@@ -20251,10 +20214,10 @@ do
 		local to = flat(Bot.spot - me)
 		local d = to.Magnitude
 		if d < 0.5 then
-			Bot.guardMove(Vector3.new())
+			Bot.stopMove()
 		else
 			local gain = S.AGLock and 1 or math.min(1, d / 3)
-			Bot.guardMove(to.Unit * gain * (w and amt > 0 and w.sp or 1))
+			Bot.move(to.Unit * gain, mul)
 		end
 		if S.AGFace then Bot.faceAt(t.pos) end
 		Bot.status = "Guarding " .. t.pl.Name
@@ -23056,6 +23019,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.50 - Auto Guard holds the real Guard button instead of crafting remote calls",
 "v1.49 - fixed HoldG toggling itself back off every frame before the server caught up",
 "v1.48 - Auto Guard now presses the real Guard button and lets the server drive movement",
 "v1.47 - learns your real defensive slide animation separately from your walk",
