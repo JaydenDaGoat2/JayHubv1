@@ -6343,7 +6343,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.38  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.39  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -8829,7 +8829,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.38"
+d.Text = "JHub V1.39"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -10151,7 +10151,9 @@ local copy = table.pack(table.unpack(args, 1, args.n))
 task.spawn(function()
 task.wait(0.12)
 local c = char()
-local name = c and c:GetAttribute("LastDribblePackage")
+local raw = c and c:GetAttribute("LastDribblePackage")
+-- the dropdown names have no hand suffix, but the game's own attribute does ("Spin 1 L"), so strip it before saving
+local name = type(raw) == "string" and (string.match(raw, "^(.-)%s+[LR]$") or raw) or raw
 if type(name) == "string" and name ~= "" and ser(lib[name] or { n = 0 }) ~= ser(copy) then
 lib[name] = copy
 saveLib()
@@ -10182,6 +10184,14 @@ end
 local info = UI.Card(pg, "How binds work")
 info.frame.Size = UDim2.new(1, -4, 0, 0)
 UI.Note(info, "Pick a dribble move for each bind and a key or controller button. The first time you do a move with the game's own button, the script learns it. After that your key or controller button does that move, and the game picks left or right from the hand the ball is in.")
+UI.Button(info, "Reset all binds", function()
+	for slot = 1, N do
+		S["BindMove" .. slot], S["BindKey" .. slot], S["BindArgs" .. slot] = "None", "", ""
+	end
+	saveSoon()
+	UI.refreshAll()
+	notify("Binds", "All 6 binds reset.", 3)
+end)
 for slot = 1, N do
 local c = UI.Card(pg, "Bind " .. slot)
 c.frame.Size = UDim2.new(0.5, -4, 0, 0)
@@ -10587,6 +10597,22 @@ else
 out[#out + 1] = "(could not read the game's bound actions)"
 end
 emit("JHub_control_map.txt", table.concat(out, "\n"), "Control map")
+end },
+})
+UI.Buttons(card, {
+{ "Find every dribble move (scan the game's own data)", function()
+notify("Dribble scan", "Reading the game's own dribble, combo and gather data. This takes a moment.", 5)
+task.spawn(function()
+local parts = {}
+for _, filt in ipairs({ "Dribbl", "Combo", "Gather", "Move" }) do
+local ok2, text = pcall(configText, filt, "DRIBBLE DATA (" .. filt .. ")")
+if ok2 and text then parts[#parts + 1] = text end
+task.wait()
+end
+local full = table.concat(parts, "\n\n")
+emit("JHub_dex_dribble.txt", full, "Dribble move data")
+notify("Dribble scan", "Done. Paste JHub_dex_dribble.txt to me so I can build real auto-fill from whatever the game actually stores.", 7)
+end)
 end },
 })
 end
@@ -11304,7 +11330,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.38", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.39", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -18029,7 +18055,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.38  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.39  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -20523,7 +20549,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.38"
+				d.Text = "JHub V1.39"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -21845,10 +21871,12 @@ do
 		task.spawn(function()
 			task.wait(0.12)
 			local c = char()
-			local name = c and c:GetAttribute("LastDribblePackage")
+			local raw = c and c:GetAttribute("LastDribblePackage")
+			-- the dropdown names have no hand suffix, but the game's own attribute does ("Spin 1 L"), so strip it before saving
+			local name = type(raw) == "string" and (string.match(raw, "^(.-)%s+[LR]$") or raw) or raw
 			if type(name) == "string" and name ~= "" and ser(lib[name] or { n = 0 }) ~= ser(copy) then
-				lib[name] = copy
-				saveLib()
+			lib[name] = copy
+			saveLib()
 			end
 		end)
 		return prevOD(args)
@@ -21876,6 +21904,14 @@ do
 	local info = UI.Card(pg, "How binds work")
 	info.frame.Size = UDim2.new(1, -4, 0, 0)
 	UI.Note(info, "Pick a dribble move for each bind and a key or controller button. The first time you do a move with the game's own button, the script learns it. After that your key or controller button does that move, and the game picks left or right from the hand the ball is in.")
+	UI.Button(info, "Reset all binds", function()
+		for slot = 1, N do
+			S["BindMove" .. slot], S["BindKey" .. slot], S["BindArgs" .. slot] = "None", "", ""
+		end
+		saveSoon()
+		UI.refreshAll()
+		notify("Binds", "All 6 binds reset.", 3)
+	end)
 	for slot = 1, N do
 		local c = UI.Card(pg, "Bind " .. slot)
 		c.frame.Size = UDim2.new(0.5, -4, 0, 0)
@@ -22281,6 +22317,22 @@ UI.Note(card, "---- Dex and remote spy ----", "Text")
 			out[#out + 1] = "(could not read the game's bound actions)"
 			end
 			emit("JHub_control_map.txt", table.concat(out, "\n"), "Control map")
+			end },
+			})
+			UI.Buttons(card, {
+			{ "Find every dribble move (scan the game's own data)", function()
+			notify("Dribble scan", "Reading the game's own dribble, combo and gather data. This takes a moment.", 5)
+			task.spawn(function()
+			local parts = {}
+			for _, filt in ipairs({ "Dribbl", "Combo", "Gather", "Move" }) do
+			local ok2, text = pcall(configText, filt, "DRIBBLE DATA (" .. filt .. ")")
+			if ok2 and text then parts[#parts + 1] = text end
+			task.wait()
+			end
+			local full = table.concat(parts, "\n\n")
+			emit("JHub_dex_dribble.txt", full, "Dribble move data")
+			notify("Dribble scan", "Done. Paste JHub_dex_dribble.txt to me so I can build real auto-fill from whatever the game actually stores.", 7)
+			end)
 			end },
 			})
 	end
