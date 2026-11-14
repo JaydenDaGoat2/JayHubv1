@@ -5844,14 +5844,14 @@ end
 show()
 table.insert(UI.refresh, show)
 b.Activated:Connect(function()
-l.Text = "press key..."
+l.Text = "press key or button..."
 UI.listening = function(name)
 setk(name or "")
 show()
 saveSoon()
 end
 task.delay(6, function()
-if l.Text == "press key..." then
+if l.Text == "press key or button..." then
 UI.listening = nil
 show()
 end
@@ -6336,7 +6336,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.30  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.31  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -8809,7 +8809,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.30"
+d.Text = "JHub V1.31"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -10141,7 +10141,9 @@ end)
 return prevOD(args)
 end
 UIS.InputBegan:Connect(function(i, gp)
-if gp or i.UserInputType ~= Enum.UserInputType.Keyboard then return end
+local it = i.UserInputType
+local isBindInput = it == Enum.UserInputType.Keyboard or it == Enum.UserInputType.Gamepad1 or it == Enum.UserInputType.Gamepad2 or it == Enum.UserInputType.Gamepad3 or it == Enum.UserInputType.Gamepad4
+if gp or not isBindInput then return end
 for slot = 1, N do
 local k = S["BindKey" .. slot]
 if k and k ~= "" and k == i.KeyCode.Name then
@@ -10159,7 +10161,7 @@ lay.Padding = UDim.new(0, 8)
 end
 local info = UI.Card(pg, "How binds work")
 info.frame.Size = UDim2.new(1, -4, 0, 0)
-UI.Note(info, "Pick a dribble move for each bind and a key. The first time you do a move with the game's own button, the script learns it. After that your key does that move, and the game picks left or right from the hand the ball is in.")
+UI.Note(info, "Pick a dribble move for each bind and a key or controller button. The first time you do a move with the game's own button, the script learns it. After that your key or controller button does that move, and the game picks left or right from the hand the ball is in.")
 for slot = 1, N do
 local c = UI.Card(pg, "Bind " .. slot)
 c.frame.Size = UDim2.new(0.5, -4, 0, 0)
@@ -11114,7 +11116,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.30", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.31", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -17267,14 +17269,14 @@ function UI.Keybind(card, text, get, setk)
 	show()
 	table.insert(UI.refresh, show)
 	b.Activated:Connect(function()
-		l.Text = "press key..."
+		l.Text = "press key or button..."
 		UI.listening = function(name)
 			setk(name or "")
 			show()
 			saveSoon()
 		end
 		task.delay(6, function()
-			if l.Text == "press key..." then
+			if l.Text == "press key or button..." then
 				UI.listening = nil
 				show()
 			end
@@ -17832,7 +17834,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.30  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.31  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -20313,7 +20315,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.30"
+				d.Text = "JHub V1.31"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -21645,7 +21647,9 @@ do
 		return prevOD(args)
 	end
 	UIS.InputBegan:Connect(function(i, gp)
-		if gp or i.UserInputType ~= Enum.UserInputType.Keyboard then return end
+		local it = i.UserInputType
+		local isBindInput = it == Enum.UserInputType.Keyboard or it == Enum.UserInputType.Gamepad1 or it == Enum.UserInputType.Gamepad2 or it == Enum.UserInputType.Gamepad3 or it == Enum.UserInputType.Gamepad4
+		if gp or not isBindInput then return end
 		for slot = 1, N do
 			local k = S["BindKey" .. slot]
 			if k and k ~= "" and k == i.KeyCode.Name then
@@ -21663,7 +21667,7 @@ do
 	end
 	local info = UI.Card(pg, "How binds work")
 	info.frame.Size = UDim2.new(1, -4, 0, 0)
-	UI.Note(info, "Pick a dribble move for each bind and a key. The first time you do a move with the game's own button, the script learns it. After that your key does that move, and the game picks left or right from the hand the ball is in.")
+	UI.Note(info, "Pick a dribble move for each bind and a key or controller button. The first time you do a move with the game's own button, the script learns it. After that your key or controller button does that move, and the game picks left or right from the hand the ball is in.")
 	for slot = 1, N do
 		local c = UI.Card(pg, "Bind " .. slot)
 		c.frame.Size = UDim2.new(0.5, -4, 0, 0)
