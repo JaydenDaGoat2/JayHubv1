@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.65"
+local VERSION = "v1.66"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -11288,6 +11288,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.66 - fixed the Discord join gate freezing the whole script for anyone whose click or isfile/writefile did not register - it no longer blocks the real menu from loading",
 "v1.65 - found it: the real walk animation id was being auto-deleted by a leftover bad-id filter, so Auto Guard could never have one; fixed and bootstrapped the confirmed real ids",
 "v1.64 - Remote Guard Recorder now also watches whoever is nearest to you, not just yourself, and logs their walk/guard animation ids too",
 "v1.63 - Auto Guard now detects AI opponents (no Player object) and uses the real HomeTeam attribute instead of Player.Team",
@@ -11594,12 +11595,13 @@ end
 
 -- DISCORD GATE: the first time the script runs, a window asks for a Discord join before anything else loads
 local GATE_VERSION = "v1.62"
+-- this used to block the whole script on the main thread for up to 10 minutes waiting for "I joined" - if isfile/writefile weren't supported on someone's executor, or the click just didn't register, the rest of JHub (the real menu, everything) would never load at all, which is exactly the "just a box" / "frozen" reports. Spawning it means the nag still shows, but the real script loads either way.
 local okGate, errGate = pcall(function()
 	local FILE = "JHub_discord_ok.txt"
 	local INVITE = "https://discord.gg/fk5TsZMrRM"
 	local seen = false
 	pcall(function() seen = type(isfile) == "function" and isfile(FILE) == true end)
-	if not seen then
+	if not seen then task.spawn(function()
 		local gui = Instance.new("ScreenGui")
 		gui.Name = "JHubDiscordGate"
 		gui.ResetOnSpawn = false
@@ -11680,7 +11682,7 @@ local okGate, errGate = pcall(function()
 			waited = waited + 0.1
 		end
 		pcall(function() gui:Destroy() end)
-	end
+	end) end
 end)
 if not okGate then warn("JHub: discord gate skipped - " .. tostring(errGate)) end
 
@@ -11728,7 +11730,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.65"
+local VERSION = "v1.66"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -23325,6 +23327,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.66 - fixed the Discord join gate freezing the whole script for anyone whose click or isfile/writefile did not register - it no longer blocks the real menu from loading",
 "v1.65 - found it: the real walk animation id was being auto-deleted by a leftover bad-id filter, so Auto Guard could never have one; fixed and bootstrapped the confirmed real ids",
 "v1.64 - Remote Guard Recorder now also watches whoever is nearest to you, not just yourself, and logs their walk/guard animation ids too",
 "v1.63 - Auto Guard now detects AI opponents (no Player object) and uses the real HomeTeam attribute instead of Player.Team",
