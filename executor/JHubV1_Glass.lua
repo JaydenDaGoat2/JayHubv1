@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.22 shot-line"
+local VERSION = "v1.23 shot-line"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -6329,7 +6329,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.22  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.23  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -8802,7 +8802,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.22"
+d.Text = "JHub V1.23"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -10340,6 +10340,137 @@ end)
 UI.Note(c, "Shoot about 10 times, then tap this and paste the result in the Discord. It lists each shot, the result, your ping and FPS.")
 end
 end
+-- DEX AND REMOTE SPY INSIDE THE ULTRA GAME RECORDER: the whole game tree, every shot package and every config module, plus the remote spy
+do
+local ultra = UI.lockedTools and UI.lockedTools[1]
+if ultra then
+local order = 0
+for _, ch in ipairs(ultra:GetChildren()) do
+if ch:IsA("GuiObject") then order = math.max(order, ch.LayoutOrder) end
+end
+local card = { frame = ultra, order = order }
+local RS = game:GetService("ReplicatedStorage")
+local function emit(file, text, what)
+pcall(function() if type(writefile) == "function" then writefile(file, text) end end)
+local clip = text
+if #clip > 900000 then clip = string.sub(clip, 1, 900000) .. "\n-- (cut here, the rest is in the file " .. file .. ")" end
+if type(setclipboard) == "function" then pcall(setclipboard, clip) end
+notify("Dex", string.format("%s: %.0f KB, saved as %s%s", what, #text / 1024, file, type(setclipboard) == "function" and " and copied" or ""), 6)
+end
+local function deep(t, depth, out, prefix, seen, cap)
+if seen[t] or depth > 7 or #out >= cap then return end
+seen[t] = true
+local keys = {}
+for k in pairs(t) do keys[#keys + 1] = k end
+pcall(table.sort, keys, function(a, b) return tostring(a) < tostring(b) end)
+for _, k in ipairs(keys) do
+if #out >= cap then
+out[#out + 1] = prefix .. "... (cut)"
+return
+end
+local v = t[k]
+local tv = typeof(v)
+if tv == "table" then
+out[#out + 1] = prefix .. tostring(k) .. " = {"
+deep(v, depth + 1, out, prefix .. "  ", seen, cap)
+out[#out + 1] = prefix .. "}"
+elseif tv == "function" then
+out[#out + 1] = prefix .. tostring(k) .. " = function"
+else
+out[#out + 1] = prefix .. tostring(k) .. " = " .. Rec.fmt(v, 0)
+end
+end
+end
+local function treeText()
+local out = { "== DEX TREE " .. tostring(VERSION) .. " | place " .. string.format("%.0f", game.PlaceId) .. " | " .. os.date("%Y-%m-%d %H:%M:%S") }
+local lines = 0
+local function walk(inst, depth, maxd)
+if depth > maxd then return end
+for _, c in ipairs(inst:GetChildren()) do
+if c ~= gui then
+local line = string.rep("  ", depth) .. c.Name .. " [" .. c.ClassName .. "]"
+if c:IsA("ValueBase") then line = line .. " = " .. tostring(c.Value) end
+if c:IsA("Animation") then line = line .. " id=" .. string.gsub(tostring(c.AnimationId), "rbxassetid://", "") end
+if c:IsA("Sound") then line = line .. " id=" .. tostring(c.SoundId) end
+if c:IsA("RemoteEvent") or c:IsA("RemoteFunction") then line = line .. " <remote>" end
+local n = 0
+for k, v in pairs(c:GetAttributes()) do
+n = n + 1
+if n <= 6 then line = line .. " @" .. k .. "=" .. tostring(v) end
+end
+out[#out + 1] = line
+lines = lines + 1
+if lines % 400 == 0 then task.wait() end
+walk(c, depth + 1, maxd)
+end
+end
+end
+for _, spec in ipairs({ { RS, 16 }, { game:GetService("ReplicatedFirst"), 6 }, { game:GetService("StarterPlayer"), 8 }, { game:GetService("StarterGui"), 8 },
+{ LP:FindFirstChild("PlayerGui"), 10 }, { workspace, 3 } }) do
+if spec[1] then
+out[#out + 1] = ""
+out[#out + 1] = "-- " .. spec[1]:GetFullName()
+pcall(walk, spec[1], 1, spec[2])
+end
+end
+return table.concat(out, "\n")
+end
+local function configText(filter, title)
+local out = { "== " .. title .. " " .. tostring(VERSION) .. " | place " .. string.format("%.0f", game.PlaceId) .. " | " .. os.date("%Y-%m-%d %H:%M:%S") }
+local seenMod, mods = {}, {}
+pcall(function()
+for _, m in ipairs(getloadedmodules()) do
+local ok, path = pcall(Bar.pathOf, m)
+if ok and string.find(path, filter, 1, true) and not seenMod[m] then seenMod[m] = true mods[#mods + 1] = { m = m, path = path } end
+end
+end)
+for _, m in ipairs(RS:GetDescendants()) do
+if m:IsA("ModuleScript") and not seenMod[m] then
+local path = m:GetFullName()
+if string.find(string.gsub(path, "%.", "/"), filter, 1, true) then seenMod[m] = true mods[#mods + 1] = { m = m, path = path } end
+end
+end
+table.sort(mods, function(a, b) return a.path < b.path end)
+for i, e in ipairs(mods) do
+if i % 5 == 0 then task.wait() end
+out[#out + 1] = ""
+out[#out + 1] = "-- " .. e.path
+local ok, res = pcall(require, e.m)
+if ok and type(res) == "table" then deep(res, 0, out, "  ", {}, #out + 2500)
+elseif ok then out[#out + 1] = "  = " .. tostring(res)
+else out[#out + 1] = "  (could not be read)" end
+end
+return table.concat(out, "\n"), #mods
+end
+UI.Note(card, "---- Dex and remote spy ----", "Text")
+UI.Buttons(card, {
+{ "Dex: game tree", function()
+notify("Dex", "Reading the whole game. This takes up to a minute.", 5)
+task.spawn(function() emit("JHub_dex_tree.txt", treeText(), "Game tree") end)
+end },
+{ "Dex: every jumpshot", function()
+notify("Dex", "Reading every shot setting.", 4)
+task.spawn(function()
+local text, n = configText("Config/Game/Shooting", "SHOT SETTINGS (every jumpshot)")
+emit("JHub_dex_shots.txt", text, n .. " shot modules")
+end)
+end },
+})
+UI.Buttons(card, {
+{ "Dex: all config", function()
+notify("Dex", "Reading every config module.", 4)
+task.spawn(function()
+local text, n = configText("Config", "ALL GAME CONFIG")
+emit("JHub_dex_config.txt", text, n .. " config modules")
+end)
+end },
+{ "Remote spy", function()
+local text = Rec.spyText()
+emit("JHub_remote_spy.txt", text, "Remote spy")
+end },
+})
+end
+end
 UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
@@ -10503,7 +10634,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.22", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.23", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -10584,7 +10715,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.22 shot-line"
+local VERSION = "v1.23 shot-line"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -17214,7 +17345,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.22  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.23  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -19695,7 +19826,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.22"
+				d.Text = "JHub V1.23"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -21231,6 +21362,137 @@ do
 			end
 		end)
 		UI.Note(c, "Shoot about 10 times, then tap this and paste the result in the Discord. It lists each shot, the result, your ping and FPS.")
+	end
+end
+-- DEX AND REMOTE SPY INSIDE THE ULTRA GAME RECORDER: the whole game tree, every shot package and every config module, plus the remote spy
+do
+	local ultra = UI.lockedTools and UI.lockedTools[1]
+	if ultra then
+		local order = 0
+		for _, ch in ipairs(ultra:GetChildren()) do
+			if ch:IsA("GuiObject") then order = math.max(order, ch.LayoutOrder) end
+		end
+		local card = { frame = ultra, order = order }
+		local RS = game:GetService("ReplicatedStorage")
+		local function emit(file, text, what)
+			pcall(function() if type(writefile) == "function" then writefile(file, text) end end)
+			local clip = text
+			if #clip > 900000 then clip = string.sub(clip, 1, 900000) .. "\n-- (cut here, the rest is in the file " .. file .. ")" end
+			if type(setclipboard) == "function" then pcall(setclipboard, clip) end
+			notify("Dex", string.format("%s: %.0f KB, saved as %s%s", what, #text / 1024, file, type(setclipboard) == "function" and " and copied" or ""), 6)
+		end
+		local function deep(t, depth, out, prefix, seen, cap)
+			if seen[t] or depth > 7 or #out >= cap then return end
+			seen[t] = true
+			local keys = {}
+			for k in pairs(t) do keys[#keys + 1] = k end
+			pcall(table.sort, keys, function(a, b) return tostring(a) < tostring(b) end)
+			for _, k in ipairs(keys) do
+				if #out >= cap then
+					out[#out + 1] = prefix .. "... (cut)"
+					return
+				end
+				local v = t[k]
+				local tv = typeof(v)
+				if tv == "table" then
+					out[#out + 1] = prefix .. tostring(k) .. " = {"
+					deep(v, depth + 1, out, prefix .. "  ", seen, cap)
+					out[#out + 1] = prefix .. "}"
+				elseif tv == "function" then
+					out[#out + 1] = prefix .. tostring(k) .. " = function"
+				else
+					out[#out + 1] = prefix .. tostring(k) .. " = " .. Rec.fmt(v, 0)
+				end
+			end
+		end
+		local function treeText()
+			local out = { "== DEX TREE " .. tostring(VERSION) .. " | place " .. string.format("%.0f", game.PlaceId) .. " | " .. os.date("%Y-%m-%d %H:%M:%S") }
+			local lines = 0
+			local function walk(inst, depth, maxd)
+				if depth > maxd then return end
+				for _, c in ipairs(inst:GetChildren()) do
+					if c ~= gui then
+						local line = string.rep("  ", depth) .. c.Name .. " [" .. c.ClassName .. "]"
+						if c:IsA("ValueBase") then line = line .. " = " .. tostring(c.Value) end
+						if c:IsA("Animation") then line = line .. " id=" .. string.gsub(tostring(c.AnimationId), "rbxassetid://", "") end
+						if c:IsA("Sound") then line = line .. " id=" .. tostring(c.SoundId) end
+						if c:IsA("RemoteEvent") or c:IsA("RemoteFunction") then line = line .. " <remote>" end
+						local n = 0
+						for k, v in pairs(c:GetAttributes()) do
+							n = n + 1
+							if n <= 6 then line = line .. " @" .. k .. "=" .. tostring(v) end
+						end
+						out[#out + 1] = line
+						lines = lines + 1
+						if lines % 400 == 0 then task.wait() end
+						walk(c, depth + 1, maxd)
+					end
+				end
+			end
+			for _, spec in ipairs({ { RS, 16 }, { game:GetService("ReplicatedFirst"), 6 }, { game:GetService("StarterPlayer"), 8 }, { game:GetService("StarterGui"), 8 },
+				{ LP:FindFirstChild("PlayerGui"), 10 }, { workspace, 3 } }) do
+				if spec[1] then
+					out[#out + 1] = ""
+					out[#out + 1] = "-- " .. spec[1]:GetFullName()
+					pcall(walk, spec[1], 1, spec[2])
+				end
+			end
+			return table.concat(out, "\n")
+		end
+		local function configText(filter, title)
+			local out = { "== " .. title .. " " .. tostring(VERSION) .. " | place " .. string.format("%.0f", game.PlaceId) .. " | " .. os.date("%Y-%m-%d %H:%M:%S") }
+			local seenMod, mods = {}, {}
+			pcall(function()
+				for _, m in ipairs(getloadedmodules()) do
+					local ok, path = pcall(Bar.pathOf, m)
+					if ok and string.find(path, filter, 1, true) and not seenMod[m] then seenMod[m] = true mods[#mods + 1] = { m = m, path = path } end
+				end
+			end)
+			for _, m in ipairs(RS:GetDescendants()) do
+				if m:IsA("ModuleScript") and not seenMod[m] then
+					local path = m:GetFullName()
+					if string.find(string.gsub(path, "%.", "/"), filter, 1, true) then seenMod[m] = true mods[#mods + 1] = { m = m, path = path } end
+				end
+			end
+			table.sort(mods, function(a, b) return a.path < b.path end)
+			for i, e in ipairs(mods) do
+				if i % 5 == 0 then task.wait() end
+				out[#out + 1] = ""
+				out[#out + 1] = "-- " .. e.path
+				local ok, res = pcall(require, e.m)
+				if ok and type(res) == "table" then deep(res, 0, out, "  ", {}, #out + 2500)
+				elseif ok then out[#out + 1] = "  = " .. tostring(res)
+				else out[#out + 1] = "  (could not be read)" end
+			end
+			return table.concat(out, "\n"), #mods
+		end
+		UI.Note(card, "---- Dex and remote spy ----", "Text")
+		UI.Buttons(card, {
+			{ "Dex: game tree", function()
+				notify("Dex", "Reading the whole game. This takes up to a minute.", 5)
+				task.spawn(function() emit("JHub_dex_tree.txt", treeText(), "Game tree") end)
+			end },
+			{ "Dex: every jumpshot", function()
+				notify("Dex", "Reading every shot setting.", 4)
+				task.spawn(function()
+					local text, n = configText("Config/Game/Shooting", "SHOT SETTINGS (every jumpshot)")
+					emit("JHub_dex_shots.txt", text, n .. " shot modules")
+				end)
+			end },
+		})
+		UI.Buttons(card, {
+			{ "Dex: all config", function()
+				notify("Dex", "Reading every config module.", 4)
+				task.spawn(function()
+					local text, n = configText("Config", "ALL GAME CONFIG")
+					emit("JHub_dex_config.txt", text, n .. " config modules")
+				end)
+			end },
+			{ "Remote spy", function()
+				local text = Rec.spyText()
+				emit("JHub_remote_spy.txt", text, "Remote spy")
+			end },
+		})
 	end
 end
 UI.syncAuto()
