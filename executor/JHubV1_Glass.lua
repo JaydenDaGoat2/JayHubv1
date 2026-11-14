@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.56"
+local VERSION = "v1.57"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -8000,10 +8000,9 @@ task.wait(0.4)
 end
 end)
 
--- Auto Guard and Auto Grind are removed for now: tabs hidden, features forced off
-S.AG, S.AB, S.AP = false, false, false
+-- Auto Grind is unfinished and stays hidden; Auto Guard no longer force-hidden or force-disabled
 for _, p in ipairs(UI.pages) do
-	if p.name == "Auto Guard" or p.name == "Auto Grind" then p.lbl.Parent.Visible = false end
+if p.name == "Auto Grind" then p.lbl.Parent.Visible = false end
 end
 
 -- UI customizations goes to the bottom of the tab list
@@ -11207,6 +11206,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.57 - found it: a leftover line was hiding the Auto Guard tab and force-disabling it every load",
 "v1.56 - rebuilt Auto Guard tab self-contained with its own 6022 code lock",
 "v1.55 - Auto Guard now locked behind the Locked tab code (6022), same as the other tools",
 "v1.54 - Auto Guard rebuilt plain again (CFrame + real animation, no simulated input); recorder moved onto its own tab",
@@ -11503,7 +11503,7 @@ end
 ]==]
 
 -- DISCORD GATE: the first time the script runs, a window asks for a Discord join before anything else loads
-local GATE_VERSION = "v1.56"
+local GATE_VERSION = "v1.57"
 local okGate, errGate = pcall(function()
 	local FILE = "JHub_discord_ok.txt"
 	local INVITE = "https://discord.gg/fk5TsZMrRM"
@@ -11638,7 +11638,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.56"
+local VERSION = "v1.57"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -19946,13 +19946,12 @@ do
 		end
 	end)
 
-	-- Auto Guard and Auto Grind are removed for now: tabs hidden, features forced off
-	S.AG, S.AB, S.AP = false, false, false
-	for _, p in ipairs(UI.pages) do
-		if p.name == "Auto Guard" or p.name == "Auto Grind" then p.lbl.Parent.Visible = false end
-	end
-	
-	-- UI customizations goes to the bottom of the tab list
+	-- Auto Grind is unfinished and stays hidden; Auto Guard no longer force-hidden or force-disabled
+for _, p in ipairs(UI.pages) do
+if p.name == "Auto Grind" then p.lbl.Parent.Visible = false end
+end
+
+-- UI customizations goes to the bottom of the tab list
 	for _, p in ipairs(UI.pages) do
 		if p.name == "UI" then p.lbl.Parent.LayoutOrder = 999 end
 	end
@@ -23153,6 +23152,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.57 - found it: a leftover line was hiding the Auto Guard tab and force-disabling it every load",
 "v1.56 - rebuilt Auto Guard tab self-contained with its own 6022 code lock",
 "v1.55 - Auto Guard now locked behind the Locked tab code (6022), same as the other tools",
 "v1.54 - Auto Guard rebuilt plain again (CFrame + real animation, no simulated input); recorder moved onto its own tab",
