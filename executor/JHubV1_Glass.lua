@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.78"
+local VERSION = "v1.79"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -10505,8 +10505,12 @@ return prevMove(dir, mul)
 end
 local prevGuard = Bot.guardStep
 function Bot.guardStep(me, others, forced)
+local ok = prevGuard(me, others, forced)
+-- only count as "actively guarding" (for animation purposes) once close to the real guard spot - this used to set guardingNow on every single call, which is every tick Auto Guard runs at all including while still chasing from far away, so the guard/defensive animation got picked almost 100% of the time and the walk animation never got a chance to show during approach
+if ok and Bot.dbg and Bot.dbg.dist and Bot.dbg.dist < 3 then
 Bot.guardingNow = tick()
-return prevGuard(me, others, forced)
+end
+return ok
 end
 -- the guard gives some room by default instead of hugging him
 if (S.AGDist or 0) < 4 then S.AGDist = 4.5 end
@@ -11377,6 +11381,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.79 - found why Auto Rebound had a walk animation but Auto Guard did not: a wobble wrapper was marking Auto Guard as actively guarding on every single tick it ran, even mid-chase, so the walk animation never got picked - fixed",
 "v1.78 - Humanoid:Move did nothing for the walk animation either (same reason it did nothing for movement) - now manually plays the confirmed real walk/guard animation on top of CFrame movement",
 "v1.77 - added an option to only drive Auto Guard while you hold the real Guard button yourself, instead of it pressing the button for you",
 "v1.76 - confirmed Mover.send also produced zero real movement (sent ok, speed stayed 0); back to CFrame for actual position, with Humanoid:Move running alongside it at the same time purely so the real walk animation plays",
@@ -11739,7 +11744,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.78"
+local VERSION = "v1.79"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -22554,8 +22559,12 @@ do
 	end
 	local prevGuard = Bot.guardStep
 	function Bot.guardStep(me, others, forced)
-		Bot.guardingNow = tick()
-		return prevGuard(me, others, forced)
+		local ok = prevGuard(me, others, forced)
+		-- only count as "actively guarding" (for animation purposes) once close to the real guard spot - this used to set guardingNow on every single call, which is every tick Auto Guard runs at all including while still chasing from far away, so the guard/defensive animation got picked almost 100% of the time and the walk animation never got a chance to show during approach
+		if ok and Bot.dbg and Bot.dbg.dist and Bot.dbg.dist < 3 then
+			Bot.guardingNow = tick()
+		end
+		return ok
 	end
 	-- the guard gives some room by default instead of hugging him
 	if (S.AGDist or 0) < 4 then S.AGDist = 4.5 end
@@ -23426,6 +23435,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.79 - found why Auto Rebound had a walk animation but Auto Guard did not: a wobble wrapper was marking Auto Guard as actively guarding on every single tick it ran, even mid-chase, so the walk animation never got picked - fixed",
 "v1.78 - Humanoid:Move did nothing for the walk animation either (same reason it did nothing for movement) - now manually plays the confirmed real walk/guard animation on top of CFrame movement",
 "v1.77 - added an option to only drive Auto Guard while you hold the real Guard button yourself, instead of it pressing the button for you",
 "v1.76 - confirmed Mover.send also produced zero real movement (sent ok, speed stayed 0); back to CFrame for actual position, with Humanoid:Move running alongside it at the same time purely so the real walk animation plays",
