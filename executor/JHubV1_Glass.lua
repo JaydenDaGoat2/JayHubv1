@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.79"
+local VERSION = "v1.80"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -7519,8 +7519,8 @@ bind(RunService.Stepped, function(_, dt)
 	if moving then
 		r.CFrame = r.CFrame + Bot.cmd * Speed.gameWS * Bot.mul * dt
 		Mover.sync(r)
-		local guarding = now - (Bot.guardingNow or 0) < 0.3
-		local id = (guarding and S.GuardAnimId and S.GuardAnimId ~= "") and S.GuardAnimId or S.WalkAnimId
+		-- GuardAnimId never actually won out over the game's own real defensive animation in any recorder log, stationary or moving - so stop competing with it and just always play the real walk animation whenever actually moving, guarding or not
+		local id = S.WalkAnimId
 		if id ~= activeId then
 			if activeTrack then pcall(function() activeTrack:Stop(0.1) end) end
 			activeTrack = trackFor(id)
@@ -11381,6 +11381,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.80 - GuardAnimId never once beat the game\'s own real defensive animation in testing, so stopped fighting it - Auto Guard now always plays the real walk animation whenever actually moving, guarding or not",
 "v1.79 - found why Auto Rebound had a walk animation but Auto Guard did not: a wobble wrapper was marking Auto Guard as actively guarding on every single tick it ran, even mid-chase, so the walk animation never got picked - fixed",
 "v1.78 - Humanoid:Move did nothing for the walk animation either (same reason it did nothing for movement) - now manually plays the confirmed real walk/guard animation on top of CFrame movement",
 "v1.77 - added an option to only drive Auto Guard while you hold the real Guard button yourself, instead of it pressing the button for you",
@@ -11744,7 +11745,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.79"
+local VERSION = "v1.80"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -19572,8 +19573,8 @@ do
 		if moving then
 			r.CFrame = r.CFrame + Bot.cmd * Speed.gameWS * Bot.mul * dt
 			Mover.sync(r)
-			local guarding = now - (Bot.guardingNow or 0) < 0.3
-			local id = (guarding and S.GuardAnimId and S.GuardAnimId ~= "") and S.GuardAnimId or S.WalkAnimId
+			-- GuardAnimId never actually won out over the game's own real defensive animation in any recorder log, stationary or moving - so stop competing with it and just always play the real walk animation whenever actually moving, guarding or not
+			local id = S.WalkAnimId
 			if id ~= activeId then
 				if activeTrack then pcall(function() activeTrack:Stop(0.1) end) end
 				activeTrack = trackFor(id)
@@ -23435,6 +23436,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.80 - GuardAnimId never once beat the game\'s own real defensive animation in testing, so stopped fighting it - Auto Guard now always plays the real walk animation whenever actually moving, guarding or not",
 "v1.79 - found why Auto Rebound had a walk animation but Auto Guard did not: a wobble wrapper was marking Auto Guard as actively guarding on every single tick it ran, even mid-chase, so the walk animation never got picked - fixed",
 "v1.78 - Humanoid:Move did nothing for the walk animation either (same reason it did nothing for movement) - now manually plays the confirmed real walk/guard animation on top of CFrame movement",
 "v1.77 - added an option to only drive Auto Guard while you hold the real Guard button yourself, instead of it pressing the button for you",
