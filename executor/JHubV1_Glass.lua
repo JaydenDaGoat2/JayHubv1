@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.55"
+local VERSION = "v1.56"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -7839,9 +7839,28 @@ UI.Note(ns, "Stops stun animations, clears stun flags on your character and gets
 end
 
 local GP = UI.Page("Auto Guard", "A")
+do
+local AG_CODE = "6022"
+local typed = ""
+local lock = UI.Card(GP, "Auto Guard (locked)")
+UI.Input(lock, "Code", { get = function() return typed end, set = function(v) typed = tostring(v or "") end }, nil, "enter the code")
+UI.Note(lock, "Auto Guard is locked. Enter the code to open it.")
+local contentFrames = {}
+UI.Button(lock, "Unlock", function()
+if string.gsub(typed, "%s", "") == AG_CODE then
+lock.frame.Visible = false
+for _, f in ipairs(contentFrames) do f.Visible = true end
+notify("Auto Guard", "Unlocked", 3)
+else
+notify("Auto Guard", "Wrong code", 3)
+end
+end, true)
 local g1 = UI.Card(GP, "Auto guard")
+g1.frame.Visible = false
+contentFrames[#contentFrames + 1] = g1.frame
 UI.Toggle(g1, "Auto guard", "AG")
 UI.Dropdown(g1, "Who to guard", "AGTarget", { "Ball handler", "Closest to me", "Closest to hoop" })
+UI.Toggle(g1, "Only guard the player who has the ball", "AGOnlyBall")
 UI.Slider(g1, "Guard distance (studs in front)", "AGDist", 1, 12, 0.5, 1)
 UI.Note(g1, "Holds the real Guard button while guarding, same as a real player, and uses Guard speed from the Players tab for how fast it closes out.")
 UI.Keybind(g1, "Guard key (keyboard, only if there is no on-screen Guard button)", function() return S.GuardKey end, function(v) S.GuardKey = v end)
@@ -7855,12 +7874,67 @@ UI.Toggle(g1, "Look human (sway, hesitate, player speed)", "AGHuman")
 UI.Slider(g1, "How human", "AGHumanAmt", 0, 100, 5, 0, "%")
 UI.Note(g1, "It stands between the player and the hoop, and leads where they are going. Stay in front no matter what ignores range and reaction and chases at double speed.")
 local g2 = UI.Card(GP, "Auto block")
+g2.frame.Visible = false
+contentFrames[#contentFrames + 1] = g2.frame
 UI.Toggle(g2, "Auto block", "AB")
 UI.Slider(g2, "Block range", "ABRange", 4, 30, 1, 0, " studs")
 UI.Slider(g2, "Block timing (delay after the shot starts)", "ABDelay", 0, 0.5, 0.01, 2, "s")
 UI.Slider(g2, "Block chance", "ABChance", 0, 100, 5, 0, "%")
 UI.Keybind(g2, "Block / jump key", function() return S.ABKey end, function(v) S.ABKey = (v ~= "" and v) or "Space" end)
 UI.Note(g2, "Blocks by jumping at the shooter. If your game blocks with another button, set it here.")
+local rc = UI.Card(GP, "Remote Guard Recorder")
+rc.frame.Visible = false
+contentFrames[#contentFrames + 1] = rc.frame
+UI.Note(rc, "Turn this on, then guard someone for real for 10-15 seconds (walk toward them, away, side to side). It catches every animation that plays on you - priority, speed, looped or not - plus your real position, HoldingG, Action and state each tick.")
+JH.rguardLog = JH.rguardLog or {}
+local rconn
+UI.Toggle(rc, "Record everything about guarding", "RGuardOn", function(v)
+if v then
+JH.rguardLog = {}
+local h = hum()
+if h then
+rconn = h.AnimationPlayed:Connect(function(track)
+if not S.RGuardOn then return end
+table.insert(JH.rguardLog, string.format("%s  anim  name=%s  id=%s  prio=%s  looped=%s  speed=%.2f",
+os.date("%H:%M:%S"), track.Name, (track.Animation and track.Animation.AnimationId) or "?", track.Priority.Name, tostring(track.Looped), track.Speed))
+if #JH.rguardLog > 500 then table.remove(JH.rguardLog, 1) end
+end)
+end
+notify("Remote Guard Recorder", "Recording. Guard someone for real now.", 5)
+else
+if rconn then rconn:Disconnect() rconn = nil end
+notify("Remote Guard Recorder", "Stopped. Tap Copy to get the report.", 4)
+end
+end)
+local rLastPos, rLastLog = nil, 0
+bind(RunService.Heartbeat, function()
+if not S.RGuardOn then return end
+local now = tick()
+if now - rLastLog < 0.2 then return end
+rLastLog = now
+local h, r = hum(), Mover.body()
+if not h or not r then return end
+local speed = 0
+if rLastPos then speed = flat(r.Position - rLastPos).Magnitude / 0.2 end
+rLastPos = r.Position
+local c2 = char()
+table.insert(JH.rguardLog, string.format("%s  move  state=%s  speed=%.1f  holdingG=%s  action=%s  guarding=%s",
+os.date("%H:%M:%S"), h:GetState().Name, speed, tostring(c2 and c2:GetAttribute("HoldingG")), tostring(c2 and c2:GetAttribute("Action")), tostring(Bot.status or "")))
+if #JH.rguardLog > 500 then table.remove(JH.rguardLog, 1) end
+end)
+UI.Button(rc, "Copy remote guard log", function()
+local rlines = { "== REMOTE GUARD RECORDER " .. tostring(VERSION) .. " | " .. os.date("%Y-%m-%d %H:%M:%S") }
+if #JH.rguardLog == 0 then
+rlines[#rlines + 1] = "(nothing recorded yet, turn it on and guard someone for real first)"
+else
+for _, l in ipairs(JH.rguardLog) do rlines[#rlines + 1] = l end
+end
+local text = table.concat(rlines, "\n")
+pcall(function() if type(writefile) == "function" then writefile("JHub_remote_guard_log.txt", text) end end)
+if type(setclipboard) == "function" then pcall(setclipboard, text) end
+notify("Remote Guard Recorder", string.format("%.0f KB, saved as JHub_remote_guard_log.txt and copied", #text / 1024), 6)
+end)
+end
 
 local RP = UI.Page("Rebound", "R")
 local r1 = UI.Card(RP, "Auto rebound")
@@ -10319,96 +10393,6 @@ forced = "Ball handler"
 end
 return prevG(me, others, forced)
 end
-local gp
-for _, p in ipairs(UI.pages) do
-if p.name == "Auto Guard" then gp = p end
-end
-if gp and UI.lockedTools then
-local c = UI.Card(gp, "Who to guard")
-UI.Toggle(c, "Only guard the player who has the ball", "AGOnlyBall")
-UI.Note(c, "When nobody on the other team has the ball, auto guard stops and does nothing.")
-table.insert(UI.lockedTools, 3, c.frame)
-c.frame.Visible = false
-end
-end
--- REMOTE GUARD RECORDER: catches every animation (not just movement ones) and every bit of movement state while you guard for real, so a real fix can be built from actual data instead of another guess
-do
-local gp2
-for _, p in ipairs(UI.pages) do
-if p.name == "Auto Guard" then gp2 = p end
-end
-if gp2 and UI.lockedTools then
-local rc = UI.Card(gp2, "Remote Guard Recorder")
-UI.Note(rc, "Turn this on, then guard someone for real for 10-15 seconds (walk toward them, away, side to side). It catches every animation that plays on you - priority, speed, looped or not - plus your real position, HoldingG, Action and state each tick.")
-JH.rguardLog = JH.rguardLog or {}
-local conn
-UI.Toggle(rc, "Record everything about guarding", "RGuardOn", function(v)
-if v then
-JH.rguardLog = {}
-local h = hum()
-if h then
-conn = h.AnimationPlayed:Connect(function(track)
-if not S.RGuardOn then return end
-table.insert(JH.rguardLog, string.format("%s  anim  name=%s  id=%s  prio=%s  looped=%s  speed=%.2f",
-os.date("%H:%M:%S"), track.Name, (track.Animation and track.Animation.AnimationId) or "?", track.Priority.Name, tostring(track.Looped), track.Speed))
-if #JH.rguardLog > 500 then table.remove(JH.rguardLog, 1) end
-end)
-end
-notify("Remote Guard Recorder", "Recording. Guard someone for real now.", 5)
-else
-if conn then conn:Disconnect() conn = nil end
-notify("Remote Guard Recorder", "Stopped. Tap Copy to get the report.", 4)
-end
-end)
-local lastPos, lastLog = nil, 0
-bind(RunService.Heartbeat, function()
-if not S.RGuardOn then return end
-local now = tick()
-if now - lastLog < 0.2 then return end
-lastLog = now
-local h, r = hum(), Mover.body()
-if not h or not r then return end
-local speed = 0
-if lastPos then speed = flat(r.Position - lastPos).Magnitude / 0.2 end
-lastPos = r.Position
-local c2 = char()
-table.insert(JH.rguardLog, string.format("%s  move  state=%s  speed=%.1f  holdingG=%s  action=%s  guarding=%s",
-os.date("%H:%M:%S"), h:GetState().Name, speed, tostring(c2 and c2:GetAttribute("HoldingG")), tostring(c2 and c2:GetAttribute("Action")), tostring(Bot.status or "")))
-if #JH.rguardLog > 500 then table.remove(JH.rguardLog, 1) end
-end)
-UI.Button(rc, "Copy remote guard log", function()
-local lines = { "== REMOTE GUARD RECORDER " .. tostring(VERSION) .. " | " .. os.date("%Y-%m-%d %H:%M:%S") }
-if #JH.rguardLog == 0 then
-lines[#lines + 1] = "(nothing recorded yet, turn it on and guard someone for real first)"
-else
-for _, l in ipairs(JH.rguardLog) do lines[#lines + 1] = l end
-end
-local text = table.concat(lines, "\n")
-pcall(function() if type(writefile) == "function" then writefile("JHub_remote_guard_log.txt", text) end end)
-if type(setclipboard) == "function" then pcall(setclipboard, text) end
-notify("Remote Guard Recorder", string.format("%.0f KB, saved as JHub_remote_guard_log.txt and copied", #text / 1024), 6)
-end)
-end
-end
--- AUTO GUARD BEHIND THE SAME CODE AS THE LOCKED TAB: the toggle and its settings stay hidden until 6022 is entered on the Locked tab
-do
-local gp3
-for _, p in ipairs(UI.pages) do
-if p.name == "Auto Guard" then gp3 = p end
-end
-if gp3 and UI.lockedTools then
-for _, f in ipairs(gp3.frame:GetChildren()) do
-if f:IsA("Frame") then
-for _, d in ipairs(f:GetDescendants()) do
-if d:IsA("TextLabel") and d.Text == "Auto guard" then
-f.Visible = false
-table.insert(UI.lockedTools, f)
-break
-end
-end
-end
-end
-end
 end
 -- UPDATE BUTTON: checks GitHub for the newest version and loads it
 do
@@ -11223,6 +11207,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.56 - rebuilt Auto Guard tab self-contained with its own 6022 code lock",
 "v1.55 - Auto Guard now locked behind the Locked tab code (6022), same as the other tools",
 "v1.54 - Auto Guard rebuilt plain again (CFrame + real animation, no simulated input); recorder moved onto its own tab",
 "v1.53 - added Remote Guard Recorder: catches every animation and movement state while guarding",
@@ -11518,7 +11503,7 @@ end
 ]==]
 
 -- DISCORD GATE: the first time the script runs, a window asks for a Discord join before anything else loads
-local GATE_VERSION = "v1.55"
+local GATE_VERSION = "v1.56"
 local okGate, errGate = pcall(function()
 	local FILE = "JHub_discord_ok.txt"
 	local INVITE = "https://discord.gg/fk5TsZMrRM"
@@ -11653,7 +11638,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.55"
+local VERSION = "v1.56"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -19800,28 +19785,102 @@ do
 	end
 
 	local GP = UI.Page("Auto Guard", "A")
-	local g1 = UI.Card(GP, "Auto guard")
-	UI.Toggle(g1, "Auto guard", "AG")
-	UI.Dropdown(g1, "Who to guard", "AGTarget", { "Ball handler", "Closest to me", "Closest to hoop" })
-	UI.Slider(g1, "Guard distance (studs in front)", "AGDist", 1, 12, 0.5, 1)
-	UI.Note(g1, "Holds the real Guard button while guarding, same as a real player, and uses Guard speed from the Players tab for how fast it closes out.")
-UI.Keybind(g1, "Guard key (keyboard, only if there is no on-screen Guard button)", function() return S.GuardKey end, function(v) S.GuardKey = v end)
-	UI.Slider(g1, "Reaction time", "AGReact", 0, 0.5, 0.01, 2, "s")
-	UI.Slider(g1, "Prediction (looks ahead)", "AGPredict", 0, 0.6, 0.02, 2, "s")
-	UI.Slider(g1, "Guard range", "AGRange", 10, 120, 5, 0, " studs")
-	UI.Toggle(g1, "Stay in front no matter what", "AGLock")
-	UI.Toggle(g1, "Face the player I guard", "AGFace")
-	UI.Toggle(g1, "Sprint to catch up", "AGSprint")
-	UI.Toggle(g1, "Look human (sway, hesitate, player speed)", "AGHuman")
-	UI.Slider(g1, "How human", "AGHumanAmt", 0, 100, 5, 0, "%")
-	UI.Note(g1, "It stands between the player and the hoop, and leads where they are going. Stay in front no matter what ignores range and reaction and chases at double speed.")
-	local g2 = UI.Card(GP, "Auto block")
-	UI.Toggle(g2, "Auto block", "AB")
-	UI.Slider(g2, "Block range", "ABRange", 4, 30, 1, 0, " studs")
-	UI.Slider(g2, "Block timing (delay after the shot starts)", "ABDelay", 0, 0.5, 0.01, 2, "s")
-	UI.Slider(g2, "Block chance", "ABChance", 0, 100, 5, 0, "%")
-	UI.Keybind(g2, "Block / jump key", function() return S.ABKey end, function(v) S.ABKey = (v ~= "" and v) or "Space" end)
-	UI.Note(g2, "Blocks by jumping at the shooter. If your game blocks with another button, set it here.")
+	do
+		local AG_CODE = "6022"
+		local typed = ""
+		local lock = UI.Card(GP, "Auto Guard (locked)")
+		UI.Input(lock, "Code", { get = function() return typed end, set = function(v) typed = tostring(v or "") end }, nil, "enter the code")
+		UI.Note(lock, "Auto Guard is locked. Enter the code to open it.")
+		local contentFrames = {}
+		UI.Button(lock, "Unlock", function()
+			if string.gsub(typed, "%s", "") == AG_CODE then
+				lock.frame.Visible = false
+				for _, f in ipairs(contentFrames) do f.Visible = true end
+				notify("Auto Guard", "Unlocked", 3)
+			else
+				notify("Auto Guard", "Wrong code", 3)
+			end
+		end, true)
+		local g1 = UI.Card(GP, "Auto guard")
+		g1.frame.Visible = false
+		contentFrames[#contentFrames + 1] = g1.frame
+		UI.Toggle(g1, "Auto guard", "AG")
+		UI.Dropdown(g1, "Who to guard", "AGTarget", { "Ball handler", "Closest to me", "Closest to hoop" })
+		UI.Toggle(g1, "Only guard the player who has the ball", "AGOnlyBall")
+		UI.Slider(g1, "Guard distance (studs in front)", "AGDist", 1, 12, 0.5, 1)
+		UI.Note(g1, "Holds the real Guard button while guarding, same as a real player, and uses Guard speed from the Players tab for how fast it closes out.")
+		UI.Keybind(g1, "Guard key (keyboard, only if there is no on-screen Guard button)", function() return S.GuardKey end, function(v) S.GuardKey = v end)
+		UI.Slider(g1, "Reaction time", "AGReact", 0, 0.5, 0.01, 2, "s")
+		UI.Slider(g1, "Prediction (looks ahead)", "AGPredict", 0, 0.6, 0.02, 2, "s")
+		UI.Slider(g1, "Guard range", "AGRange", 10, 120, 5, 0, " studs")
+		UI.Toggle(g1, "Stay in front no matter what", "AGLock")
+		UI.Toggle(g1, "Face the player I guard", "AGFace")
+		UI.Toggle(g1, "Sprint to catch up", "AGSprint")
+		UI.Toggle(g1, "Look human (sway, hesitate, player speed)", "AGHuman")
+		UI.Slider(g1, "How human", "AGHumanAmt", 0, 100, 5, 0, "%")
+		UI.Note(g1, "It stands between the player and the hoop, and leads where they are going. Stay in front no matter what ignores range and reaction and chases at double speed.")
+		local g2 = UI.Card(GP, "Auto block")
+		g2.frame.Visible = false
+		contentFrames[#contentFrames + 1] = g2.frame
+		UI.Toggle(g2, "Auto block", "AB")
+		UI.Slider(g2, "Block range", "ABRange", 4, 30, 1, 0, " studs")
+		UI.Slider(g2, "Block timing (delay after the shot starts)", "ABDelay", 0, 0.5, 0.01, 2, "s")
+		UI.Slider(g2, "Block chance", "ABChance", 0, 100, 5, 0, "%")
+		UI.Keybind(g2, "Block / jump key", function() return S.ABKey end, function(v) S.ABKey = (v ~= "" and v) or "Space" end)
+		UI.Note(g2, "Blocks by jumping at the shooter. If your game blocks with another button, set it here.")
+		local rc = UI.Card(GP, "Remote Guard Recorder")
+		rc.frame.Visible = false
+		contentFrames[#contentFrames + 1] = rc.frame
+		UI.Note(rc, "Turn this on, then guard someone for real for 10-15 seconds (walk toward them, away, side to side). It catches every animation that plays on you - priority, speed, looped or not - plus your real position, HoldingG, Action and state each tick.")
+		JH.rguardLog = JH.rguardLog or {}
+		local rconn
+		UI.Toggle(rc, "Record everything about guarding", "RGuardOn", function(v)
+			if v then
+				JH.rguardLog = {}
+				local h = hum()
+				if h then
+					rconn = h.AnimationPlayed:Connect(function(track)
+						if not S.RGuardOn then return end
+						table.insert(JH.rguardLog, string.format("%s  anim  name=%s  id=%s  prio=%s  looped=%s  speed=%.2f",
+							os.date("%H:%M:%S"), track.Name, (track.Animation and track.Animation.AnimationId) or "?", track.Priority.Name, tostring(track.Looped), track.Speed))
+						if #JH.rguardLog > 500 then table.remove(JH.rguardLog, 1) end
+					end)
+				end
+				notify("Remote Guard Recorder", "Recording. Guard someone for real now.", 5)
+			else
+				if rconn then rconn:Disconnect() rconn = nil end
+				notify("Remote Guard Recorder", "Stopped. Tap Copy to get the report.", 4)
+			end
+		end)
+		local rLastPos, rLastLog = nil, 0
+		bind(RunService.Heartbeat, function()
+			if not S.RGuardOn then return end
+			local now = tick()
+			if now - rLastLog < 0.2 then return end
+			rLastLog = now
+			local h, r = hum(), Mover.body()
+			if not h or not r then return end
+			local speed = 0
+			if rLastPos then speed = flat(r.Position - rLastPos).Magnitude / 0.2 end
+			rLastPos = r.Position
+			local c2 = char()
+			table.insert(JH.rguardLog, string.format("%s  move  state=%s  speed=%.1f  holdingG=%s  action=%s  guarding=%s",
+				os.date("%H:%M:%S"), h:GetState().Name, speed, tostring(c2 and c2:GetAttribute("HoldingG")), tostring(c2 and c2:GetAttribute("Action")), tostring(Bot.status or "")))
+			if #JH.rguardLog > 500 then table.remove(JH.rguardLog, 1) end
+		end)
+		UI.Button(rc, "Copy remote guard log", function()
+			local rlines = { "== REMOTE GUARD RECORDER " .. tostring(VERSION) .. " | " .. os.date("%Y-%m-%d %H:%M:%S") }
+			if #JH.rguardLog == 0 then
+				rlines[#rlines + 1] = "(nothing recorded yet, turn it on and guard someone for real first)"
+			else
+				for _, l in ipairs(JH.rguardLog) do rlines[#rlines + 1] = l end
+			end
+			local text = table.concat(rlines, "\n")
+			pcall(function() if type(writefile) == "function" then writefile("JHub_remote_guard_log.txt", text) end end)
+			if type(setclipboard) == "function" then pcall(setclipboard, text) end
+			notify("Remote Guard Recorder", string.format("%.0f KB, saved as JHub_remote_guard_log.txt and copied", #text / 1024), 6)
+		end)
+	end
 
 	local RP = UI.Page("Rebound", "R")
 	local r1 = UI.Card(RP, "Auto rebound")
@@ -22280,96 +22339,6 @@ do
 		end
 		return prevG(me, others, forced)
 	end
-	local gp
-	for _, p in ipairs(UI.pages) do
-		if p.name == "Auto Guard" then gp = p end
-	end
-	if gp and UI.lockedTools then
-		local c = UI.Card(gp, "Who to guard")
-		UI.Toggle(c, "Only guard the player who has the ball", "AGOnlyBall")
-		UI.Note(c, "When nobody on the other team has the ball, auto guard stops and does nothing.")
-		table.insert(UI.lockedTools, 3, c.frame)
-		c.frame.Visible = false
-	end
-end
--- REMOTE GUARD RECORDER: catches every animation (not just movement ones) and every bit of movement state while you guard for real, so a real fix can be built from actual data instead of another guess
-do
-	local gp2
-	for _, p in ipairs(UI.pages) do
-		if p.name == "Auto Guard" then gp2 = p end
-	end
-	if gp2 and UI.lockedTools then
-		local rc = UI.Card(gp2, "Remote Guard Recorder")
-		UI.Note(rc, "Turn this on, then guard someone for real for 10-15 seconds (walk toward them, away, side to side). It catches every animation that plays on you - priority, speed, looped or not - plus your real position, HoldingG, Action and state each tick.")
-		JH.rguardLog = JH.rguardLog or {}
-		local conn
-		UI.Toggle(rc, "Record everything about guarding", "RGuardOn", function(v)
-			if v then
-				JH.rguardLog = {}
-				local h = hum()
-				if h then
-					conn = h.AnimationPlayed:Connect(function(track)
-						if not S.RGuardOn then return end
-						table.insert(JH.rguardLog, string.format("%s  anim  name=%s  id=%s  prio=%s  looped=%s  speed=%.2f",
-							os.date("%H:%M:%S"), track.Name, (track.Animation and track.Animation.AnimationId) or "?", track.Priority.Name, tostring(track.Looped), track.Speed))
-						if #JH.rguardLog > 500 then table.remove(JH.rguardLog, 1) end
-					end)
-				end
-				notify("Remote Guard Recorder", "Recording. Guard someone for real now.", 5)
-			else
-				if conn then conn:Disconnect() conn = nil end
-				notify("Remote Guard Recorder", "Stopped. Tap Copy to get the report.", 4)
-			end
-		end)
-		local lastPos, lastLog = nil, 0
-		bind(RunService.Heartbeat, function()
-			if not S.RGuardOn then return end
-			local now = tick()
-			if now - lastLog < 0.2 then return end
-			lastLog = now
-			local h, r = hum(), Mover.body()
-			if not h or not r then return end
-			local speed = 0
-			if lastPos then speed = flat(r.Position - lastPos).Magnitude / 0.2 end
-			lastPos = r.Position
-			local c2 = char()
-			table.insert(JH.rguardLog, string.format("%s  move  state=%s  speed=%.1f  holdingG=%s  action=%s  guarding=%s",
-				os.date("%H:%M:%S"), h:GetState().Name, speed, tostring(c2 and c2:GetAttribute("HoldingG")), tostring(c2 and c2:GetAttribute("Action")), tostring(Bot.status or "")))
-			if #JH.rguardLog > 500 then table.remove(JH.rguardLog, 1) end
-		end)
-		UI.Button(rc, "Copy remote guard log", function()
-			local lines = { "== REMOTE GUARD RECORDER " .. tostring(VERSION) .. " | " .. os.date("%Y-%m-%d %H:%M:%S") }
-			if #JH.rguardLog == 0 then
-				lines[#lines + 1] = "(nothing recorded yet, turn it on and guard someone for real first)"
-			else
-				for _, l in ipairs(JH.rguardLog) do lines[#lines + 1] = l end
-			end
-			local text = table.concat(lines, "\n")
-			pcall(function() if type(writefile) == "function" then writefile("JHub_remote_guard_log.txt", text) end end)
-			if type(setclipboard) == "function" then pcall(setclipboard, text) end
-			notify("Remote Guard Recorder", string.format("%.0f KB, saved as JHub_remote_guard_log.txt and copied", #text / 1024), 6)
-		end)
-	end
-end
--- AUTO GUARD BEHIND THE SAME CODE AS THE LOCKED TAB: the toggle and its settings stay hidden until 6022 is entered on the Locked tab
-do
-	local gp3
-	for _, p in ipairs(UI.pages) do
-		if p.name == "Auto Guard" then gp3 = p end
-	end
-	if gp3 and UI.lockedTools then
-		for _, f in ipairs(gp3.frame:GetChildren()) do
-			if f:IsA("Frame") then
-				for _, d in ipairs(f:GetDescendants()) do
-					if d:IsA("TextLabel") and d.Text == "Auto guard" then
-						f.Visible = false
-						table.insert(UI.lockedTools, f)
-						break
-					end
-				end
-			end
-		end
-	end
 end
 -- UPDATE BUTTON: checks GitHub for the newest version and loads it
 do
@@ -23184,6 +23153,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.56 - rebuilt Auto Guard tab self-contained with its own 6022 code lock",
 "v1.55 - Auto Guard now locked behind the Locked tab code (6022), same as the other tools",
 "v1.54 - Auto Guard rebuilt plain again (CFrame + real animation, no simulated input); recorder moved onto its own tab",
 "v1.53 - added Remote Guard Recorder: catches every animation and movement state while guarding",
