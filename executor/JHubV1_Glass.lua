@@ -6336,7 +6336,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.31  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.32  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -7386,15 +7386,39 @@ if not S.APPause then return false end
 local d = Mover.gameDir
 return d ~= nil and tick() - (Mover.gameDirT or 0) < 0.4 and flat(d).Magnitude > 0.35
 end
-bind(RunService.Stepped, function(_, dt)
-if dt <= 0 or dt > 0.25 then return end
-local r = Mover.body()
-if not r then return end
-local now = tick()
-if Bot.cmd and now - Bot.cmdT < 0.35 and Bot.cmd.Magnitude > 0.05 then
-r.CFrame = r.CFrame + Bot.cmd * Speed.gameWS * Bot.mul * dt
-Mover.sync(r)
+local moveTrack, moveTrackHum
+local function walkTrack()
+	local h = hum()
+	if not h then return nil end
+	if moveTrack and moveTrackHum == h then return moveTrack end
+	local animator = h:FindFirstChildOfClass("Animator")
+	if not animator then return nil end
+	local anim = Instance.new("Animation")
+	anim.AnimationId = "rbxassetid://135438934392621"
+	local ok, track = pcall(function() return animator:LoadAnimation(anim) end)
+	if not ok or not track then return nil end
+	track.Priority = Enum.AnimationPriority.Movement
+	track.Looped = true
+	moveTrack, moveTrackHum = track, h
+	return track
 end
+bind(RunService.Stepped, function(_, dt)
+	if dt <= 0 or dt > 0.25 then return end
+	local r = Mover.body()
+	if not r then return end
+	local now = tick()
+	local moving = Bot.cmd and now - Bot.cmdT < 0.35 and Bot.cmd.Magnitude > 0.05
+	if moving then
+		r.CFrame = r.CFrame + Bot.cmd * Speed.gameWS * Bot.mul * dt
+		Mover.sync(r)
+		local ok, tr = pcall(walkTrack)
+		if ok and tr then
+			tr.Speed = math.clamp(Bot.mul or 1, 0.6, 1.8)
+			if not tr.IsPlaying then tr:Play(0.15) end
+		end
+	elseif moveTrack and moveTrack.IsPlaying then
+		moveTrack:Stop(0.15)
+	end
 if Bot.face and now - Bot.faceT < 0.35 then
 local p = r.Position
 r.CFrame = CFrame.new(p, p + Bot.face)
@@ -7445,7 +7469,7 @@ if S.AGLock then mul = mul * 2 end
 if d < 0.5 then
 Bot.stopMove()
 else
-local gain = S.AGLock and 1 or math.min(1, d / (4 - 2.5 * strength))
+local gain = S.AGLock and 1 or math.min(1, d / 3)
 Bot.move(to.Unit * gain, mul)
 end
 if S.AGFace then Bot.faceAt(t.pos) end
@@ -7464,7 +7488,6 @@ if o.shooting and not was and now - Bot.blockT > 0.9 then
 local dist = flat(o.pos - me).Magnitude
 if dist <= S.ABRange and math.random(100) <= S.ABChance then
 Bot.blockT = now
-if S.ABChase then Bot.chaseUntil, Bot.chaseRoot = now + S.ABDelay + 0.35, o.root end
 task.delay(S.ABDelay, function()
 if JH.Running then Bot.doJump() end
 end)
@@ -7740,13 +7763,6 @@ local others = Bot.others()
 local hasBall = Feat.hasBall()
 pcall(Bot.blockStep, others, me)
 local now = tick()
-if now < Bot.chaseUntil and Bot.chaseRoot and Bot.chaseRoot.Parent then
-local to = flat(Bot.chaseRoot.Position - me)
-if to.Magnitude > 2 then Bot.move(to.Unit, 2.2) else Bot.stopMove() end
-Bot.faceAt(Bot.chaseRoot.Position)
-Bot.status = "Contesting the shot"
-return
-end
 local acted = false
 if S.AP then
 acted = Bot.play(me, others, hasBall)
@@ -7816,7 +7832,6 @@ UI.Toggle(g2, "Auto block", "AB")
 UI.Slider(g2, "Block range", "ABRange", 4, 30, 1, 0, " studs")
 UI.Slider(g2, "Block timing (delay after the shot starts)", "ABDelay", 0, 0.5, 0.01, 2, "s")
 UI.Slider(g2, "Block chance", "ABChance", 0, 100, 5, 0, "%")
-UI.Toggle(g2, "Run at the shooter first", "ABChase")
 UI.Keybind(g2, "Block / jump key", function() return S.ABKey end, function(v) S.ABKey = (v ~= "" and v) or "Space" end)
 UI.Note(g2, "Blocks by jumping at the shooter. If your game blocks with another button, set it here.")
 
@@ -8282,14 +8297,12 @@ return true
 end
 local to = flat(Bot.spot - me)
 local d = to.Magnitude
-local strength = S.AGStrength / 100
-local mul = S.AGSpeed * (0.7 + strength * 1.3)
-if S.AGLock then mul = mul * 2 end
+local mul = 1 + (S.GuardSpeed or 0) / 100
 if amt > 0 then mul = math.min(mul * w.sp, (S.AGLock and (1 + 0.8 * amt) or (1 + 0.35 * amt))) end
 if d < 0.5 then
 Bot.stopMove()
 else
-local gain = S.AGLock and 1 or math.min(1, d / (4 - 2.5 * strength))
+local gain = S.AGLock and 1 or math.min(1, d / 3)
 Bot.move(to.Unit * gain, mul)
 end
 if S.AGFace then Bot.faceAt(t.pos) end
@@ -8809,7 +8822,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.31"
+d.Text = "JHub V1.32"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -9968,7 +9981,6 @@ if o.shooting and not was and now - Bot.blockT > 0.9 then
 local dist = flat(o.pos - me).Magnitude
 if dist <= S.ABRange and math.random(100) <= S.ABChance then
 Bot.blockT = now
-if S.ABChase then Bot.chaseUntil, Bot.chaseRoot = now + S.ABDelay + 0.35, o.root end
 local c = o.c
 task.delay(S.ABDelay * (0.85 + math.random() * 0.3), function()
 if not JH.Running then return end
@@ -11116,7 +11128,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.31", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.32", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -17834,7 +17846,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.31  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.32  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -18892,14 +18904,38 @@ do
 		local d = Mover.gameDir
 		return d ~= nil and tick() - (Mover.gameDirT or 0) < 0.4 and flat(d).Magnitude > 0.35
 	end
+	local moveTrack, moveTrackHum
+	local function walkTrack()
+		local h = hum()
+		if not h then return nil end
+		if moveTrack and moveTrackHum == h then return moveTrack end
+		local animator = h:FindFirstChildOfClass("Animator")
+		if not animator then return nil end
+		local anim = Instance.new("Animation")
+		anim.AnimationId = "rbxassetid://135438934392621"
+		local ok, track = pcall(function() return animator:LoadAnimation(anim) end)
+		if not ok or not track then return nil end
+		track.Priority = Enum.AnimationPriority.Movement
+		track.Looped = true
+		moveTrack, moveTrackHum = track, h
+		return track
+	end
 	bind(RunService.Stepped, function(_, dt)
 		if dt <= 0 or dt > 0.25 then return end
 		local r = Mover.body()
 		if not r then return end
 		local now = tick()
-		if Bot.cmd and now - Bot.cmdT < 0.35 and Bot.cmd.Magnitude > 0.05 then
+		local moving = Bot.cmd and now - Bot.cmdT < 0.35 and Bot.cmd.Magnitude > 0.05
+		if moving then
 			r.CFrame = r.CFrame + Bot.cmd * Speed.gameWS * Bot.mul * dt
 			Mover.sync(r)
+			local ok, tr = pcall(walkTrack)
+			if ok and tr then
+				tr.Speed = math.clamp(Bot.mul or 1, 0.6, 1.8)
+				if not tr.IsPlaying then tr:Play(0.15) end
+			end
+		elseif moveTrack and moveTrack.IsPlaying then
+			moveTrack:Stop(0.15)
 		end
 		if Bot.face and now - Bot.faceT < 0.35 then
 			local p = r.Position
@@ -18951,7 +18987,7 @@ do
 		if d < 0.5 then
 			Bot.stopMove()
 		else
-			local gain = S.AGLock and 1 or math.min(1, d / (4 - 2.5 * strength))
+			local gain = S.AGLock and 1 or math.min(1, d / 3)
 			Bot.move(to.Unit * gain, mul)
 		end
 		if S.AGFace then Bot.faceAt(t.pos) end
@@ -18970,7 +19006,6 @@ do
 					local dist = flat(o.pos - me).Magnitude
 					if dist <= S.ABRange and math.random(100) <= S.ABChance then
 						Bot.blockT = now
-						if S.ABChase then Bot.chaseUntil, Bot.chaseRoot = now + S.ABDelay + 0.35, o.root end
 						task.delay(S.ABDelay, function()
 							if JH.Running then Bot.doJump() end
 						end)
@@ -19246,13 +19281,6 @@ do
 		local hasBall = Feat.hasBall()
 		pcall(Bot.blockStep, others, me)
 		local now = tick()
-		if now < Bot.chaseUntil and Bot.chaseRoot and Bot.chaseRoot.Parent then
-			local to = flat(Bot.chaseRoot.Position - me)
-			if to.Magnitude > 2 then Bot.move(to.Unit, 2.2) else Bot.stopMove() end
-			Bot.faceAt(Bot.chaseRoot.Position)
-			Bot.status = "Contesting the shot"
-			return
-		end
 		local acted = false
 		if S.AP then
 			acted = Bot.play(me, others, hasBall)
@@ -19322,7 +19350,6 @@ do
 	UI.Slider(g2, "Block range", "ABRange", 4, 30, 1, 0, " studs")
 	UI.Slider(g2, "Block timing (delay after the shot starts)", "ABDelay", 0, 0.5, 0.01, 2, "s")
 	UI.Slider(g2, "Block chance", "ABChance", 0, 100, 5, 0, "%")
-	UI.Toggle(g2, "Run at the shooter first", "ABChase")
 	UI.Keybind(g2, "Block / jump key", function() return S.ABKey end, function(v) S.ABKey = (v ~= "" and v) or "Space" end)
 	UI.Note(g2, "Blocks by jumping at the shooter. If your game blocks with another button, set it here.")
 
@@ -19788,14 +19815,12 @@ do
 		end
 		local to = flat(Bot.spot - me)
 		local d = to.Magnitude
-		local strength = S.AGStrength / 100
-		local mul = S.AGSpeed * (0.7 + strength * 1.3)
-		if S.AGLock then mul = mul * 2 end
+		local mul = 1 + (S.GuardSpeed or 0) / 100
 		if amt > 0 then mul = math.min(mul * w.sp, (S.AGLock and (1 + 0.8 * amt) or (1 + 0.35 * amt))) end
 		if d < 0.5 then
 			Bot.stopMove()
 		else
-			local gain = S.AGLock and 1 or math.min(1, d / (4 - 2.5 * strength))
+			local gain = S.AGLock and 1 or math.min(1, d / 3)
 			Bot.move(to.Unit * gain, mul)
 		end
 		if S.AGFace then Bot.faceAt(t.pos) end
@@ -20315,7 +20340,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.31"
+				d.Text = "JHub V1.32"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -21474,7 +21499,6 @@ do
 					local dist = flat(o.pos - me).Magnitude
 					if dist <= S.ABRange and math.random(100) <= S.ABChance then
 						Bot.blockT = now
-						if S.ABChase then Bot.chaseUntil, Bot.chaseRoot = now + S.ABDelay + 0.35, o.root end
 						local c = o.c
 						task.delay(S.ABDelay * (0.85 + math.random() * 0.3), function()
 							if not JH.Running then return end
