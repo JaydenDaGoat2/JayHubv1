@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.48"
+local VERSION = "v1.49"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -8290,15 +8290,18 @@ end
 end
 
 -- real guarding in this game is server-driven: the real Guard button fires HoldG and the server takes over movement/animation from MoveDirection input, the same as any real player. Auto Guard does the same two calls instead of sliding the character itself, so the game's own physics and Defensive animations play exactly as they do for a human.
-local holdGRemote, moveDirRemote, guardHeld
+local holdGRemote, moveDirRemote, guardHeld, guardHeldSeeded
 local function findRemote(name)
 local d = game:GetService("ReplicatedStorage"):FindFirstChild(name, true)
 return (d and d:IsA("RemoteEvent")) and d or nil
 end
 function Bot.setGuardHold(on)
+if not guardHeldSeeded then
 local c = char()
-local already = c and c:GetAttribute("HoldingG") == true
-if on == already then guardHeld = on return end
+guardHeld = c and c:GetAttribute("HoldingG") == true
+guardHeldSeeded = true
+end
+if on == guardHeld then return end
 holdGRemote = holdGRemote or findRemote("HoldG")
 if holdGRemote then
 Mover.selfFire = true
@@ -11159,6 +11162,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.49 - fixed HoldG toggling itself back off every frame before the server caught up",
 "v1.48 - Auto Guard now presses the real Guard button and lets the server drive movement",
 "v1.47 - learns your real defensive slide animation separately from your walk",
 "v1.46 - fixed the walk animation learner relearning its own old fake id",
@@ -11447,7 +11451,7 @@ end
 ]==]
 
 -- DISCORD GATE: the first time the script runs, a window asks for a Discord join before anything else loads
-local GATE_VERSION = "v1.48"
+local GATE_VERSION = "v1.49"
 local okGate, errGate = pcall(function()
 	local FILE = "JHub_discord_ok.txt"
 	local INVITE = "https://discord.gg/fk5TsZMrRM"
@@ -11582,7 +11586,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.48"
+local VERSION = "v1.49"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -20180,15 +20184,18 @@ do
 	end
 
 	-- real guarding in this game is server-driven: the real Guard button fires HoldG and the server takes over movement/animation from MoveDirection input, the same as any real player. Auto Guard does the same two calls instead of sliding the character itself, so the game's own physics and Defensive animations play exactly as they do for a human.
-	local holdGRemote, moveDirRemote, guardHeld
+	local holdGRemote, moveDirRemote, guardHeld, guardHeldSeeded
 	local function findRemote(name)
 		local d = game:GetService("ReplicatedStorage"):FindFirstChild(name, true)
 		return (d and d:IsA("RemoteEvent")) and d or nil
 	end
 	function Bot.setGuardHold(on)
-		local c = char()
-		local already = c and c:GetAttribute("HoldingG") == true
-		if on == already then guardHeld = on return end
+		if not guardHeldSeeded then
+			local c = char()
+			guardHeld = c and c:GetAttribute("HoldingG") == true
+			guardHeldSeeded = true
+		end
+		if on == guardHeld then return end
 		holdGRemote = holdGRemote or findRemote("HoldG")
 		if holdGRemote then
 			Mover.selfFire = true
@@ -23049,6 +23056,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.49 - fixed HoldG toggling itself back off every frame before the server caught up",
 "v1.48 - Auto Guard now presses the real Guard button and lets the server drive movement",
 "v1.47 - learns your real defensive slide animation separately from your walk",
 "v1.46 - fixed the walk animation learner relearning its own old fake id",
