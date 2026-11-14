@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.62"
+local VERSION = "v1.63"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -7271,18 +7271,44 @@ end
 end
 end
 end
+-- this game never sets Player.Team (confirmed nil on real players in a remote spy log), it uses a custom HomeTeam attribute on the character instead
+local function sameSide(c1, c2)
+if not c1 or not c2 then return false end
+local h1, h2 = c1:GetAttribute("HomeTeam"), c2:GetAttribute("HomeTeam")
+if h1 == nil or h2 == nil then return false end
+return h1 == h2
+end
 function Bot.others()
 local out = {}
+local seen = {}
+local myChar = char()
 for _, pl in ipairs(Players:GetPlayers()) do
 if pl ~= LP then
 local c = Bot.charOf(pl)
 local root = c and (c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart)
 local hm = c and c:FindFirstChildOfClass("Humanoid")
 if root and hm and hm.Health > 0 then
+seen[c] = true
 local tr = Bot.track[root]
 out[#out + 1] = { pl = pl, c = c, root = root, pos = root.Position, vel = tr and tr.v or Vector3.new(0, 0, 0),
-mate = (S.APTeam == "By team" and LP.Team ~= nil and pl.Team == LP.Team) and true or false,
+mate = S.APTeam == "By team" and sameSide(myChar, c),
 ball = Bot.hasBall(c), shooting = c:GetAttribute("Action") == "Shooting" }
+end
+end
+end
+-- AI opponents are real characters in the game but have no Player object behind them, so the loop above never finds them
+local folder = workspace:FindFirstChild("Characters")
+if folder then
+for _, c in ipairs(folder:GetChildren()) do
+if c:IsA("Model") and c ~= myChar and not seen[c] and c.Name ~= "InvisCharacter" then
+local root = c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart
+local hm = c:FindFirstChildOfClass("Humanoid")
+if root and hm and hm.Health > 0 then
+local tr = Bot.track[root]
+out[#out + 1] = { pl = { Name = c.Name }, c = c, root = root, pos = root.Position, vel = tr and tr.v or Vector3.new(0, 0, 0),
+mate = S.APTeam == "By team" and sameSide(myChar, c),
+ball = Bot.hasBall(c), shooting = c:GetAttribute("Action") == "Shooting" }
+end
 end
 end
 end
@@ -11222,6 +11248,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.63 - Auto Guard now detects AI opponents (no Player object) and uses the real HomeTeam attribute instead of Player.Team",
 "v1.62 - recorder now polls currently-playing animations directly instead of waiting on a play event",
 "v1.61 - fixed the recorder: move spam was evicting every animation entry from the log",
 "v1.60 - found the real cause of the blank Auto Guard tab: a leftover block re-hid every card on it",
@@ -11659,7 +11686,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.62"
+local VERSION = "v1.63"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -19239,18 +19266,44 @@ do
 			end
 		end
 	end
+	-- this game never sets Player.Team (confirmed nil on real players in a remote spy log), it uses a custom HomeTeam attribute on the character instead
+	local function sameSide(c1, c2)
+		if not c1 or not c2 then return false end
+		local h1, h2 = c1:GetAttribute("HomeTeam"), c2:GetAttribute("HomeTeam")
+		if h1 == nil or h2 == nil then return false end
+		return h1 == h2
+	end
 	function Bot.others()
 		local out = {}
+		local seen = {}
+		local myChar = char()
 		for _, pl in ipairs(Players:GetPlayers()) do
 			if pl ~= LP then
 				local c = Bot.charOf(pl)
 				local root = c and (c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart)
 				local hm = c and c:FindFirstChildOfClass("Humanoid")
 				if root and hm and hm.Health > 0 then
+					seen[c] = true
 					local tr = Bot.track[root]
 					out[#out + 1] = { pl = pl, c = c, root = root, pos = root.Position, vel = tr and tr.v or Vector3.new(0, 0, 0),
-						mate = (S.APTeam == "By team" and LP.Team ~= nil and pl.Team == LP.Team) and true or false,
+						mate = S.APTeam == "By team" and sameSide(myChar, c),
 						ball = Bot.hasBall(c), shooting = c:GetAttribute("Action") == "Shooting" }
+				end
+			end
+		end
+		-- AI opponents are real characters in the game but have no Player object behind them, so the loop above never finds them
+		local folder = workspace:FindFirstChild("Characters")
+		if folder then
+			for _, c in ipairs(folder:GetChildren()) do
+				if c:IsA("Model") and c ~= myChar and not seen[c] and c.Name ~= "InvisCharacter" then
+					local root = c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart
+					local hm = c:FindFirstChildOfClass("Humanoid")
+					if root and hm and hm.Health > 0 then
+						local tr = Bot.track[root]
+						out[#out + 1] = { pl = { Name = c.Name }, c = c, root = root, pos = root.Position, vel = tr and tr.v or Vector3.new(0, 0, 0),
+							mate = S.APTeam == "By team" and sameSide(myChar, c),
+							ball = Bot.hasBall(c), shooting = c:GetAttribute("Action") == "Shooting" }
+					end
 				end
 			end
 		end
@@ -23189,6 +23242,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.63 - Auto Guard now detects AI opponents (no Player object) and uses the real HomeTeam attribute instead of Player.Team",
 "v1.62 - recorder now polls currently-playing animations directly instead of waiting on a play event",
 "v1.61 - fixed the recorder: move spam was evicting every animation entry from the log",
 "v1.60 - found the real cause of the blank Auto Guard tab: a leftover block re-hid every card on it",
