@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.39"
+local VERSION = "v1.40"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -10119,6 +10119,8 @@ for name, args in pairs(lib) do parts[#parts + 1] = name .. "@@" .. ser(args) ..
 S.BindLib = table.concat(parts)
 saveSoon()
 end
+-- let the network layer (loaded later) read/write this move library and share it
+JH.bindLib, JH.bindSer, JH.bindDeser, JH.bindSaveLib = lib, ser, deser, saveLib
 local function remote()
 local d = game:GetService("ReplicatedStorage"):FindFirstChild("Dribble", true)
 return (d and d:IsA("RemoteEvent")) and d or Mover.lastDribbleRemote
@@ -10157,6 +10159,7 @@ local name = type(raw) == "string" and (string.match(raw, "^(.-)%s+[LR]$") or ra
 if type(name) == "string" and name ~= "" and ser(lib[name] or { n = 0 }) ~= ser(copy) then
 lib[name] = copy
 saveLib()
+if JH.onBindLearned then task.spawn(JH.onBindLearned, name, copy) end
 end
 end)
 return prevOD(args)
@@ -10197,6 +10200,12 @@ local c = UI.Card(pg, "Bind " .. slot)
 c.frame.Size = UDim2.new(0.5, -4, 0, 0)
 UI.Dropdown(c, "Move", "BindMove" .. slot, MOVES)
 UI.Keybind(c, "Key", function() return S["BindKey" .. slot] end, function(v) S["BindKey" .. slot] = v end)
+UI.Button(c, "X - clear this bind", function()
+S["BindMove" .. slot], S["BindKey" .. slot], S["BindArgs" .. slot] = "None", "", ""
+saveSoon()
+UI.refreshAll()
+notify("Binds", "Bind " .. slot .. " cleared.", 2)
+end)
 end
 end
 -- LESS OBVIOUS GUARD, AUTO PLAY CARD, AUTO BLOCK BUTTON WORDS
@@ -11028,6 +11037,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.40 - X button on every bind, learned binds shared across the network",
 "v1.29 - JHub network: chat, live feed, shared jumpshot timing",
 "v1.28 - 10 always-on live helps for Auto Green",
 "v1.27 - Sweep locked off at all times",
@@ -11132,6 +11142,31 @@ return a.hold
 end
 return prevSeedHL(key)
 end
+-- SHARED BINDS: a dribble move learned on anyone's copy is pushed to the network and picked up by everyone else who hasn't learned it yet
+function JH.onBindLearned(name, args)
+if JH.bindSer then
+task.spawn(netPut, "bindlib/" .. sanitize(name), { text = JH.bindSer(args), name = name, by = myName, t = os.time() })
+end
+end
+task.spawn(function()
+local res = netGet("bindlib")
+if type(res) == "table" and JH.bindLib and JH.bindDeser then
+local changed = false
+for key, rowv in pairs(res) do
+if type(rowv) == "table" and type(rowv.text) == "string" then
+local realName = type(rowv.name) == "string" and rowv.name or key
+if not JH.bindLib[realName] then
+local args = JH.bindDeser(rowv.text)
+if args then
+JH.bindLib[realName] = args
+changed = true
+end
+end
+end
+end
+if changed and JH.bindSaveLib then JH.bindSaveLib() end
+end
+end)
 end
 -- LIVE ADAPT, SHARPER: steps shrink the more a jumpshot has actually been seen (so it locks in fast early, then stops wobbling), and one freak result against a steady trend gets a lighter step, not a full swing
 do
@@ -11411,7 +11446,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.39"
+local VERSION = "v1.40"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -21839,6 +21874,8 @@ do
 		S.BindLib = table.concat(parts)
 		saveSoon()
 	end
+	-- let the network layer (loaded later) read/write this move library and share it
+	JH.bindLib, JH.bindSer, JH.bindDeser, JH.bindSaveLib = lib, ser, deser, saveLib
 	local function remote()
 		local d = game:GetService("ReplicatedStorage"):FindFirstChild("Dribble", true)
 		return (d and d:IsA("RemoteEvent")) and d or Mover.lastDribbleRemote
@@ -21877,6 +21914,7 @@ do
 			if type(name) == "string" and name ~= "" and ser(lib[name] or { n = 0 }) ~= ser(copy) then
 			lib[name] = copy
 			saveLib()
+			if JH.onBindLearned then task.spawn(JH.onBindLearned, name, copy) end
 			end
 		end)
 		return prevOD(args)
@@ -21917,6 +21955,12 @@ do
 		c.frame.Size = UDim2.new(0.5, -4, 0, 0)
 		UI.Dropdown(c, "Move", "BindMove" .. slot, MOVES)
 		UI.Keybind(c, "Key", function() return S["BindKey" .. slot] end, function(v) S["BindKey" .. slot] = v end)
+		UI.Button(c, "X - clear this bind", function()
+			S["BindMove" .. slot], S["BindKey" .. slot], S["BindArgs" .. slot] = "None", "", ""
+			saveSoon()
+			UI.refreshAll()
+			notify("Binds", "Bind " .. slot .. " cleared.", 2)
+		end)
 	end
 end
 -- LESS OBVIOUS GUARD, AUTO PLAY CARD, AUTO BLOCK BUTTON WORDS
@@ -22748,6 +22792,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.40 - X button on every bind, learned binds shared across the network",
 "v1.29 - JHub network: chat, live feed, shared jumpshot timing",
 "v1.28 - 10 always-on live helps for Auto Green",
 "v1.27 - Sweep locked off at all times",
@@ -22852,6 +22897,31 @@ return a.hold
 end
 return prevSeedHL(key)
 end
+-- SHARED BINDS: a dribble move learned on anyone's copy is pushed to the network and picked up by everyone else who hasn't learned it yet
+function JH.onBindLearned(name, args)
+if JH.bindSer then
+task.spawn(netPut, "bindlib/" .. sanitize(name), { text = JH.bindSer(args), name = name, by = myName, t = os.time() })
+end
+end
+task.spawn(function()
+local res = netGet("bindlib")
+if type(res) == "table" and JH.bindLib and JH.bindDeser then
+local changed = false
+for key, rowv in pairs(res) do
+if type(rowv) == "table" and type(rowv.text) == "string" then
+local realName = type(rowv.name) == "string" and rowv.name or key
+if not JH.bindLib[realName] then
+local args = JH.bindDeser(rowv.text)
+if args then
+JH.bindLib[realName] = args
+changed = true
+end
+end
+end
+end
+if changed and JH.bindSaveLib then JH.bindSaveLib() end
+end
+end)
 end
 -- LIVE ADAPT, SHARPER: steps shrink the more a jumpshot has actually been seen (so it locks in fast early, then stops wobbling), and one freak result against a steady trend gets a lighter step, not a full swing
 do
