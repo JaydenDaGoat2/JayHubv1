@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.69"
+local VERSION = "v1.70"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -7494,16 +7494,23 @@ bind(RunService.Stepped, function(_, dt)
 	if not r then return end
 	local now = tick()
 	local moving = Bot.cmd and now - Bot.cmdT < 0.35 and Bot.cmd.Magnitude > 0.05
-	-- Humanoid:Move hands movement back to Roblox's own character controller instead of us overwriting CFrame - the game's real Animate script then picks the correct walk/defensive-slide animation on its own (the same way it does for a real player holding the real Guard button), so we don't need to load or play any animation track ourselves anymore
-	local h2 = hum()
+	-- Humanoid:Move produced zero actual displacement in this game (confirmed from a real recorder log: speed stayed 0.0 the whole time it said "Guarding X") - this game runs its own movement/physics layer that ignores a script's Humanoid:Move calls, so CFrame is the only thing that reliably moves the character here. Keep driving position by CFrame, but load and play the confirmed real animation track ourselves on top of it.
 	if moving then
-		if h2 then
-			-- Move auto-faces the direction it's given by default, which would fight the deliberate "face the man while shuffling sideways/backward" below - only turn that off while we're the one actually driving, and only for as long as that lasts
-			h2.AutoRotate = false
-			h2:Move(Bot.cmd, false)
+		r.CFrame = r.CFrame + Bot.cmd * Speed.gameWS * Bot.mul * dt
+		Mover.sync(r)
+		local guarding = now - (Bot.guardingNow or 0) < 0.3
+		local id = (guarding and S.GuardAnimId and S.GuardAnimId ~= "") and S.GuardAnimId or S.WalkAnimId
+		if id ~= activeId then
+			if activeTrack then pcall(function() activeTrack:Stop(0.1) end) end
+			activeTrack = trackFor(id)
+			activeId = id
 		end
-	elseif h2 and h2.AutoRotate == false then
-		h2.AutoRotate = true
+		if activeTrack then
+			activeTrack.Speed = math.clamp(Bot.mul or 1, 0.6, 1.8)
+			if not activeTrack.IsPlaying then activeTrack:Play(0.15) end
+		end
+	elseif activeTrack and activeTrack.IsPlaying then
+		activeTrack:Stop(0.15)
 	end
 if Bot.face and now - Bot.faceT < 0.35 then
 local p = r.Position
@@ -11290,6 +11297,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.70 - Humanoid:Move produced zero actual movement in this game (confirmed: speed stuck at 0 the whole time), reverted to CFrame for position while keeping the confirmed real walk/defensive animation ids playing on top",
 "v1.69 - Auto Guard no longer moves by CFrame at all - it now uses Humanoid:Move like a real player does, so the game\'s own Animate script picks the correct walk/defensive-slide animation automatically",
 "v1.68 - found the real reason the walk animation never showed: moving the root by CFrame alone left the humanoid stuck in Freefall/FallingDown state forever, which hid the walk animation even though it was technically playing - fixed",
 "v1.67 - removed the Discord join gate entirely, replaced with a Discord button in the top right of the menu that copies the invite link",
@@ -11643,7 +11651,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.69"
+local VERSION = "v1.70"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -19446,16 +19454,23 @@ do
 		if not r then return end
 		local now = tick()
 		local moving = Bot.cmd and now - Bot.cmdT < 0.35 and Bot.cmd.Magnitude > 0.05
-		-- Humanoid:Move hands movement back to Roblox's own character controller instead of us overwriting CFrame - the game's real Animate script then picks the correct walk/defensive-slide animation on its own (the same way it does for a real player holding the real Guard button), so we don't need to load or play any animation track ourselves anymore
-		local h2 = hum()
+		-- Humanoid:Move produced zero actual displacement in this game (confirmed from a real recorder log: speed stayed 0.0 the whole time it said "Guarding X") - this game runs its own movement/physics layer that ignores a script's Humanoid:Move calls, so CFrame is the only thing that reliably moves the character here. Keep driving position by CFrame, but load and play the confirmed real animation track ourselves on top of it.
 		if moving then
-			if h2 then
-				-- Move auto-faces the direction it's given by default, which would fight the deliberate "face the man while shuffling sideways/backward" below - only turn that off while we're the one actually driving, and only for as long as that lasts
-				h2.AutoRotate = false
-				h2:Move(Bot.cmd, false)
+			r.CFrame = r.CFrame + Bot.cmd * Speed.gameWS * Bot.mul * dt
+			Mover.sync(r)
+			local guarding = now - (Bot.guardingNow or 0) < 0.3
+			local id = (guarding and S.GuardAnimId and S.GuardAnimId ~= "") and S.GuardAnimId or S.WalkAnimId
+			if id ~= activeId then
+				if activeTrack then pcall(function() activeTrack:Stop(0.1) end) end
+				activeTrack = trackFor(id)
+				activeId = id
 			end
-		elseif h2 and h2.AutoRotate == false then
-			h2.AutoRotate = true
+			if activeTrack then
+				activeTrack.Speed = math.clamp(Bot.mul or 1, 0.6, 1.8)
+				if not activeTrack.IsPlaying then activeTrack:Play(0.15) end
+			end
+		elseif activeTrack and activeTrack.IsPlaying then
+			activeTrack:Stop(0.15)
 		end
 		if Bot.face and now - Bot.faceT < 0.35 then
 			local p = r.Position
@@ -23243,6 +23258,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.70 - Humanoid:Move produced zero actual movement in this game (confirmed: speed stuck at 0 the whole time), reverted to CFrame for position while keeping the confirmed real walk/defensive animation ids playing on top",
 "v1.69 - Auto Guard no longer moves by CFrame at all - it now uses Humanoid:Move like a real player does, so the game\'s own Animate script picks the correct walk/defensive-slide animation automatically",
 "v1.68 - found the real reason the walk animation never showed: moving the root by CFrame alone left the humanoid stuck in Freefall/FallingDown state forever, which hid the walk animation even though it was technically playing - fixed",
 "v1.67 - removed the Discord join gate entirely, replaced with a Discord button in the top right of the menu that copies the invite link",
