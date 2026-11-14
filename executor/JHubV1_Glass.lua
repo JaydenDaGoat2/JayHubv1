@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.71"
+local VERSION = "v1.72"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -7258,24 +7258,35 @@ local af = c:FindFirstChild("Attributes")
 local bv = af and af:FindFirstChild("Basketball")
 return (bv and bv.Value ~= nil) and true or false
 end
+-- reads real root.AssemblyLinearVelocity instead of estimating speed from position deltas - the engine already knows the opponent's true instantaneous velocity and replicates it, no need to re-derive a laggier copy of it
+local function sampleRoot(root, now)
+local v = root.AssemblyLinearVelocity
+local flatV = Vector3.new(v.X, 0, v.Z)
+local tr = Bot.track[root]
+if not tr then
+Bot.track[root] = { p = root.Position, t = now, v = flatV }
+else
+tr.v = tr.v * 0.6 + flatV * 0.4
+tr.p, tr.t = root.Position, now
+end
+end
 function Bot.sample()
 local now = tick()
 for _, pl in ipairs(Players:GetPlayers()) do
 if pl ~= LP then
 local c = Bot.charOf(pl)
 local root = c and (c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart)
-if root then
-local tr = Bot.track[root]
-if not tr then
-Bot.track[root] = { p = root.Position, t = now, v = Vector3.new(0, 0, 0) }
-else
-local dt = now - tr.t
-if dt > 0.001 then
-local nv = (root.Position - tr.p) / dt
-tr.v = tr.v * 0.6 + Vector3.new(nv.X, 0, nv.Z) * 0.4
-tr.p, tr.t = root.Position, now
+if root then sampleRoot(root, now) end
 end
 end
+-- AI opponents have no Player object, so the loop above never samples their velocity - without this, Bot.guardStep's prediction always assumed AI stood still
+local myChar = char()
+local folder = workspace:FindFirstChild("Characters")
+if folder then
+for _, c in ipairs(folder:GetChildren()) do
+if c:IsA("Model") and c ~= myChar and c.Name ~= "InvisCharacter" then
+local root = c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart
+if root then sampleRoot(root, now) end
 end
 end
 end
@@ -7517,21 +7528,44 @@ end)
 -- AUTO GUARD AND AUTO BLOCK
 ---------------------------------------------------------------------
 function Bot.pickTarget(others, me, forced)
-local best, bd
 local mode = forced or S.AGTarget
+local function scoreOf(o)
+local d = flat(o.pos - me).Magnitude
+if mode == "Ball handler" then return o.ball and (d - 1000) or d end
+if mode == "Closest to hoop" then
+local h = Bot.nearestHoop(o.pos)
+return h and flat(o.pos - h).Magnitude or d
+end
+return d
+end
+local best, bd
 for _, o in ipairs(others) do
 if not o.mate then
-local d = flat(o.pos - me).Magnitude
-local score = d
-if mode == "Ball handler" then
-score = o.ball and (d - 1000) or d
-elseif mode == "Closest to hoop" then
-local h = Bot.nearestHoop(o.pos)
-score = h and flat(o.pos - h).Magnitude or d
-end
+local score = scoreOf(o)
 if not bd or score < bd then best, bd = o, score end
 end
 end
+-- stick to whoever is already locked unless they're gone/dead, or a clearly better target has stayed clearly better for a bit - stops the target flickering between two near-equal candidates every tick, which is what caused jittery, indecisive movement
+local now = tick()
+if Bot.lockedChar then
+local still
+for _, o in ipairs(others) do
+if o.c == Bot.lockedChar and not o.mate then still = o break end
+end
+if still then
+if best and best.c ~= still.c and bd < scoreOf(still) - 2 then
+if Bot.lockBetterChar ~= best.c then Bot.lockBetterChar, Bot.lockBetterSince = best.c, now end
+if now - Bot.lockBetterSince >= 0.5 then
+Bot.lockedChar, Bot.lockBetterChar, Bot.lockBetterSince = best.c, nil, nil
+return best
+end
+else
+Bot.lockBetterChar, Bot.lockBetterSince = nil, nil
+end
+return still
+end
+end
+Bot.lockedChar, Bot.lockBetterChar, Bot.lockBetterSince = best and best.c or nil, nil, nil
 return best
 end
 function Bot.blockStep(others, me)
@@ -11292,6 +11326,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.72 - Auto Guard target lock now sticks to the same opponent (with hysteresis) instead of re-picking best every tick, and velocity is read from the real AssemblyLinearVelocity (now including AI) instead of estimated",
 "v1.71 - back on Humanoid:Move for good: re-read the last log correctly - speed=0 was the guard distance dead-zone working as intended, not a stall; movement is smooth, animations are the game\'s own, target lock/tracking unchanged",
 "v1.70 - Humanoid:Move produced zero actual movement in this game (confirmed: speed stuck at 0 the whole time), reverted to CFrame for position while keeping the confirmed real walk/defensive animation ids playing on top",
 "v1.69 - Auto Guard no longer moves by CFrame at all - it now uses Humanoid:Move like a real player does, so the game\'s own Animate script picks the correct walk/defensive-slide animation automatically",
@@ -11647,7 +11682,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.71"
+local VERSION = "v1.72"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -19214,24 +19249,35 @@ do
 		local bv = af and af:FindFirstChild("Basketball")
 		return (bv and bv.Value ~= nil) and true or false
 	end
+	-- reads real root.AssemblyLinearVelocity instead of estimating speed from position deltas - the engine already knows the opponent's true instantaneous velocity and replicates it, no need to re-derive a laggier copy of it
+	local function sampleRoot(root, now)
+		local v = root.AssemblyLinearVelocity
+		local flatV = Vector3.new(v.X, 0, v.Z)
+		local tr = Bot.track[root]
+		if not tr then
+			Bot.track[root] = { p = root.Position, t = now, v = flatV }
+		else
+			tr.v = tr.v * 0.6 + flatV * 0.4
+			tr.p, tr.t = root.Position, now
+		end
+	end
 	function Bot.sample()
 		local now = tick()
 		for _, pl in ipairs(Players:GetPlayers()) do
 			if pl ~= LP then
 				local c = Bot.charOf(pl)
 				local root = c and (c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart)
-				if root then
-					local tr = Bot.track[root]
-					if not tr then
-						Bot.track[root] = { p = root.Position, t = now, v = Vector3.new(0, 0, 0) }
-					else
-						local dt = now - tr.t
-						if dt > 0.001 then
-							local nv = (root.Position - tr.p) / dt
-							tr.v = tr.v * 0.6 + Vector3.new(nv.X, 0, nv.Z) * 0.4
-							tr.p, tr.t = root.Position, now
-						end
-					end
+				if root then sampleRoot(root, now) end
+			end
+		end
+		-- AI opponents have no Player object, so the loop above never samples their velocity - without this, Bot.guardStep's prediction always assumed AI stood still
+		local myChar = char()
+		local folder = workspace:FindFirstChild("Characters")
+		if folder then
+			for _, c in ipairs(folder:GetChildren()) do
+				if c:IsA("Model") and c ~= myChar and c.Name ~= "InvisCharacter" then
+					local root = c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart
+					if root then sampleRoot(root, now) end
 				end
 			end
 		end
@@ -19474,21 +19520,44 @@ do
 	-- AUTO GUARD AND AUTO BLOCK
 	---------------------------------------------------------------------
 	function Bot.pickTarget(others, me, forced)
-		local best, bd
 		local mode = forced or S.AGTarget
+		local function scoreOf(o)
+			local d = flat(o.pos - me).Magnitude
+			if mode == "Ball handler" then return o.ball and (d - 1000) or d end
+			if mode == "Closest to hoop" then
+				local h = Bot.nearestHoop(o.pos)
+				return h and flat(o.pos - h).Magnitude or d
+			end
+			return d
+		end
+		local best, bd
 		for _, o in ipairs(others) do
 			if not o.mate then
-				local d = flat(o.pos - me).Magnitude
-				local score = d
-				if mode == "Ball handler" then
-					score = o.ball and (d - 1000) or d
-				elseif mode == "Closest to hoop" then
-					local h = Bot.nearestHoop(o.pos)
-					score = h and flat(o.pos - h).Magnitude or d
-				end
+				local score = scoreOf(o)
 				if not bd or score < bd then best, bd = o, score end
 			end
 		end
+		-- stick to whoever is already locked unless they're gone/dead, or a clearly better target has stayed clearly better for a bit - stops the target flickering between two near-equal candidates every tick, which is what caused jittery, indecisive movement
+		local now = tick()
+		if Bot.lockedChar then
+			local still
+			for _, o in ipairs(others) do
+				if o.c == Bot.lockedChar and not o.mate then still = o break end
+			end
+			if still then
+				if best and best.c ~= still.c and bd < scoreOf(still) - 2 then
+					if Bot.lockBetterChar ~= best.c then Bot.lockBetterChar, Bot.lockBetterSince = best.c, now end
+					if now - Bot.lockBetterSince >= 0.5 then
+						Bot.lockedChar, Bot.lockBetterChar, Bot.lockBetterSince = best.c, nil, nil
+						return best
+					end
+				else
+					Bot.lockBetterChar, Bot.lockBetterSince = nil, nil
+				end
+				return still
+			end
+		end
+		Bot.lockedChar, Bot.lockBetterChar, Bot.lockBetterSince = best and best.c or nil, nil, nil
 		return best
 	end
 	function Bot.blockStep(others, me)
@@ -23250,6 +23319,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.72 - Auto Guard target lock now sticks to the same opponent (with hysteresis) instead of re-picking best every tick, and velocity is read from the real AssemblyLinearVelocity (now including AI) instead of estimated",
 "v1.71 - back on Humanoid:Move for good: re-read the last log correctly - speed=0 was the guard distance dead-zone working as intended, not a stall; movement is smooth, animations are the game\'s own, target lock/tracking unchanged",
 "v1.70 - Humanoid:Move produced zero actual movement in this game (confirmed: speed stuck at 0 the whole time), reverted to CFrame for position while keeping the confirmed real walk/defensive animation ids playing on top",
 "v1.69 - Auto Guard no longer moves by CFrame at all - it now uses Humanoid:Move like a real player does, so the game\'s own Animate script picks the correct walk/defensive-slide animation automatically",
