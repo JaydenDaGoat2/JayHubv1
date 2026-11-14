@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.44"
+local VERSION = "v1.45"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -7394,15 +7394,25 @@ local d = Mover.gameDir
 return d ~= nil and tick() - (Mover.gameDirT or 0) < 0.4 and flat(d).Magnitude > 0.35
 end
 local moveTrack, moveTrackHum
--- learn the game's own real walk animation by watching what actually plays while you walk for real (MoveDirection set by the game, not by us), instead of guessing an asset id or digging through a script that may not be structured the way we expect
+-- learn the game's own real walk animation by watching what actually plays while you walk for real, instead of guessing an asset id or relying on MoveDirection (this game may drive movement without ever setting it)
+local walkLastPos, walkLastT
 bind(RunService.Heartbeat, function()
 	if S.WalkAnimId and S.WalkAnimId ~= "" then return end
-	local h = hum()
-	if not h or h.MoveDirection.Magnitude < 0.1 then return end
+	if Bot.cmd then return end
+	local h, r = hum(), Mover.body()
+	if not h or not r then return end
+	local now = tick()
+	local moving = false
+	if walkLastPos and walkLastT and now - walkLastT > 0 then
+		moving = flat(r.Position - walkLastPos).Magnitude / (now - walkLastT) > 3
+	end
+	walkLastPos, walkLastT = r.Position, now
+	if not moving then return end
 	for _, tr in ipairs(h:GetPlayingAnimationTracks()) do
 		if tr.Priority == Enum.AnimationPriority.Movement and tr.Looped and tr.Animation and tr.Animation.AnimationId ~= "" then
 			S.WalkAnimId = tr.Animation.AnimationId
 			saveSoon()
+			notify("JHub", "Learned your real walk animation.", 3)
 			break
 		end
 	end
@@ -11094,6 +11104,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.45 - fixed walk animation never being learned (this game does not use MoveDirection)",
 "v1.44 - guard recorder: records your real guarding and reports the learned walk animation id",
 "v1.43 - fixed a frozen black/blue screen on first run for some users (Discord gate crash)",
 "v1.42 - walk animation is learned from your own real walk instead of a guessed id",
@@ -11378,7 +11389,7 @@ end
 ]==]
 
 -- DISCORD GATE: the first time the script runs, a window asks for a Discord join before anything else loads
-local GATE_VERSION = "v1.44"
+local GATE_VERSION = "v1.45"
 local okGate, errGate = pcall(function()
 	local FILE = "JHub_discord_ok.txt"
 	local INVITE = "https://discord.gg/fk5TsZMrRM"
@@ -11513,7 +11524,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.44"
+local VERSION = "v1.45"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -19216,15 +19227,25 @@ do
 		return d ~= nil and tick() - (Mover.gameDirT or 0) < 0.4 and flat(d).Magnitude > 0.35
 	end
 	local moveTrack, moveTrackHum
-	-- learn the game's own real walk animation by watching what actually plays while you walk for real (MoveDirection set by the game, not by us), instead of guessing an asset id or digging through a script that may not be structured the way we expect
+	-- learn the game's own real walk animation by watching what actually plays while you walk for real, instead of guessing an asset id or relying on MoveDirection (this game may drive movement without ever setting it)
+	local walkLastPos, walkLastT
 	bind(RunService.Heartbeat, function()
 		if S.WalkAnimId and S.WalkAnimId ~= "" then return end
-		local h = hum()
-		if not h or h.MoveDirection.Magnitude < 0.1 then return end
+		if Bot.cmd then return end
+		local h, r = hum(), Mover.body()
+		if not h or not r then return end
+		local now = tick()
+		local moving = false
+		if walkLastPos and walkLastT and now - walkLastT > 0 then
+			moving = flat(r.Position - walkLastPos).Magnitude / (now - walkLastT) > 3
+		end
+		walkLastPos, walkLastT = r.Position, now
+		if not moving then return end
 		for _, tr in ipairs(h:GetPlayingAnimationTracks()) do
 			if tr.Priority == Enum.AnimationPriority.Movement and tr.Looped and tr.Animation and tr.Animation.AnimationId ~= "" then
 				S.WalkAnimId = tr.Animation.AnimationId
 				saveSoon()
+				notify("JHub", "Learned your real walk animation.", 3)
 				break
 			end
 		end
@@ -22916,6 +22937,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.45 - fixed walk animation never being learned (this game does not use MoveDirection)",
 "v1.44 - guard recorder: records your real guarding and reports the learned walk animation id",
 "v1.43 - fixed a frozen black/blue screen on first run for some users (Discord gate crash)",
 "v1.42 - walk animation is learned from your own real walk instead of a guessed id",
