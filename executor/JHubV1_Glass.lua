@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.42"
+local VERSION = "v1.43"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -11019,6 +11019,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.43 - fixed a frozen black/blue screen on first run for some users (Discord gate crash)",
 "v1.42 - walk animation is learned from your own real walk instead of a guessed id",
 "v1.41 - auto guard uses your real walk animation and Players-tab guard speed only",
 "v1.40 - X button on every bind, learned binds shared across the network",
@@ -11301,7 +11302,8 @@ end
 ]==]
 
 -- DISCORD GATE: the first time the script runs, a window asks for a Discord join before anything else loads
-do
+local GATE_VERSION = "v1.43"
+local okGate, errGate = pcall(function()
 	local FILE = "JHub_discord_ok.txt"
 	local INVITE = "https://discord.gg/fk5TsZMrRM"
 	local seen = false
@@ -11349,7 +11351,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V" .. VERSION:sub(2), 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V" .. GATE_VERSION:sub(2), 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -11381,10 +11383,15 @@ do
 			done = true
 			pcall(function() if type(writefile) == "function" then writefile(FILE, "1") end end)
 		end)
-		while not done and gui.Parent do task.wait(0.1) end
+		local waited = 0
+		while not done and gui.Parent and waited < 600 do
+			task.wait(0.1)
+			waited = waited + 0.1
+		end
 		pcall(function() gui:Destroy() end)
 	end
-end
+end)
+if not okGate then warn("JHub: discord gate skipped - " .. tostring(errGate)) end
 
 local function JHubMain()
 
@@ -11430,7 +11437,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.42"
+local VERSION = "v1.43"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -22758,6 +22765,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.43 - fixed a frozen black/blue screen on first run for some users (Discord gate crash)",
 "v1.42 - walk animation is learned from your own real walk instead of a guessed id",
 "v1.41 - auto guard uses your real walk animation and Players-tab guard speed only",
 "v1.40 - X button on every bind, learned binds shared across the network",
