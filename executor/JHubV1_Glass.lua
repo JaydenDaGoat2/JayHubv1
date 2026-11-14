@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.80"
+local VERSION = "v1.81"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -128,7 +128,7 @@ LogoSize = 58, LogoOpacity = 1, LogoAnim = true, LogoX = -1, LogoY = -1,
 Blur = false, BlurSize = 10, Watermark = true, Notifications = true, Sounds = true, MenuKey = "RightShift",
 Codes = "100M 100KLIKES 500KMEMBERS 100KCCUPLS RELEASE SORRYFORBUGS", CodeRemotes = true,
 AutoGreen = true, AutoCalibrate = true, AutoTiming = true, ShotRelease = "Auto",
-HoldTime = 0.55, MaxHold = 1.6, CalSpeed = 0.6, CalStep = 0.02,
+HoldTime = 0.55, MaxHold = 1.6, CalSpeed = 1.0, CalStep = 0.035,
 ShotTimes = "", ShotRatio = 0, BarPath = "", BarProp = "", BarAt = 0, BarNudge = 0,
 ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 25, Learn = false, PeakLead = 0.027, PerfectGreen = false, PerfectGreenPct = 100, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, Lightning = true, BoltCount = 6, BoltSpeed = 1, BoltThick = 2, BoltBright = 0.9, BoltColor = "White + Yellow", BgMove = true, BgGlow = 0.5, BgOrbs = true, AccentMode = "Gold", OutlineSpeed = 1, LogoStyle = "J bolt H", LogoBg = true, Preset = "Lightning Gold", PacketOn = true, PacketMul = 1,
 MovingOffset = 0, SprintOffset = 0, PingComp = 0, Humanize = 0, Nudge = 0, GreenSound = true,
@@ -1624,7 +1624,6 @@ if res == "green" then
 st.greens = st.greens + 1
 st.streak = st.streak + 1
 if st.streak > st.best then st.best = st.streak end
-if S.GreenSound then local gid = string.match(tostring(S.GreenSoundId or ""), "%d+") playSound(gid and ("rbxassetid://" .. gid) or SND_CLICK, S.GreenSoundVol or 0.6) end
 elseif res == "good" then
 st.streak = 0
 elseif res == "early" then
@@ -6185,7 +6184,6 @@ UI.Slider(hl, "Moving outline speed", "OutlineSpeed", 0, 4, 0.1, 1, "x")
 local al = UI.Card(P, "Alerts and keys")
 UI.Toggle(al, "Notifications", "Notifications")
 UI.Toggle(al, "Sounds", "Sounds")
-UI.Toggle(al, "Green sound", "GreenSound")
 UI.Input(al, "Green sound ID (Roblox audio number)", "GreenSoundId", nil, "paste a Roblox audio ID")
 UI.Slider(al, "Green sound volume", "GreenSoundVol", 0.1, 1, 0.05, 2)
 UI.Keybind(al, "Menu key (PC)", function() return S.MenuKey end, function(v) S.MenuKey = (v ~= "" and v) or "RightShift" end)
@@ -9769,6 +9767,42 @@ end, true)
 UI.Note(lock, "Everything in this tab is locked. Enter the code to open it.")
 end
 end
+-- OWNER TAB: locked with its own code, sets who gets a crown/dev/mod badge in JHub Chat for everyone
+do
+local CODE2 = "2011"
+local mainPage
+for _, p in ipairs(UI.pages) do if p.name == "Main" then mainPage = p end end
+if mainPage then
+local OP = UI.Page("Owner", "O")
+local typed2 = ""
+local lock2 = UI.Card(OP, "Owner")
+UI.Input(lock2, "Code", { get = function() return typed2 end, set = function(v) typed2 = tostring(v or "") end }, nil, "enter the code")
+local rolesCard = UI.Card(OP, "Chat roles")
+rolesCard.frame.Visible = false
+local ownerName, devNames, mod1Name, mod2Name = Players.LocalPlayer.Name, "", "", ""
+UI.Input(rolesCard, "Owner name (gold text, crown, #owner)", { get = function() return ownerName end, set = function(v) ownerName = tostring(v or "") end }, nil, "owner's player name")
+UI.Input(rolesCard, "Devs (comma separated player names)", { get = function() return devNames end, set = function(v) devNames = tostring(v or "") end }, nil, "name1, name2")
+UI.Input(rolesCard, "Mod 1 name", { get = function() return mod1Name end, set = function(v) mod1Name = tostring(v or "") end }, nil, "player name")
+UI.Input(rolesCard, "Mod 2 name", { get = function() return mod2Name end, set = function(v) mod2Name = tostring(v or "") end }, nil, "player name")
+UI.Button(rolesCard, "Save and push to everyone", function()
+local roles = { owner = ownerName, devs = devNames, mod1 = mod1Name, mod2 = mod2Name, t = os.time() }
+JH.roles = roles
+if JH.netPut then task.spawn(JH.netPut, "roles", roles) end
+notify("Owner tab", "Roles saved and pushed - everyone's JHub Chat will show the badges.", 4)
+end, true)
+UI.Note(rolesCard, "Whoever is named here gets a badge next to their name in JHub Chat for everyone: the owner gets a gold crown and #owner, devs/mods get their own tag.")
+UI.Button(lock2, "Unlock", function()
+if string.gsub(typed2, "%s", "") == CODE2 then
+lock2.frame.Visible = false
+rolesCard.frame.Visible = true
+notify("Owner tab", "Unlocked", 3)
+else
+notify("Owner tab", "Wrong code", 3)
+end
+end, true)
+UI.Note(lock2, "Owner-only tab. Enter the code to manage chat crown/dev/mod badges.")
+end
+end
 -- MINIMISED BAR: the artwork draws the minimise and close buttons, so when the artwork is hidden the buttons are drawn on the bar itself
 do
 local YEL = Color3.fromRGB(255, 214, 60)
@@ -11283,6 +11317,29 @@ pcall(function() request({ Url = Net.URL .. "/" .. path .. ".json", Method = "PU
 end
 local function sanitize(k) return (string.gsub(tostring(k), "[%.%#%$%[%]/]", "_")) end
 local myName = Players.LocalPlayer.Name
+JH.netGet, JH.netPut = netGet, netPut
+JH.roles = JH.roles or {}
+task.spawn(function()
+while true do
+local ok, data = pcall(netGet, "roles")
+if ok and type(data) == "table" then JH.roles = data end
+task.wait(5)
+end
+end)
+local function badgeFor(name)
+local roles = JH.roles or {}
+if roles.owner and roles.owner ~= "" and name == roles.owner then
+return "\u{1F451} ", Color3.fromRGB(255, 215, 0), " #owner"
+end
+if type(roles.devs) == "string" then
+for dn in string.gmatch(roles.devs, "([^,]+)") do
+if string.gsub(dn, "^%s+", "") == name then return "\u{1F6E0} ", Color3.fromRGB(80, 220, 255), " #dev" end
+end
+end
+if roles.mod1 and roles.mod1 ~= "" and name == roles.mod1 then return "\u{1F6E1} ", Color3.fromRGB(190, 120, 255), " #mod" end
+if roles.mod2 and roles.mod2 ~= "" and name == roles.mod2 then return "\u{2B50} ", Color3.fromRGB(255, 160, 60), " #mod" end
+return "", nil, ""
+end
 
 local mainPage
 for _, p in ipairs(UI.pages) do if p.name == "Main" then mainPage = p end end
@@ -11332,6 +11389,7 @@ end
 end
 chatBox.FocusLost:Connect(function(enter) if enter then sendChat() end end)
 chatSendBtn.Activated:Connect(sendChat)
+local lastChatKey = nil
 task.spawn(function()
 while true do
 local data = netGet("chat")
@@ -11343,9 +11401,21 @@ for _, c in ipairs(chatList:GetChildren()) do if c:IsA("TextLabel") then c:Destr
 for i = math.max(1, #keys - 29), #keys do
 local m = data[keys[i]]
 if type(m) == "table" then
-UI.label({ Text = string.format("%s: %s", tostring(m.name or "?"), tostring(m.text or "")), TextSize = 11,
+local name = tostring(m.name or "?")
+local prefix, color, suffix = badgeFor(name)
+local lbl = UI.label({ Text = string.format("%s%s: %s%s", prefix, name, tostring(m.text or ""), suffix), TextSize = 11,
 Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true,
 TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = i, Parent = chatList }, false, "Text")
+if color then lbl.TextColor3 = color end
+end
+end
+local newest = keys[#keys]
+if newest and newest ~= lastChatKey then
+local wasFirst = lastChatKey == nil
+lastChatKey = newest
+local m = data[newest]
+if not wasFirst and type(m) == "table" and tostring(m.name or "") ~= myName then
+notify("JHub Chat", string.format("%s: %s", tostring(m.name or "?"), tostring(m.text or "")), 4)
 end
 end
 end
@@ -11381,6 +11451,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.81 - new Owner tab (code 2011) sets who gets a crown/gold/#owner or dev/mod badge in JHub Chat for everyone; chat now pops a notification for new messages; shared jumpshot timing now pushes/pulls every 2-4s instead of 10-20s so one person's locked timing reaches everyone almost instantly; calibration step/speed increased; removed the made-shot ding sound",
 "v1.80 - GuardAnimId never once beat the game\'s own real defensive animation in testing, so stopped fighting it - Auto Guard now always plays the real walk animation whenever actually moving, guarding or not",
 "v1.79 - found why Auto Rebound had a walk animation but Auto Guard did not: a wobble wrapper was marking Auto Guard as actively guarding on every single tick it ran, even mid-chase, so the walk animation never got picked - fixed",
 "v1.78 - Humanoid:Move did nothing for the walk animation either (same reason it did nothing for movement) - now manually plays the confirmed real walk/guard animation on top of CFrame movement",
@@ -11440,7 +11511,7 @@ local r = prevLearnNet(info, res, strength)
 if info and info.key and Shot.auto and Shot.auto[info.key] and Shot.auto[info.key].locked and not Shot.FINAL[info.key] then
 local a = Shot.auto[info.key]
 local now = tick()
-if (lastPush[info.key] or 0) + 10 < now then
+if (lastPush[info.key] or 0) + 2 < now then
 lastPush[info.key] = now
 task.spawn(netPut, "timing/" .. sanitize(info.key), { lead = a.hold, n = a.n or 0, by = myName, t = os.time() })
 end
@@ -11457,7 +11528,7 @@ if type(v) == "table" and type(v.lead) == "number" then merged[k] = v end
 end
 Net.lead = merged
 end
-task.wait(20)
+task.wait(4)
 end
 end)
 local prevSeedNet = Shot.seedLead
@@ -11745,7 +11816,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.80"
+local VERSION = "v1.81"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -11833,7 +11904,7 @@ local S = {
 	Codes = "100M 100KLIKES 500KMEMBERS 100KCCUPLS RELEASE SORRYFORBUGS", CodeRemotes = true,
 	-- shooting
 	AutoGreen = true, AutoCalibrate = true, AutoTiming = true, ShotRelease = "Auto",
-	HoldTime = 0.55, MaxHold = 1.6, CalSpeed = 0.6, CalStep = 0.02,
+	HoldTime = 0.55, MaxHold = 1.6, CalSpeed = 1.0, CalStep = 0.035,
 	ShotTimes = "", ShotRatio = 0, BarPath = "", BarProp = "", BarAt = 0, BarNudge = 0,
 	ShotStyle = "Hold", AutoExec = false, BallMagnet = false, MagnetMode = "Pull to me", MagnetRange = 25, Learn = false, PeakLead = 0.027, PerfectGreen = false, PerfectGreenPct = 100, AutoCal = true, AutoTimes = "", Sweep = false, MagnetFrames = 1, LogoOn = false, Logo = "Owner", MascotOn = false, Mascot = "SpongeBob", MaxOverall = false, MaxCoins = false, MaxBadges = false, MeterAim = false, MeterTarget = 1.0, MeterBin = 0.05, Lightning = true, BoltCount = 6, BoltSpeed = 1, BoltThick = 2, BoltBright = 0.9, BoltColor = "White + Yellow", BgMove = true, BgGlow = 0.5, BgOrbs = true, AccentMode = "Gold", OutlineSpeed = 1, LogoStyle = "J bolt H", LogoBg = true, Preset = "Lightning Gold", PacketOn = true, PacketMul = 1,
 	MovingOffset = 0, SprintOffset = 0, PingComp = 0, Humanize = 0, Nudge = 0, GreenSound = true,
@@ -13420,7 +13491,6 @@ function Shot.evaluate(info)
 		st.greens = st.greens + 1
 		st.streak = st.streak + 1
 		if st.streak > st.best then st.best = st.streak end
-		if S.GreenSound then local gid = string.match(tostring(S.GreenSoundId or ""), "%d+") playSound(gid and ("rbxassetid://" .. gid) or SND_CLICK, S.GreenSoundVol or 0.6) end
 	elseif res == "good" then
 		st.streak = 0
 	elseif res == "early" then
@@ -18213,7 +18283,6 @@ do
 	local al = UI.Card(P, "Alerts and keys")
 	UI.Toggle(al, "Notifications", "Notifications")
 	UI.Toggle(al, "Sounds", "Sounds")
-	UI.Toggle(al, "Green sound", "GreenSound")
 	UI.Input(al, "Green sound ID (Roblox audio number)", "GreenSoundId", nil, "paste a Roblox audio ID")
 	UI.Slider(al, "Green sound volume", "GreenSoundVol", 0.1, 1, 0.05, 2)
 	UI.Keybind(al, "Menu key (PC)", function() return S.MenuKey end, function(v) S.MenuKey = (v ~= "" and v) or "RightShift" end)
@@ -21824,6 +21893,42 @@ do
 		UI.Note(lock, "Everything in this tab is locked. Enter the code to open it.")
 	end
 end
+-- OWNER TAB: locked with its own code, sets who gets a crown/dev/mod badge in JHub Chat for everyone
+do
+local CODE2 = "2011"
+local mainPage
+for _, p in ipairs(UI.pages) do if p.name == "Main" then mainPage = p end end
+if mainPage then
+local OP = UI.Page("Owner", "O")
+local typed2 = ""
+local lock2 = UI.Card(OP, "Owner")
+UI.Input(lock2, "Code", { get = function() return typed2 end, set = function(v) typed2 = tostring(v or "") end }, nil, "enter the code")
+local rolesCard = UI.Card(OP, "Chat roles")
+rolesCard.frame.Visible = false
+local ownerName, devNames, mod1Name, mod2Name = Players.LocalPlayer.Name, "", "", ""
+UI.Input(rolesCard, "Owner name (gold text, crown, #owner)", { get = function() return ownerName end, set = function(v) ownerName = tostring(v or "") end }, nil, "owner's player name")
+UI.Input(rolesCard, "Devs (comma separated player names)", { get = function() return devNames end, set = function(v) devNames = tostring(v or "") end }, nil, "name1, name2")
+UI.Input(rolesCard, "Mod 1 name", { get = function() return mod1Name end, set = function(v) mod1Name = tostring(v or "") end }, nil, "player name")
+UI.Input(rolesCard, "Mod 2 name", { get = function() return mod2Name end, set = function(v) mod2Name = tostring(v or "") end }, nil, "player name")
+UI.Button(rolesCard, "Save and push to everyone", function()
+local roles = { owner = ownerName, devs = devNames, mod1 = mod1Name, mod2 = mod2Name, t = os.time() }
+JH.roles = roles
+if JH.netPut then task.spawn(JH.netPut, "roles", roles) end
+notify("Owner tab", "Roles saved and pushed - everyone's JHub Chat will show the badges.", 4)
+end, true)
+UI.Note(rolesCard, "Whoever is named here gets a badge next to their name in JHub Chat for everyone: the owner gets a gold crown and #owner, devs/mods get their own tag.")
+UI.Button(lock2, "Unlock", function()
+if string.gsub(typed2, "%s", "") == CODE2 then
+lock2.frame.Visible = false
+rolesCard.frame.Visible = true
+notify("Owner tab", "Unlocked", 3)
+else
+notify("Owner tab", "Wrong code", 3)
+end
+end, true)
+UI.Note(lock2, "Owner-only tab. Enter the code to manage chat crown/dev/mod badges.")
+end
+end
 -- MINIMISED BAR: the artwork draws the minimise and close buttons, so when the artwork is hidden the buttons are drawn on the bar itself
 do
 	local YEL = Color3.fromRGB(255, 214, 60)
@@ -23338,6 +23443,29 @@ pcall(function() request({ Url = Net.URL .. "/" .. path .. ".json", Method = "PU
 end
 local function sanitize(k) return (string.gsub(tostring(k), "[%.%#%$%[%]/]", "_")) end
 local myName = Players.LocalPlayer.Name
+JH.netGet, JH.netPut = netGet, netPut
+JH.roles = JH.roles or {}
+task.spawn(function()
+while true do
+local ok, data = pcall(netGet, "roles")
+if ok and type(data) == "table" then JH.roles = data end
+task.wait(5)
+end
+end)
+local function badgeFor(name)
+local roles = JH.roles or {}
+if roles.owner and roles.owner ~= "" and name == roles.owner then
+return "\u{1F451} ", Color3.fromRGB(255, 215, 0), " #owner"
+end
+if type(roles.devs) == "string" then
+for dn in string.gmatch(roles.devs, "([^,]+)") do
+if string.gsub(dn, "^%s+", "") == name then return "\u{1F6E0} ", Color3.fromRGB(80, 220, 255), " #dev" end
+end
+end
+if roles.mod1 and roles.mod1 ~= "" and name == roles.mod1 then return "\u{1F6E1} ", Color3.fromRGB(190, 120, 255), " #mod" end
+if roles.mod2 and roles.mod2 ~= "" and name == roles.mod2 then return "\u{2B50} ", Color3.fromRGB(255, 160, 60), " #mod" end
+return "", nil, ""
+end
 
 local mainPage
 for _, p in ipairs(UI.pages) do if p.name == "Main" then mainPage = p end end
@@ -23387,6 +23515,7 @@ end
 end
 chatBox.FocusLost:Connect(function(enter) if enter then sendChat() end end)
 chatSendBtn.Activated:Connect(sendChat)
+local lastChatKey = nil
 task.spawn(function()
 while true do
 local data = netGet("chat")
@@ -23398,9 +23527,21 @@ for _, c in ipairs(chatList:GetChildren()) do if c:IsA("TextLabel") then c:Destr
 for i = math.max(1, #keys - 29), #keys do
 local m = data[keys[i]]
 if type(m) == "table" then
-UI.label({ Text = string.format("%s: %s", tostring(m.name or "?"), tostring(m.text or "")), TextSize = 11,
+local name = tostring(m.name or "?")
+local prefix, color, suffix = badgeFor(name)
+local lbl = UI.label({ Text = string.format("%s%s: %s%s", prefix, name, tostring(m.text or ""), suffix), TextSize = 11,
 Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true,
 TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = i, Parent = chatList }, false, "Text")
+if color then lbl.TextColor3 = color end
+end
+end
+local newest = keys[#keys]
+if newest and newest ~= lastChatKey then
+local wasFirst = lastChatKey == nil
+lastChatKey = newest
+local m = data[newest]
+if not wasFirst and type(m) == "table" and tostring(m.name or "") ~= myName then
+notify("JHub Chat", string.format("%s: %s", tostring(m.name or "?"), tostring(m.text or "")), 4)
 end
 end
 end
@@ -23436,6 +23577,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.81 - new Owner tab (code 2011) sets who gets a crown/gold/#owner or dev/mod badge in JHub Chat for everyone; chat now pops a notification for new messages; shared jumpshot timing now pushes/pulls every 2-4s instead of 10-20s so one person's locked timing reaches everyone almost instantly; calibration step/speed increased; removed the made-shot ding sound",
 "v1.80 - GuardAnimId never once beat the game\'s own real defensive animation in testing, so stopped fighting it - Auto Guard now always plays the real walk animation whenever actually moving, guarding or not",
 "v1.79 - found why Auto Rebound had a walk animation but Auto Guard did not: a wobble wrapper was marking Auto Guard as actively guarding on every single tick it ran, even mid-chase, so the walk animation never got picked - fixed",
 "v1.78 - Humanoid:Move did nothing for the walk animation either (same reason it did nothing for movement) - now manually plays the confirmed real walk/guard animation on top of CFrame movement",
@@ -23495,7 +23637,7 @@ local r = prevLearnNet(info, res, strength)
 if info and info.key and Shot.auto and Shot.auto[info.key] and Shot.auto[info.key].locked and not Shot.FINAL[info.key] then
 local a = Shot.auto[info.key]
 local now = tick()
-if (lastPush[info.key] or 0) + 10 < now then
+if (lastPush[info.key] or 0) + 2 < now then
 lastPush[info.key] = now
 task.spawn(netPut, "timing/" .. sanitize(info.key), { lead = a.hold, n = a.n or 0, by = myName, t = os.time() })
 end
@@ -23512,7 +23654,7 @@ if type(v) == "table" and type(v.lead) == "number" then merged[k] = v end
 end
 Net.lead = merged
 end
-task.wait(20)
+task.wait(4)
 end
 end)
 local prevSeedNet = Shot.seedLead
