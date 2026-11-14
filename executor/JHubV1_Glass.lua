@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.57"
+local VERSION = "v1.58"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -11206,9 +11206,10 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.58 - removed the lock code from the visible update log",
 "v1.57 - found it: a leftover line was hiding the Auto Guard tab and force-disabling it every load",
-"v1.56 - rebuilt Auto Guard tab self-contained with its own 6022 code lock",
-"v1.55 - Auto Guard now locked behind the Locked tab code (6022), same as the other tools",
+"v1.56 - rebuilt Auto Guard tab self-contained with its own code lock",
+"v1.55 - Auto Guard now locked behind the Locked tab code, same as the other tools",
 "v1.54 - Auto Guard rebuilt plain again (CFrame + real animation, no simulated input); recorder moved onto its own tab",
 "v1.53 - added Remote Guard Recorder: catches every animation and movement state while guarding",
 "v1.52 - fixed sideways drift and stuck movement when auto guard stops being called",
@@ -11503,7 +11504,7 @@ end
 ]==]
 
 -- DISCORD GATE: the first time the script runs, a window asks for a Discord join before anything else loads
-local GATE_VERSION = "v1.57"
+local GATE_VERSION = "v1.58"
 local okGate, errGate = pcall(function()
 	local FILE = "JHub_discord_ok.txt"
 	local INVITE = "https://discord.gg/fk5TsZMrRM"
@@ -11638,7 +11639,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.57"
+local VERSION = "v1.58"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -23152,9 +23153,10 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.58 - removed the lock code from the visible update log",
 "v1.57 - found it: a leftover line was hiding the Auto Guard tab and force-disabling it every load",
-"v1.56 - rebuilt Auto Guard tab self-contained with its own 6022 code lock",
-"v1.55 - Auto Guard now locked behind the Locked tab code (6022), same as the other tools",
+"v1.56 - rebuilt Auto Guard tab self-contained with its own code lock",
+"v1.55 - Auto Guard now locked behind the Locked tab code, same as the other tools",
 "v1.54 - Auto Guard rebuilt plain again (CFrame + real animation, no simulated input); recorder moved onto its own tab",
 "v1.53 - added Remote Guard Recorder: catches every animation and movement state while guarding",
 "v1.52 - fixed sideways drift and stuck movement when auto guard stops being called",
