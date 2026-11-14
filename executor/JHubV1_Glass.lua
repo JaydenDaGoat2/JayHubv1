@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.64"
+local VERSION = "v1.65"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -7419,10 +7419,10 @@ if not S.APPause then return false end
 local d = Mover.gameDir
 return d ~= nil and tick() - (Mover.gameDirT or 0) < 0.4 and flat(d).Magnitude > 0.35
 end
--- a stale leftover track from the old guessed-id attempt can fool the learner into "learning" our own fake id back - throw it out if it's still sitting there
-if S.WalkAnimId == "rbxassetid://135438934392621" then S.WalkAnimId = "" saveSoon() end
+-- confirmed from a real remote guard recorder log (this game's real Jog/defensive slide ids) - bootstrap these so Auto Guard has a walk animation immediately instead of waiting on another learning pass, now that the old bad exclusion is gone
+if not S.WalkAnimId or S.WalkAnimId == "" then S.WalkAnimId = "rbxassetid://135438934392621" saveSoon() end
+if not S.GuardAnimId or S.GuardAnimId == "" then S.GuardAnimId = "rbxassetid://16597565910" saveSoon() end
 -- learn two real animations from how you actually move: a normal walk (facing roughly the way you're moving) and a defensive slide (facing one way, moving sideways/backward - the real signature of guarding someone), instead of guessing an id or treating all movement the same
-local JUNKWALK = "rbxassetid://135438934392621"
 local walkLastPos, walkLastT
 bind(RunService.Heartbeat, function()
 	local needWalk = not S.WalkAnimId or S.WalkAnimId == ""
@@ -7446,7 +7446,7 @@ bind(RunService.Heartbeat, function()
 	end
 	for _, tr in ipairs(h:GetPlayingAnimationTracks()) do
 		local id = tr.Animation and tr.Animation.AnimationId
-		if tr.Priority == Enum.AnimationPriority.Movement and tr.Looped and id and id ~= "" and id ~= JUNKWALK then
+		if tr.Priority == Enum.AnimationPriority.Movement and tr.Looped and id and id ~= "" then
 			if isGuardMove and needGuard then
 				S.GuardAnimId = id
 				saveSoon()
@@ -11288,6 +11288,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.65 - found it: the real walk animation id was being auto-deleted by a leftover bad-id filter, so Auto Guard could never have one; fixed and bootstrapped the confirmed real ids",
 "v1.64 - Remote Guard Recorder now also watches whoever is nearest to you, not just yourself, and logs their walk/guard animation ids too",
 "v1.63 - Auto Guard now detects AI opponents (no Player object) and uses the real HomeTeam attribute instead of Player.Team",
 "v1.62 - recorder now polls currently-playing animations directly instead of waiting on a play event",
@@ -11727,7 +11728,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.64"
+local VERSION = "v1.65"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -19455,10 +19456,10 @@ do
 		local d = Mover.gameDir
 		return d ~= nil and tick() - (Mover.gameDirT or 0) < 0.4 and flat(d).Magnitude > 0.35
 	end
-	-- a stale leftover track from the old guessed-id attempt can fool the learner into "learning" our own fake id back - throw it out if it's still sitting there
-	if S.WalkAnimId == "rbxassetid://135438934392621" then S.WalkAnimId = "" saveSoon() end
+	-- confirmed from a real remote guard recorder log (this game's real Jog/defensive slide ids) - bootstrap these so Auto Guard has a walk animation immediately instead of waiting on another learning pass, now that the old bad exclusion is gone
+	if not S.WalkAnimId or S.WalkAnimId == "" then S.WalkAnimId = "rbxassetid://135438934392621" saveSoon() end
+	if not S.GuardAnimId or S.GuardAnimId == "" then S.GuardAnimId = "rbxassetid://16597565910" saveSoon() end
 	-- learn two real animations from how you actually move: a normal walk (facing roughly the way you're moving) and a defensive slide (facing one way, moving sideways/backward - the real signature of guarding someone), instead of guessing an id or treating all movement the same
-	local JUNKWALK = "rbxassetid://135438934392621"
 	local walkLastPos, walkLastT
 	bind(RunService.Heartbeat, function()
 		local needWalk = not S.WalkAnimId or S.WalkAnimId == ""
@@ -19482,7 +19483,7 @@ do
 		end
 		for _, tr in ipairs(h:GetPlayingAnimationTracks()) do
 			local id = tr.Animation and tr.Animation.AnimationId
-			if tr.Priority == Enum.AnimationPriority.Movement and tr.Looped and id and id ~= "" and id ~= JUNKWALK then
+			if tr.Priority == Enum.AnimationPriority.Movement and tr.Looped and id and id ~= "" then
 				if isGuardMove and needGuard then
 					S.GuardAnimId = id
 					saveSoon()
@@ -23324,6 +23325,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.65 - found it: the real walk animation id was being auto-deleted by a leftover bad-id filter, so Auto Guard could never have one; fixed and bootstrapped the confirmed real ids",
 "v1.64 - Remote Guard Recorder now also watches whoever is nearest to you, not just yourself, and logs their walk/guard animation ids too",
 "v1.63 - Auto Guard now detects AI opponents (no Player object) and uses the real HomeTeam attribute instead of Player.Team",
 "v1.62 - recorder now polls currently-playing animations directly instead of waiting on a play event",
