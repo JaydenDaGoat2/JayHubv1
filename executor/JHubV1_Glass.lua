@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.82"
+local VERSION = "v1.83"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -9793,18 +9793,32 @@ local lock2 = UI.Card(OP, "Owner")
 UI.Input(lock2, "Code", { get = function() return typed2 end, set = function(v) typed2 = tostring(v or "") end }, nil, "enter the code")
 local rolesCard = UI.Card(OP, "Chat roles")
 rolesCard.frame.Visible = false
-local ownerName, devNames, mod1Name, mod2Name = Players.LocalPlayer.Name, "", "", ""
+local existing = JH.roles or {}
+local ownerName, devNames, mod1Name, mod2Name, ownerCode = tostring(existing.owner or ""), tostring(existing.devs or ""), tostring(existing.mod1 or ""), tostring(existing.mod2 or ""), ""
 UI.Input(rolesCard, "Owner name (gold text, crown, #owner)", { get = function() return ownerName end, set = function(v) ownerName = tostring(v or "") end }, nil, "owner's player name")
+UI.Input(rolesCard, "Owner code (only needed to set/change the Owner)", { get = function() return ownerCode end, set = function(v) ownerCode = tostring(v or "") end }, nil, "required to change the Owner")
 UI.Input(rolesCard, "Devs (comma separated player names)", { get = function() return devNames end, set = function(v) devNames = tostring(v or "") end }, nil, "name1, name2")
 UI.Input(rolesCard, "Mod 1 name", { get = function() return mod1Name end, set = function(v) mod1Name = tostring(v or "") end }, nil, "player name")
 UI.Input(rolesCard, "Mod 2 name", { get = function() return mod2Name end, set = function(v) mod2Name = tostring(v or "") end }, nil, "player name")
 UI.Button(rolesCard, "Save and push to everyone", function()
-local roles = { owner = ownerName, devs = devNames, mod1 = mod1Name, mod2 = mod2Name, t = os.time() }
+local cur = JH.roles or {}
+local newOwner = cur.owner or ""
+if ownerName ~= (cur.owner or "") then
+if string.lower(string.gsub(ownerCode, "%s", "")) == "jay" then
+newOwner = ownerName
+else
+notify("Owner tab", "Wrong owner code - the Owner was not changed. Devs/mods still saved.", 4)
+end
+else
+newOwner = ownerName
+end
+ownerName, ownerCode = newOwner, ""
+local roles = { owner = newOwner, devs = devNames, mod1 = mod1Name, mod2 = mod2Name, t = os.time() }
 JH.roles = roles
 if JH.netPut then task.spawn(JH.netPut, "roles", roles) end
 notify("Owner tab", "Roles saved and pushed - everyone's JHub Chat will show the badges.", 4)
 end, true)
-UI.Note(rolesCard, "Whoever is named here gets a badge next to their name in JHub Chat for everyone: the owner gets a gold crown and #owner, devs/mods get their own tag.")
+UI.Note(rolesCard, "Whoever is named here gets a badge next to their name in JHub Chat for everyone: the owner gets a gold crown and #owner, devs/mods get their own tag. Once set, a role stays until changed - changing the Owner needs the Owner code, not just the tab code.")
 if S.OwnerUnlocked then
 task.defer(function()
 lock2.frame.Visible = false
@@ -11473,6 +11487,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.83 - the Owner tab's 2011 code alone could let anyone rename themselves Owner, overwriting whoever had it; now the roles screen loads the current Owner/devs/mods instead of defaulting to you, roles stay set until someone changes them, and changing who the Owner is now needs a separate code on top of 2011",
 "v1.82 - entering the Auto Guard, Locked, or Owner tab code once now sticks - it stays unlocked after the script resets/reloads, no need to retype it",
 "v1.81 - new Owner tab (code 2011) sets who gets a crown/gold/#owner or dev/mod badge in JHub Chat for everyone; chat now pops a notification for new messages; shared jumpshot timing now pushes/pulls every 2-4s instead of 10-20s so one person's locked timing reaches everyone almost instantly; calibration step/speed increased; removed the made-shot ding sound",
 "v1.80 - GuardAnimId never once beat the game\'s own real defensive animation in testing, so stopped fighting it - Auto Guard now always plays the real walk animation whenever actually moving, guarding or not",
@@ -11839,7 +11854,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.82"
+local VERSION = "v1.83"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -21942,18 +21957,32 @@ local lock2 = UI.Card(OP, "Owner")
 UI.Input(lock2, "Code", { get = function() return typed2 end, set = function(v) typed2 = tostring(v or "") end }, nil, "enter the code")
 local rolesCard = UI.Card(OP, "Chat roles")
 rolesCard.frame.Visible = false
-local ownerName, devNames, mod1Name, mod2Name = Players.LocalPlayer.Name, "", "", ""
+local existing = JH.roles or {}
+local ownerName, devNames, mod1Name, mod2Name, ownerCode = tostring(existing.owner or ""), tostring(existing.devs or ""), tostring(existing.mod1 or ""), tostring(existing.mod2 or ""), ""
 UI.Input(rolesCard, "Owner name (gold text, crown, #owner)", { get = function() return ownerName end, set = function(v) ownerName = tostring(v or "") end }, nil, "owner's player name")
+UI.Input(rolesCard, "Owner code (only needed to set/change the Owner)", { get = function() return ownerCode end, set = function(v) ownerCode = tostring(v or "") end }, nil, "required to change the Owner")
 UI.Input(rolesCard, "Devs (comma separated player names)", { get = function() return devNames end, set = function(v) devNames = tostring(v or "") end }, nil, "name1, name2")
 UI.Input(rolesCard, "Mod 1 name", { get = function() return mod1Name end, set = function(v) mod1Name = tostring(v or "") end }, nil, "player name")
 UI.Input(rolesCard, "Mod 2 name", { get = function() return mod2Name end, set = function(v) mod2Name = tostring(v or "") end }, nil, "player name")
 UI.Button(rolesCard, "Save and push to everyone", function()
-local roles = { owner = ownerName, devs = devNames, mod1 = mod1Name, mod2 = mod2Name, t = os.time() }
+local cur = JH.roles or {}
+local newOwner = cur.owner or ""
+if ownerName ~= (cur.owner or "") then
+if string.lower(string.gsub(ownerCode, "%s", "")) == "jay" then
+newOwner = ownerName
+else
+notify("Owner tab", "Wrong owner code - the Owner was not changed. Devs/mods still saved.", 4)
+end
+else
+newOwner = ownerName
+end
+ownerName, ownerCode = newOwner, ""
+local roles = { owner = newOwner, devs = devNames, mod1 = mod1Name, mod2 = mod2Name, t = os.time() }
 JH.roles = roles
 if JH.netPut then task.spawn(JH.netPut, "roles", roles) end
 notify("Owner tab", "Roles saved and pushed - everyone's JHub Chat will show the badges.", 4)
 end, true)
-UI.Note(rolesCard, "Whoever is named here gets a badge next to their name in JHub Chat for everyone: the owner gets a gold crown and #owner, devs/mods get their own tag.")
+UI.Note(rolesCard, "Whoever is named here gets a badge next to their name in JHub Chat for everyone: the owner gets a gold crown and #owner, devs/mods get their own tag. Once set, a role stays until changed - changing the Owner needs the Owner code, not just the tab code.")
 if S.OwnerUnlocked then
 task.defer(function()
 lock2.frame.Visible = false
@@ -23622,6 +23651,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.83 - the Owner tab's 2011 code alone could let anyone rename themselves Owner, overwriting whoever had it; now the roles screen loads the current Owner/devs/mods instead of defaulting to you, roles stay set until someone changes them, and changing who the Owner is now needs a separate code on top of 2011",
 "v1.82 - entering the Auto Guard, Locked, or Owner tab code once now sticks - it stays unlocked after the script resets/reloads, no need to retype it",
 "v1.81 - new Owner tab (code 2011) sets who gets a crown/gold/#owner or dev/mod badge in JHub Chat for everyone; chat now pops a notification for new messages; shared jumpshot timing now pushes/pulls every 2-4s instead of 10-20s so one person's locked timing reaches everyone almost instantly; calibration step/speed increased; removed the made-shot ding sound",
 "v1.80 - GuardAnimId never once beat the game\'s own real defensive animation in testing, so stopped fighting it - Auto Guard now always plays the real walk animation whenever actually moving, guarding or not",
