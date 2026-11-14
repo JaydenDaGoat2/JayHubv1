@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.86"
+local VERSION = "v1.87"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -6334,6 +6334,7 @@ while JH.Running do
 count = count + 1
 local ok, holding, source = pcall(Ball.check)
 if ok then
+if holding and not Ball.holding then Ball.holdSince = tick() end
 Ball.holding, Ball.source = holding, source
 end
 pcall(Feat.tick, count)
@@ -9532,7 +9533,7 @@ end
 end
 copy(table.concat(lines, "\n"), "Shot profiles")
 end)
-UI.Note(c, "Each jumpshot animation gets its own timing profile automatically - switching jumpshots switches profiles, no setup needed. A profile needs enough consistent real shots before it is trusted (locked); until then it is still learning. If a locked profile starts missing consistently, it is automatically unlocked and flagged to retest instead of staying trusted forever.")
+UI.Note(c, "Each jumpshot animation gets its own timing profile automatically - switching jumpshots switches profiles, no setup needed. A profile needs enough consistent real shots before it is trusted (locked); until then it is still learning. If a locked profile starts missing consistently, it is automatically unlocked and flagged to retest instead of staying trusted forever. Situations seen also tracks real shot distance (close/mid/three) and catch-and-shoot vs off-the-dribble, from actual position and ball-hold data.")
 task.spawn(function()
 while true do
 local cur = Shot.cur
@@ -11569,6 +11570,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.87 - Shot Intelligence now tags real shot distance (close/mid/three, from actual position vs the hoop) and catch-and-shoot vs off-the-dribble (from how long you'd actually had the ball) per profile - still metadata only, the timing learner itself stays per-animation so this doesn't fragment it. Did not add fake animation-phase detection (prep/release/follow-through) - the game doesn't expose keyframe data to back it, so it's skipped rather than faked",
 "v1.86 - Universal Shot Intelligence: every jumpshot animation now gets a persisted profile (name, length, times seen, situations seen, first/last seen, identified or not), a locked profile that starts missing consistently is automatically unlocked and flagged to retest instead of staying trusted forever, and an animation that cannot be identified is labeled as such instead of silently reusing another profile's data - all shown on the Shot Intelligence card",
 "v1.85 - new Shot Intelligence card shows the detected jumpshot, its animation ID, calibration status, confidence (sample count/locked/built-in), active timing, and how many profiles are known, plus a button to copy every profile - this is the existing per-animation timing-profile system (automatic per-jumpshot profiles, auto switching when you change jumpshots) made visible instead of hidden",
 "v1.84 - a jumpshot used to only get shared as a found best timing network-wide if someone hit a literal real Perfect on it; now any jumpshot whose adaptive learner converges with enough real samples (12+) gets shared the same way, so every jumpshot anyone actually plays eventually gets a found-and-shared best timing, not just the rare Perfects",
@@ -11765,6 +11767,25 @@ end
 rec.lastSeen = os.time()
 rec.timesSeen = (rec.timesSeen or 0) + 1
 if info.sit then rec.sits[info.sit] = (rec.sits[info.sit] or 0) + 1 end
+-- SHOT CLASSIFICATION ENGINE, continued: real distance-to-hoop and catch-vs-pullup tags, from actual position/ball-hold
+-- data (not guessed categories) - kept as metadata on the profile, not separate learners, since the timing itself is
+-- still keyed per animation only (mixing situations into the learner itself was explicitly what the spec warned against)
+do
+local okc, r = pcall(hrp)
+if okc and r then
+local okh, hoop = pcall(Bot.nearestHoop, r.Position)
+if okh and hoop then
+local dist = (r.Position - hoop).Magnitude
+local bucket = dist < 15 and "close" or (dist < 25 and "mid" or "three")
+rec.sits[bucket] = (rec.sits[bucket] or 0) + 1
+end
+end
+if Ball.holdSince then
+local heldFor = tick() - Ball.holdSince
+local tag = heldFor < 0.35 and "catch-and-shoot" or "off-the-dribble"
+rec.sits[tag] = (rec.sits[tag] or 0) + 1
+end
+end
 if not rec.identified and identified then rec.identified = true end
 if ShotIntel.lastKey ~= key then
 ShotIntel.switched = { from = ShotIntel.lastKey, to = key, t = tick() }
@@ -12023,7 +12044,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.86"
+local VERSION = "v1.87"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -18657,6 +18678,7 @@ task.spawn(function()
 		count = count + 1
 		local ok, holding, source = pcall(Ball.check)
 		if ok then
+			if holding and not Ball.holding then Ball.holdSince = tick() end
 			Ball.holding, Ball.source = holding, source
 		end
 		pcall(Feat.tick, count)
@@ -21865,7 +21887,7 @@ end
 end
 copy(table.concat(lines, "\n"), "Shot profiles")
 end)
-UI.Note(c, "Each jumpshot animation gets its own timing profile automatically - switching jumpshots switches profiles, no setup needed. A profile needs enough consistent real shots before it is trusted (locked); until then it is still learning. If a locked profile starts missing consistently, it is automatically unlocked and flagged to retest instead of staying trusted forever.")
+UI.Note(c, "Each jumpshot animation gets its own timing profile automatically - switching jumpshots switches profiles, no setup needed. A profile needs enough consistent real shots before it is trusted (locked); until then it is still learning. If a locked profile starts missing consistently, it is automatically unlocked and flagged to retest instead of staying trusted forever. Situations seen also tracks real shot distance (close/mid/three) and catch-and-shoot vs off-the-dribble, from actual position and ball-hold data.")
 task.spawn(function()
 while true do
 local cur = Shot.cur
@@ -23902,6 +23924,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.87 - Shot Intelligence now tags real shot distance (close/mid/three, from actual position vs the hoop) and catch-and-shoot vs off-the-dribble (from how long you'd actually had the ball) per profile - still metadata only, the timing learner itself stays per-animation so this doesn't fragment it. Did not add fake animation-phase detection (prep/release/follow-through) - the game doesn't expose keyframe data to back it, so it's skipped rather than faked",
 "v1.86 - Universal Shot Intelligence: every jumpshot animation now gets a persisted profile (name, length, times seen, situations seen, first/last seen, identified or not), a locked profile that starts missing consistently is automatically unlocked and flagged to retest instead of staying trusted forever, and an animation that cannot be identified is labeled as such instead of silently reusing another profile's data - all shown on the Shot Intelligence card",
 "v1.85 - new Shot Intelligence card shows the detected jumpshot, its animation ID, calibration status, confidence (sample count/locked/built-in), active timing, and how many profiles are known, plus a button to copy every profile - this is the existing per-animation timing-profile system (automatic per-jumpshot profiles, auto switching when you change jumpshots) made visible instead of hidden",
 "v1.84 - a jumpshot used to only get shared as a found best timing network-wide if someone hit a literal real Perfect on it; now any jumpshot whose adaptive learner converges with enough real samples (12+) gets shared the same way, so every jumpshot anyone actually plays eventually gets a found-and-shared best timing, not just the rare Perfects",
@@ -24098,6 +24121,25 @@ end
 rec.lastSeen = os.time()
 rec.timesSeen = (rec.timesSeen or 0) + 1
 if info.sit then rec.sits[info.sit] = (rec.sits[info.sit] or 0) + 1 end
+-- SHOT CLASSIFICATION ENGINE, continued: real distance-to-hoop and catch-vs-pullup tags, from actual position/ball-hold
+-- data (not guessed categories) - kept as metadata on the profile, not separate learners, since the timing itself is
+-- still keyed per animation only (mixing situations into the learner itself was explicitly what the spec warned against)
+do
+local okc, r = pcall(hrp)
+if okc and r then
+local okh, hoop = pcall(Bot.nearestHoop, r.Position)
+if okh and hoop then
+local dist = (r.Position - hoop).Magnitude
+local bucket = dist < 15 and "close" or (dist < 25 and "mid" or "three")
+rec.sits[bucket] = (rec.sits[bucket] or 0) + 1
+end
+end
+if Ball.holdSince then
+local heldFor = tick() - Ball.holdSince
+local tag = heldFor < 0.35 and "catch-and-shoot" or "off-the-dribble"
+rec.sits[tag] = (rec.sits[tag] or 0) + 1
+end
+end
 if not rec.identified and identified then rec.identified = true end
 if ShotIntel.lastKey ~= key then
 ShotIntel.switched = { from = ShotIntel.lastKey, to = key, t = tick() }
