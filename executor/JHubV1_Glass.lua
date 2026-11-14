@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.47"
+local VERSION = "v1.48"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -7843,7 +7843,7 @@ local g1 = UI.Card(GP, "Auto guard")
 UI.Toggle(g1, "Auto guard", "AG")
 UI.Dropdown(g1, "Who to guard", "AGTarget", { "Ball handler", "Closest to me", "Closest to hoop" })
 UI.Slider(g1, "Guard distance (studs in front)", "AGDist", 1, 12, 0.5, 1)
-UI.Note(g1, "Speed comes from Guard speed in the Players tab.")
+UI.Note(g1, "Guarding now moves like a real player: it presses the real Guard button and sends real stick input, so the game controls the speed and animation itself. Guard speed in the Players tab no longer applies to Auto Guard.")
 UI.Slider(g1, "Reaction time", "AGReact", 0, 0.5, 0.01, 2, "s")
 UI.Slider(g1, "Prediction (looks ahead)", "AGPredict", 0, 0.6, 0.02, 2, "s")
 UI.Slider(g1, "Guard range", "AGRange", 10, 120, 5, 0, " studs")
@@ -8289,6 +8289,35 @@ Shot.finalSave()
 end
 end
 
+-- real guarding in this game is server-driven: the real Guard button fires HoldG and the server takes over movement/animation from MoveDirection input, the same as any real player. Auto Guard does the same two calls instead of sliding the character itself, so the game's own physics and Defensive animations play exactly as they do for a human.
+local holdGRemote, moveDirRemote, guardHeld
+local function findRemote(name)
+local d = game:GetService("ReplicatedStorage"):FindFirstChild(name, true)
+return (d and d:IsA("RemoteEvent")) and d or nil
+end
+function Bot.setGuardHold(on)
+local c = char()
+local already = c and c:GetAttribute("HoldingG") == true
+if on == already then guardHeld = on return end
+holdGRemote = holdGRemote or findRemote("HoldG")
+if holdGRemote then
+Mover.selfFire = true
+pcall(function() holdGRemote:FireServer({}) end)
+Mover.selfFire = false
+end
+guardHeld = on
+end
+function Bot.guardMove(dir)
+moveDirRemote = moveDirRemote or findRemote("MoveDirection")
+if not moveDirRemote then return false end
+Mover.selfFire = true
+pcall(function() moveDirRemote:FireServer(dir) end)
+Mover.selfFire = false
+return true
+end
+bind(RunService.Heartbeat, function()
+if not S.AG and guardHeld then Bot.setGuardHold(false) end
+end)
 -- the guard looks like a player: it sways, reacts a little differently each time, sometimes hesitates and never runs faster than a player can
 function Bot.guardStep(me, others, forced)
 local t = Bot.pickTarget(others, me, forced)
@@ -8315,24 +8344,22 @@ local spot = ppos + dirf.Unit * S.AGDist
 if w and amt > 0 then spot = spot + Vector3.new(w.ox, 0, w.oz) end
 Bot.spot, Bot.spotTarget, Bot.spotT = spot, t, now
 end
+Bot.setGuardHold(true)
 if w and amt > 0 and w.pause > now then
-Bot.stopMove()
+Bot.guardMove(Vector3.new())
 if S.AGFace then Bot.faceAt(t.pos) end
 Bot.status = "Guarding " .. t.pl.Name
 return true
 end
 local to = flat(Bot.spot - me)
 local d = to.Magnitude
-local mul = 1 + (S.GuardSpeed or 0) / 100
-if amt > 0 then mul = math.min(mul * w.sp, (S.AGLock and (1 + 0.8 * amt) or (1 + 0.35 * amt))) end
 if d < 0.5 then
-Bot.stopMove()
+Bot.guardMove(Vector3.new())
 else
 local gain = S.AGLock and 1 or math.min(1, d / 3)
-Bot.move(to.Unit * gain, mul)
+Bot.guardMove(to.Unit * gain * (w and amt > 0 and w.sp or 1))
 end
 if S.AGFace then Bot.faceAt(t.pos) end
-Bot.setSprint(S.AGSprint and d > 7)
 Bot.status = "Guarding " .. t.pl.Name
 return true
 end
@@ -10302,7 +10329,7 @@ local handler
 for _, o in ipairs(others) do
 if o.ball and not o.mate then handler = o end
 end
-if not handler then return false end
+if not handler then Bot.setGuardHold(false) return false end
 forced = "Ball handler"
 end
 return prevG(me, others, forced)
@@ -10691,8 +10718,8 @@ for _, tr in ipairs(h:GetPlayingAnimationTracks()) do
 local id = tr.Animation and tr.Animation.AnimationId or "?"
 tracks[#tracks + 1] = string.format("%s(%s,%s)", id, tr.Priority.Name, tostring(tr.Looped))
 end
-table.insert(JH.guardLog, string.format("%s  state=%s  moveDir=%.2f  dist=%.1f  guarding=%s  tracks=%s",
-os.date("%H:%M:%S"), h:GetState().Name, h.MoveDirection.Magnitude, dist or -1, tostring(Bot.status or ""), #tracks > 0 and table.concat(tracks, " | ") or "none"))
+table.insert(JH.guardLog, string.format("%s  state=%s  holdingG=%s  moveDir=%.2f  dist=%.1f  guarding=%s  tracks=%s",
+os.date("%H:%M:%S"), h:GetState().Name, tostring(char() and char():GetAttribute("HoldingG")), h.MoveDirection.Magnitude, dist or -1, tostring(Bot.status or ""), #tracks > 0 and table.concat(tracks, " | ") or "none"))
 if #JH.guardLog > 300 then table.remove(JH.guardLog, 1) end
 end)
 UI.Toggle(card, "Record guarding", "GuardSpyOn", function(v)
@@ -11132,6 +11159,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.48 - Auto Guard now presses the real Guard button and lets the server drive movement",
 "v1.47 - learns your real defensive slide animation separately from your walk",
 "v1.46 - fixed the walk animation learner relearning its own old fake id",
 "v1.45 - fixed walk animation never being learned (this game does not use MoveDirection)",
@@ -11419,7 +11447,7 @@ end
 ]==]
 
 -- DISCORD GATE: the first time the script runs, a window asks for a Discord join before anything else loads
-local GATE_VERSION = "v1.47"
+local GATE_VERSION = "v1.48"
 local okGate, errGate = pcall(function()
 	local FILE = "JHub_discord_ok.txt"
 	local INVITE = "https://discord.gg/fk5TsZMrRM"
@@ -11554,7 +11582,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.47"
+local VERSION = "v1.48"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -19705,7 +19733,7 @@ do
 	UI.Toggle(g1, "Auto guard", "AG")
 	UI.Dropdown(g1, "Who to guard", "AGTarget", { "Ball handler", "Closest to me", "Closest to hoop" })
 	UI.Slider(g1, "Guard distance (studs in front)", "AGDist", 1, 12, 0.5, 1)
-	UI.Note(g1, "Speed comes from Guard speed in the Players tab.")
+	UI.Note(g1, "Guarding now moves like a real player: it presses the real Guard button and sends real stick input, so the game controls the speed and animation itself. Guard speed in the Players tab no longer applies to Auto Guard.")
 	UI.Slider(g1, "Reaction time", "AGReact", 0, 0.5, 0.01, 2, "s")
 	UI.Slider(g1, "Prediction (looks ahead)", "AGPredict", 0, 0.6, 0.02, 2, "s")
 	UI.Slider(g1, "Guard range", "AGRange", 10, 120, 5, 0, " studs")
@@ -20151,6 +20179,35 @@ do
 		end
 	end
 
+	-- real guarding in this game is server-driven: the real Guard button fires HoldG and the server takes over movement/animation from MoveDirection input, the same as any real player. Auto Guard does the same two calls instead of sliding the character itself, so the game's own physics and Defensive animations play exactly as they do for a human.
+	local holdGRemote, moveDirRemote, guardHeld
+	local function findRemote(name)
+		local d = game:GetService("ReplicatedStorage"):FindFirstChild(name, true)
+		return (d and d:IsA("RemoteEvent")) and d or nil
+	end
+	function Bot.setGuardHold(on)
+		local c = char()
+		local already = c and c:GetAttribute("HoldingG") == true
+		if on == already then guardHeld = on return end
+		holdGRemote = holdGRemote or findRemote("HoldG")
+		if holdGRemote then
+			Mover.selfFire = true
+			pcall(function() holdGRemote:FireServer({}) end)
+			Mover.selfFire = false
+		end
+		guardHeld = on
+	end
+	function Bot.guardMove(dir)
+		moveDirRemote = moveDirRemote or findRemote("MoveDirection")
+		if not moveDirRemote then return false end
+		Mover.selfFire = true
+		pcall(function() moveDirRemote:FireServer(dir) end)
+		Mover.selfFire = false
+		return true
+	end
+	bind(RunService.Heartbeat, function()
+		if not S.AG and guardHeld then Bot.setGuardHold(false) end
+	end)
 	-- the guard looks like a player: it sways, reacts a little differently each time, sometimes hesitates and never runs faster than a player can
 	function Bot.guardStep(me, others, forced)
 		local t = Bot.pickTarget(others, me, forced)
@@ -20177,24 +20234,22 @@ do
 			if w and amt > 0 then spot = spot + Vector3.new(w.ox, 0, w.oz) end
 			Bot.spot, Bot.spotTarget, Bot.spotT = spot, t, now
 		end
+		Bot.setGuardHold(true)
 		if w and amt > 0 and w.pause > now then
-			Bot.stopMove()
+			Bot.guardMove(Vector3.new())
 			if S.AGFace then Bot.faceAt(t.pos) end
 			Bot.status = "Guarding " .. t.pl.Name
 			return true
 		end
 		local to = flat(Bot.spot - me)
 		local d = to.Magnitude
-		local mul = 1 + (S.GuardSpeed or 0) / 100
-		if amt > 0 then mul = math.min(mul * w.sp, (S.AGLock and (1 + 0.8 * amt) or (1 + 0.35 * amt))) end
 		if d < 0.5 then
-			Bot.stopMove()
+			Bot.guardMove(Vector3.new())
 		else
 			local gain = S.AGLock and 1 or math.min(1, d / 3)
-			Bot.move(to.Unit * gain, mul)
+			Bot.guardMove(to.Unit * gain * (w and amt > 0 and w.sp or 1))
 		end
 		if S.AGFace then Bot.faceAt(t.pos) end
-		Bot.setSprint(S.AGSprint and d > 7)
 		Bot.status = "Guarding " .. t.pl.Name
 		return true
 	end
@@ -22164,7 +22219,7 @@ do
 			for _, o in ipairs(others) do
 				if o.ball and not o.mate then handler = o end
 			end
-			if not handler then return false end
+			if not handler then Bot.setGuardHold(false) return false end
 			forced = "Ball handler"
 		end
 		return prevG(me, others, forced)
@@ -22553,8 +22608,8 @@ do
 				local id = tr.Animation and tr.Animation.AnimationId or "?"
 				tracks[#tracks + 1] = string.format("%s(%s,%s)", id, tr.Priority.Name, tostring(tr.Looped))
 			end
-			table.insert(JH.guardLog, string.format("%s  state=%s  moveDir=%.2f  dist=%.1f  guarding=%s  tracks=%s",
-				os.date("%H:%M:%S"), h:GetState().Name, h.MoveDirection.Magnitude, dist or -1, tostring(Bot.status or ""), #tracks > 0 and table.concat(tracks, " | ") or "none"))
+			table.insert(JH.guardLog, string.format("%s  state=%s  holdingG=%s  moveDir=%.2f  dist=%.1f  guarding=%s  tracks=%s",
+				os.date("%H:%M:%S"), h:GetState().Name, tostring(char() and char():GetAttribute("HoldingG")), h.MoveDirection.Magnitude, dist or -1, tostring(Bot.status or ""), #tracks > 0 and table.concat(tracks, " | ") or "none"))
 			if #JH.guardLog > 300 then table.remove(JH.guardLog, 1) end
 		end)
 		UI.Toggle(card, "Record guarding", "GuardSpyOn", function(v)
@@ -22994,6 +23049,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.48 - Auto Guard now presses the real Guard button and lets the server drive movement",
 "v1.47 - learns your real defensive slide animation separately from your walk",
 "v1.46 - fixed the walk animation learner relearning its own old fake id",
 "v1.45 - fixed walk animation never being learned (this game does not use MoveDirection)",
