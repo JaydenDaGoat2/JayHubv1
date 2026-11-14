@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.46"
+local VERSION = "v1.47"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -151,7 +151,7 @@ AGOnlyBall = true,
 BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
 BindKey1 = "", BindArgs1 = "", BindKey2 = "", BindArgs2 = "", BindKey3 = "", BindArgs3 = "", BindKey4 = "", BindArgs4 = "", BindKey5 = "", BindArgs5 = "", BindKey6 = "", BindArgs6 = "",
 LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
-AG = false, AGTarget = "Ball handler", AGDist = 4, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true, WalkAnimId = "",
+AG = false, AGTarget = "Ball handler", AGDist = 4, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true, WalkAnimId = "", GuardAnimId = "",
 AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
 AR = false, ARSpeed = 1, ARReact = 0.18, ARRange = 45, ARJump = true, ARMagnet = true, ARMagRange = 4, ARMarker = false,
 AP = false, APBuild = "Small", APPostScore = true, APAllAround = true, APOpenDist = 6, APRange = 24, APThree = true, APDrive = true, APLayups = true, APSprint = true, APMoves = true,
@@ -7393,46 +7393,64 @@ if not S.APPause then return false end
 local d = Mover.gameDir
 return d ~= nil and tick() - (Mover.gameDirT or 0) < 0.4 and flat(d).Magnitude > 0.35
 end
-local moveTrack, moveTrackHum
 -- a stale leftover track from the old guessed-id attempt can fool the learner into "learning" our own fake id back - throw it out if it's still sitting there
 if S.WalkAnimId == "rbxassetid://135438934392621" then S.WalkAnimId = "" saveSoon() end
--- learn the game's own real walk animation by watching what actually plays while you walk for real, instead of guessing an asset id or relying on MoveDirection (this game may drive movement without ever setting it)
+-- learn two real animations from how you actually move: a normal walk (facing roughly the way you're moving) and a defensive slide (facing one way, moving sideways/backward - the real signature of guarding someone), instead of guessing an id or treating all movement the same
+local JUNKWALK = "rbxassetid://135438934392621"
 local walkLastPos, walkLastT
 bind(RunService.Heartbeat, function()
-	if S.WalkAnimId and S.WalkAnimId ~= "" then return end
+	local needWalk = not S.WalkAnimId or S.WalkAnimId == ""
+	local needGuard = not S.GuardAnimId or S.GuardAnimId == ""
+	if not needWalk and not needGuard then return end
 	if Bot.cmd then return end
 	local h, r = hum(), Mover.body()
 	if not h or not r then return end
 	local now = tick()
-	local moving = false
+	local moveDelta, moving = Vector3.new(), false
 	if walkLastPos and walkLastT and now - walkLastT > 0 then
-		moving = flat(r.Position - walkLastPos).Magnitude / (now - walkLastT) > 3
+		moveDelta = flat(r.Position - walkLastPos)
+		moving = moveDelta.Magnitude / (now - walkLastT) > 3
 	end
 	walkLastPos, walkLastT = r.Position, now
 	if not moving then return end
+	local facing = flat(r.CFrame.LookVector)
+	local isGuardMove = false
+	if facing.Magnitude > 0.1 and moveDelta.Magnitude > 0.1 then
+		isGuardMove = facing.Unit:Dot(moveDelta.Unit) < 0.3
+	end
 	for _, tr in ipairs(h:GetPlayingAnimationTracks()) do
-		if tr.Priority == Enum.AnimationPriority.Movement and tr.Looped and tr.Animation and tr.Animation.AnimationId ~= "" and tr.Animation.AnimationId ~= "rbxassetid://135438934392621" then
-			S.WalkAnimId = tr.Animation.AnimationId
-			saveSoon()
-			notify("JHub", "Learned your real walk animation.", 3)
+		local id = tr.Animation and tr.Animation.AnimationId
+		if tr.Priority == Enum.AnimationPriority.Movement and tr.Looped and id and id ~= "" and id ~= JUNKWALK then
+			if isGuardMove and needGuard then
+				S.GuardAnimId = id
+				saveSoon()
+				notify("JHub", "Learned your real defensive slide animation.", 3)
+			elseif not isGuardMove and needWalk then
+				S.WalkAnimId = id
+				saveSoon()
+				notify("JHub", "Learned your real walk animation.", 3)
+			end
 			break
 		end
 	end
 end)
-local function walkTrack()
+local activeId, activeTrack
+local moveTracks = {}
+local function trackFor(id)
+	if not id or id == "" then return nil end
 	local h = hum()
 	if not h then return nil end
-	if moveTrack and moveTrackHum == h then return moveTrack end
-	if not S.WalkAnimId or S.WalkAnimId == "" then return nil end
+	local cached = moveTracks[id]
+	if cached and cached.hum == h then return cached.track end
 	local animator = h:FindFirstChildOfClass("Animator")
 	if not animator then return nil end
 	local anim = Instance.new("Animation")
-	anim.AnimationId = S.WalkAnimId
+	anim.AnimationId = id
 	local ok, track = pcall(function() return animator:LoadAnimation(anim) end)
 	if not ok or not track then return nil end
 	track.Priority = Enum.AnimationPriority.Movement
 	track.Looped = true
-	moveTrack, moveTrackHum = track, h
+	moveTracks[id] = { track = track, hum = h }
 	return track
 end
 bind(RunService.Stepped, function(_, dt)
@@ -7444,13 +7462,20 @@ bind(RunService.Stepped, function(_, dt)
 	if moving then
 		r.CFrame = r.CFrame + Bot.cmd * Speed.gameWS * Bot.mul * dt
 		Mover.sync(r)
-		local ok, tr = pcall(walkTrack)
-		if ok and tr then
-			tr.Speed = math.clamp(Bot.mul or 1, 0.6, 1.8)
-			if not tr.IsPlaying then tr:Play(0.15) end
+		-- while guarding (set just before Bot.move is called to guard), prefer the real defensive slide animation over the plain walk
+		local guarding = now - (Bot.guardingNow or 0) < 0.3
+		local id = (guarding and S.GuardAnimId and S.GuardAnimId ~= "") and S.GuardAnimId or S.WalkAnimId
+		if id ~= activeId then
+			if activeTrack then pcall(function() activeTrack:Stop(0.1) end) end
+			activeTrack = trackFor(id)
+			activeId = id
 		end
-	elseif moveTrack and moveTrack.IsPlaying then
-		moveTrack:Stop(0.15)
+		if activeTrack then
+			activeTrack.Speed = math.clamp(Bot.mul or 1, 0.6, 1.8)
+			if not activeTrack.IsPlaying then activeTrack:Play(0.15) end
+		end
+	elseif activeTrack and activeTrack.IsPlaying then
+		activeTrack:Stop(0.15)
 	end
 if Bot.face and now - Bot.faceT < 0.35 then
 local p = r.Position
@@ -10683,6 +10708,7 @@ UI.Buttons(card, {
 local log = JH.guardLog or {}
 local lines = { "== GUARD RECORDER " .. tostring(VERSION) .. " | " .. os.date("%Y-%m-%d %H:%M:%S"),
 "Learned walk animation id: " .. tostring(S.WalkAnimId ~= "" and S.WalkAnimId or "(not learned yet, walk for real once)"),
+				"Learned guard/slide animation id: " .. tostring(S.GuardAnimId ~= "" and S.GuardAnimId or "(not learned yet, guard someone for real once)"),
 string.format("Guard settings: dist=%s react=%s predict=%s range=%s guardSpeed=%s", tostring(S.AGDist), tostring(S.AGReact), tostring(S.AGPredict), tostring(S.AGRange), tostring(S.GuardSpeed)),
 "" }
 if #log == 0 then
@@ -11106,6 +11132,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.47 - learns your real defensive slide animation separately from your walk",
 "v1.46 - fixed the walk animation learner relearning its own old fake id",
 "v1.45 - fixed walk animation never being learned (this game does not use MoveDirection)",
 "v1.44 - guard recorder: records your real guarding and reports the learned walk animation id",
@@ -11392,7 +11419,7 @@ end
 ]==]
 
 -- DISCORD GATE: the first time the script runs, a window asks for a Discord join before anything else loads
-local GATE_VERSION = "v1.46"
+local GATE_VERSION = "v1.47"
 local okGate, errGate = pcall(function()
 	local FILE = "JHub_discord_ok.txt"
 	local INVITE = "https://discord.gg/fk5TsZMrRM"
@@ -11527,7 +11554,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.46"
+local VERSION = "v1.47"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -11639,7 +11666,7 @@ local S = {
 	BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
 	BindKey1 = "", BindArgs1 = "", BindKey2 = "", BindArgs2 = "", BindKey3 = "", BindArgs3 = "", BindKey4 = "", BindArgs4 = "", BindKey5 = "", BindArgs5 = "", BindKey6 = "", BindArgs6 = "",
 	LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
-	AG = false, AGTarget = "Ball handler", AGDist = 4, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true, WalkAnimId = "",
+	AG = false, AGTarget = "Ball handler", AGDist = 4, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true, WalkAnimId = "", GuardAnimId = "",
 	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
 	AR = false, ARSpeed = 1, ARReact = 0.18, ARRange = 45, ARJump = true, ARMagnet = true, ARMagRange = 4, ARMarker = false,
 	AP = false, APBuild = "Small", APPostScore = true, APAllAround = true, APOpenDist = 6, APRange = 24, APThree = true, APDrive = true, APLayups = true, APSprint = true, APMoves = true,
@@ -19229,46 +19256,64 @@ do
 		local d = Mover.gameDir
 		return d ~= nil and tick() - (Mover.gameDirT or 0) < 0.4 and flat(d).Magnitude > 0.35
 	end
-	local moveTrack, moveTrackHum
 	-- a stale leftover track from the old guessed-id attempt can fool the learner into "learning" our own fake id back - throw it out if it's still sitting there
 	if S.WalkAnimId == "rbxassetid://135438934392621" then S.WalkAnimId = "" saveSoon() end
-	-- learn the game's own real walk animation by watching what actually plays while you walk for real, instead of guessing an asset id or relying on MoveDirection (this game may drive movement without ever setting it)
+	-- learn two real animations from how you actually move: a normal walk (facing roughly the way you're moving) and a defensive slide (facing one way, moving sideways/backward - the real signature of guarding someone), instead of guessing an id or treating all movement the same
+	local JUNKWALK = "rbxassetid://135438934392621"
 	local walkLastPos, walkLastT
 	bind(RunService.Heartbeat, function()
-		if S.WalkAnimId and S.WalkAnimId ~= "" then return end
+		local needWalk = not S.WalkAnimId or S.WalkAnimId == ""
+		local needGuard = not S.GuardAnimId or S.GuardAnimId == ""
+		if not needWalk and not needGuard then return end
 		if Bot.cmd then return end
 		local h, r = hum(), Mover.body()
 		if not h or not r then return end
 		local now = tick()
-		local moving = false
+		local moveDelta, moving = Vector3.new(), false
 		if walkLastPos and walkLastT and now - walkLastT > 0 then
-			moving = flat(r.Position - walkLastPos).Magnitude / (now - walkLastT) > 3
+			moveDelta = flat(r.Position - walkLastPos)
+			moving = moveDelta.Magnitude / (now - walkLastT) > 3
 		end
 		walkLastPos, walkLastT = r.Position, now
 		if not moving then return end
+		local facing = flat(r.CFrame.LookVector)
+		local isGuardMove = false
+		if facing.Magnitude > 0.1 and moveDelta.Magnitude > 0.1 then
+			isGuardMove = facing.Unit:Dot(moveDelta.Unit) < 0.3
+		end
 		for _, tr in ipairs(h:GetPlayingAnimationTracks()) do
-			if tr.Priority == Enum.AnimationPriority.Movement and tr.Looped and tr.Animation and tr.Animation.AnimationId ~= "" and tr.Animation.AnimationId ~= "rbxassetid://135438934392621" then
-				S.WalkAnimId = tr.Animation.AnimationId
-				saveSoon()
-				notify("JHub", "Learned your real walk animation.", 3)
+			local id = tr.Animation and tr.Animation.AnimationId
+			if tr.Priority == Enum.AnimationPriority.Movement and tr.Looped and id and id ~= "" and id ~= JUNKWALK then
+				if isGuardMove and needGuard then
+					S.GuardAnimId = id
+					saveSoon()
+					notify("JHub", "Learned your real defensive slide animation.", 3)
+				elseif not isGuardMove and needWalk then
+					S.WalkAnimId = id
+					saveSoon()
+					notify("JHub", "Learned your real walk animation.", 3)
+				end
 				break
 			end
 		end
 	end)
-	local function walkTrack()
+	local activeId, activeTrack
+	local moveTracks = {}
+	local function trackFor(id)
+		if not id or id == "" then return nil end
 		local h = hum()
 		if not h then return nil end
-		if moveTrack and moveTrackHum == h then return moveTrack end
-		if not S.WalkAnimId or S.WalkAnimId == "" then return nil end
+		local cached = moveTracks[id]
+		if cached and cached.hum == h then return cached.track end
 		local animator = h:FindFirstChildOfClass("Animator")
 		if not animator then return nil end
 		local anim = Instance.new("Animation")
-		anim.AnimationId = S.WalkAnimId
+		anim.AnimationId = id
 		local ok, track = pcall(function() return animator:LoadAnimation(anim) end)
 		if not ok or not track then return nil end
 		track.Priority = Enum.AnimationPriority.Movement
 		track.Looped = true
-		moveTrack, moveTrackHum = track, h
+		moveTracks[id] = { track = track, hum = h }
 		return track
 	end
 	bind(RunService.Stepped, function(_, dt)
@@ -19280,13 +19325,19 @@ do
 		if moving then
 			r.CFrame = r.CFrame + Bot.cmd * Speed.gameWS * Bot.mul * dt
 			Mover.sync(r)
-			local ok, tr = pcall(walkTrack)
-			if ok and tr then
-				tr.Speed = math.clamp(Bot.mul or 1, 0.6, 1.8)
-				if not tr.IsPlaying then tr:Play(0.15) end
+			local guarding = now - (Bot.guardingNow or 0) < 0.3
+			local id = (guarding and S.GuardAnimId and S.GuardAnimId ~= "") and S.GuardAnimId or S.WalkAnimId
+			if id ~= activeId then
+				if activeTrack then pcall(function() activeTrack:Stop(0.1) end) end
+				activeTrack = trackFor(id)
+				activeId = id
 			end
-		elseif moveTrack and moveTrack.IsPlaying then
-			moveTrack:Stop(0.15)
+			if activeTrack then
+				activeTrack.Speed = math.clamp(Bot.mul or 1, 0.6, 1.8)
+				if not activeTrack.IsPlaying then activeTrack:Play(0.15) end
+			end
+		elseif activeTrack and activeTrack.IsPlaying then
+			activeTrack:Stop(0.15)
 		end
 		if Bot.face and now - Bot.faceT < 0.35 then
 			local p = r.Position
@@ -22519,6 +22570,7 @@ do
 			local log = JH.guardLog or {}
 			local lines = { "== GUARD RECORDER " .. tostring(VERSION) .. " | " .. os.date("%Y-%m-%d %H:%M:%S"),
 				"Learned walk animation id: " .. tostring(S.WalkAnimId ~= "" and S.WalkAnimId or "(not learned yet, walk for real once)"),
+				"Learned guard/slide animation id: " .. tostring(S.GuardAnimId ~= "" and S.GuardAnimId or "(not learned yet, guard someone for real once)"),
 				string.format("Guard settings: dist=%s react=%s predict=%s range=%s guardSpeed=%s", tostring(S.AGDist), tostring(S.AGReact), tostring(S.AGPredict), tostring(S.AGRange), tostring(S.GuardSpeed)),
 				"" }
 			if #log == 0 then
@@ -22942,6 +22994,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.47 - learns your real defensive slide animation separately from your walk",
 "v1.46 - fixed the walk animation learner relearning its own old fake id",
 "v1.45 - fixed walk animation never being learned (this game does not use MoveDirection)",
 "v1.44 - guard recorder: records your real guarding and reports the learned walk animation id",
