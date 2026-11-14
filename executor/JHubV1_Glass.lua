@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.58"
+local VERSION = "v1.59"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -10395,7 +10395,7 @@ end
 end
 -- UPDATE BUTTON: checks GitHub for the newest version and loads it
 do
-local OWNER, REPO, BRANCH = "jaydendagoat2", "jayhubv1", "claude/claudechud-8cord-executor-wclom3"
+local OWNER, REPO, BRANCH = "jaydendagoat2", "jayhubv1", "claude/claudechud-8cord-executor-x86h7a"
 local function http(url) return game:HttpGet(url) end
 local function latestSha()
 local branch = string.gsub(BRANCH, "/", "%%2F")
@@ -11206,6 +11206,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.59 - fixed the in-script update checker pointing at the wrong, stale branch",
 "v1.58 - removed the lock code from the visible update log",
 "v1.57 - found it: a leftover line was hiding the Auto Guard tab and force-disabling it every load",
 "v1.56 - rebuilt Auto Guard tab self-contained with its own code lock",
@@ -11504,7 +11505,7 @@ end
 ]==]
 
 -- DISCORD GATE: the first time the script runs, a window asks for a Discord join before anything else loads
-local GATE_VERSION = "v1.58"
+local GATE_VERSION = "v1.59"
 local okGate, errGate = pcall(function()
 	local FILE = "JHub_discord_ok.txt"
 	local INVITE = "https://discord.gg/fk5TsZMrRM"
@@ -11639,7 +11640,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.58"
+local VERSION = "v1.59"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -22342,7 +22343,7 @@ do
 end
 -- UPDATE BUTTON: checks GitHub for the newest version and loads it
 do
-	local OWNER, REPO, BRANCH = "jaydendagoat2", "jayhubv1", "claude/claudechud-8cord-executor-wclom3"
+	local OWNER, REPO, BRANCH = "jaydendagoat2", "jayhubv1", "claude/claudechud-8cord-executor-x86h7a"
 	local function http(url) return game:HttpGet(url) end
 	local function latestSha()
 		local branch = string.gsub(BRANCH, "/", "%%2F")
@@ -23153,6 +23154,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.59 - fixed the in-script update checker pointing at the wrong, stale branch",
 "v1.58 - removed the lock code from the visible update log",
 "v1.57 - found it: a leftover line was hiding the Auto Guard tab and force-disabling it every load",
 "v1.56 - rebuilt Auto Guard tab self-contained with its own code lock",
