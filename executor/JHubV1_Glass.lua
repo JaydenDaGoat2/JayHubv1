@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.87"
+local VERSION = "v1.88"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -9511,6 +9511,7 @@ local sHold = UI.Stat(c, "Active timing")
 local sSeen = UI.Stat(c, "Recognized before")
 local sTimes = UI.Stat(c, "Times seen")
 local sSit = UI.Stat(c, "Situations seen")
+local sRelease = UI.Stat(c, "Release point (of animation)")
 local sRetest = UI.Stat(c, "Needs retest")
 local sKnown = UI.Stat(c, "Known profiles")
 UI.Button(c, "Copy every known shot profile", function()
@@ -9564,10 +9565,15 @@ else
 sSit.Text = "-"
 end
 sRetest.Text = (rec and rec.needsRetest) and "Yes - flagged" or "No"
+if rec and rec.releaseAvg then
+sRelease.Text = string.format("%.0f%% (range %.0f-%.0f%%)", rec.releaseAvg * 100, rec.releaseLo * 100, rec.releaseHi * 100)
+else
+sRelease.Text = "No track data yet"
+end
 if rec and not rec.identified then sStatus.Text = "Unidentified animation" end
 else
 sName.Text, sId.Text, sStatus.Text, sConf.Text, sHold.Text = "-", "-", "Shoot to see it", "-", "-"
-sSeen.Text, sTimes.Text, sSit.Text, sRetest.Text = "-", "-", "-", "-"
+sSeen.Text, sTimes.Text, sSit.Text, sRetest.Text, sRelease.Text = "-", "-", "-", "-", "-"
 end
 local known = 0
 for _ in pairs(Shot.FINAL) do known = known + 1 end
@@ -11570,6 +11576,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.88 - added real Release-Point Analysis: tracks where in the actual animation (held/track.Length, speed and framerate independent) the release really happens, as a rolling range per profile, shown as Release point on the Shot Intelligence card. Still did not add fake prep/upward/extension/follow-through phase labels since the game exposes no keyframe markers to back those - this one's real, that one still isn't",
 "v1.87 - Shot Intelligence now tags real shot distance (close/mid/three, from actual position vs the hoop) and catch-and-shoot vs off-the-dribble (from how long you'd actually had the ball) per profile - still metadata only, the timing learner itself stays per-animation so this doesn't fragment it. Did not add fake animation-phase detection (prep/release/follow-through) - the game doesn't expose keyframe data to back it, so it's skipped rather than faked",
 "v1.86 - Universal Shot Intelligence: every jumpshot animation now gets a persisted profile (name, length, times seen, situations seen, first/last seen, identified or not), a locked profile that starts missing consistently is automatically unlocked and flagged to retest instead of staying trusted forever, and an animation that cannot be identified is labeled as such instead of silently reusing another profile's data - all shown on the Shot Intelligence card",
 "v1.85 - new Shot Intelligence card shows the detected jumpshot, its animation ID, calibration status, confidence (sample count/locked/built-in), active timing, and how many profiles are known, plus a button to copy every profile - this is the existing per-animation timing-profile system (automatic per-jumpshot profiles, auto switching when you change jumpshots) made visible instead of hidden",
@@ -11785,6 +11792,24 @@ local heldFor = tick() - Ball.holdSince
 local tag = heldFor < 0.35 and "catch-and-shoot" or "off-the-dribble"
 rec.sits[tag] = (rec.sits[tag] or 0) + 1
 end
+end
+-- RELEASE-POINT ANALYSIS: real release point as a fraction of the animation's own length (held/track.Length), which is
+-- speed/framerate independent by construction - not a guessed phase label, just where in the real playback the release
+-- actually happened. Only possible when a real track is available (the remote capture path doesn't expose one); honest
+-- about that gap rather than guessing. Kept as a rolling window so a drifting release point is visible, not just a locked number.
+if info.track and (info.track.Length or 0) > 0.05 and info.held then
+local ratio = clamp(info.held / info.track.Length, 0, 1)
+local buf2 = rec.releasePoints
+if not buf2 then buf2 = {} rec.releasePoints = buf2 end
+table.insert(buf2, 1, ratio)
+while #buf2 > 20 do table.remove(buf2) end
+local sum, lo, hi = 0, 1, 0
+for _, v in ipairs(buf2) do
+sum = sum + v
+lo = math.min(lo, v)
+hi = math.max(hi, v)
+end
+rec.releaseAvg, rec.releaseLo, rec.releaseHi = sum / #buf2, lo, hi
 end
 if not rec.identified and identified then rec.identified = true end
 if ShotIntel.lastKey ~= key then
@@ -12044,7 +12069,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.87"
+local VERSION = "v1.88"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -21865,6 +21890,7 @@ local sHold = UI.Stat(c, "Active timing")
 local sSeen = UI.Stat(c, "Recognized before")
 local sTimes = UI.Stat(c, "Times seen")
 local sSit = UI.Stat(c, "Situations seen")
+local sRelease = UI.Stat(c, "Release point (of animation)")
 local sRetest = UI.Stat(c, "Needs retest")
 local sKnown = UI.Stat(c, "Known profiles")
 UI.Button(c, "Copy every known shot profile", function()
@@ -21918,10 +21944,15 @@ else
 sSit.Text = "-"
 end
 sRetest.Text = (rec and rec.needsRetest) and "Yes - flagged" or "No"
+if rec and rec.releaseAvg then
+sRelease.Text = string.format("%.0f%% (range %.0f-%.0f%%)", rec.releaseAvg * 100, rec.releaseLo * 100, rec.releaseHi * 100)
+else
+sRelease.Text = "No track data yet"
+end
 if rec and not rec.identified then sStatus.Text = "Unidentified animation" end
 else
 sName.Text, sId.Text, sStatus.Text, sConf.Text, sHold.Text = "-", "-", "Shoot to see it", "-", "-"
-sSeen.Text, sTimes.Text, sSit.Text, sRetest.Text = "-", "-", "-", "-"
+sSeen.Text, sTimes.Text, sSit.Text, sRetest.Text, sRelease.Text = "-", "-", "-", "-", "-"
 end
 local known = 0
 for _ in pairs(Shot.FINAL) do known = known + 1 end
@@ -23924,6 +23955,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.88 - added real Release-Point Analysis: tracks where in the actual animation (held/track.Length, speed and framerate independent) the release really happens, as a rolling range per profile, shown as Release point on the Shot Intelligence card. Still did not add fake prep/upward/extension/follow-through phase labels since the game exposes no keyframe markers to back those - this one's real, that one still isn't",
 "v1.87 - Shot Intelligence now tags real shot distance (close/mid/three, from actual position vs the hoop) and catch-and-shoot vs off-the-dribble (from how long you'd actually had the ball) per profile - still metadata only, the timing learner itself stays per-animation so this doesn't fragment it. Did not add fake animation-phase detection (prep/release/follow-through) - the game doesn't expose keyframe data to back it, so it's skipped rather than faked",
 "v1.86 - Universal Shot Intelligence: every jumpshot animation now gets a persisted profile (name, length, times seen, situations seen, first/last seen, identified or not), a locked profile that starts missing consistently is automatically unlocked and flagged to retest instead of staying trusted forever, and an animation that cannot be identified is labeled as such instead of silently reusing another profile's data - all shown on the Shot Intelligence card",
 "v1.85 - new Shot Intelligence card shows the detected jumpshot, its animation ID, calibration status, confidence (sample count/locked/built-in), active timing, and how many profiles are known, plus a button to copy every profile - this is the existing per-animation timing-profile system (automatic per-jumpshot profiles, auto switching when you change jumpshots) made visible instead of hidden",
@@ -24139,6 +24171,24 @@ local heldFor = tick() - Ball.holdSince
 local tag = heldFor < 0.35 and "catch-and-shoot" or "off-the-dribble"
 rec.sits[tag] = (rec.sits[tag] or 0) + 1
 end
+end
+-- RELEASE-POINT ANALYSIS: real release point as a fraction of the animation's own length (held/track.Length), which is
+-- speed/framerate independent by construction - not a guessed phase label, just where in the real playback the release
+-- actually happened. Only possible when a real track is available (the remote capture path doesn't expose one); honest
+-- about that gap rather than guessing. Kept as a rolling window so a drifting release point is visible, not just a locked number.
+if info.track and (info.track.Length or 0) > 0.05 and info.held then
+local ratio = clamp(info.held / info.track.Length, 0, 1)
+local buf2 = rec.releasePoints
+if not buf2 then buf2 = {} rec.releasePoints = buf2 end
+table.insert(buf2, 1, ratio)
+while #buf2 > 20 do table.remove(buf2) end
+local sum, lo, hi = 0, 1, 0
+for _, v in ipairs(buf2) do
+sum = sum + v
+lo = math.min(lo, v)
+hi = math.max(hi, v)
+end
+rec.releaseAvg, rec.releaseLo, rec.releaseHi = sum / #buf2, lo, hi
 end
 if not rec.identified and identified then rec.identified = true end
 if ShotIntel.lastKey ~= key then
