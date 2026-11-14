@@ -145,7 +145,7 @@ ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, St
 LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6,
+FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false,
 AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 AGOnlyBall = true,
 BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
@@ -6336,7 +6336,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.32  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.33  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -8822,7 +8822,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.32"
+d.Text = "JHub V1.33"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -10493,6 +10493,47 @@ local text = Rec.spyText()
 emit("JHub_remote_spy.txt", text, "Remote spy")
 end },
 })
+JH.ctrlLog = JH.ctrlLog or {}
+UI.Toggle(card, "Record controller inputs", "CtrlSpyOn", function(v)
+	if v then
+		JH.ctrlLog = {}
+		notify("Controller spy", "Press every button, stick and trigger on your controller now.", 5)
+	else
+		notify("Controller spy", "Stopped. Tap Copy controller log to get the report.", 4)
+	end
+end)
+UI.Buttons(card, {
+{ "Copy controller log", function()
+local log = JH.ctrlLog or {}
+local lines = { "== CONTROLLER INPUTS " .. tostring(VERSION) .. " | " .. os.date("%Y-%m-%d %H:%M:%S") }
+if #log == 0 then
+lines[#lines + 1] = "(nothing recorded yet, turn Record controller inputs on and press every button, stick and trigger)"
+else
+for _, l in ipairs(log) do lines[#lines + 1] = l end
+end
+emit("JHub_controller_log.txt", table.concat(lines, "\n"), "Controller log")
+end },
+})
+local lastAxis = {}
+local function isGamepad(t)
+	return t == Enum.UserInputType.Gamepad1 or t == Enum.UserInputType.Gamepad2 or t == Enum.UserInputType.Gamepad3 or t == Enum.UserInputType.Gamepad4
+end
+bind(UIS.InputBegan, function(i, gp)
+	if not S.CtrlSpyOn or not isGamepad(i.UserInputType) then return end
+	table.insert(JH.ctrlLog, string.format("%s  PRESS  %s  (%s)", os.date("%H:%M:%S"), i.KeyCode.Name, i.UserInputType.Name))
+	if #JH.ctrlLog > 300 then table.remove(JH.ctrlLog, 1) end
+end)
+bind(UIS.InputChanged, function(i, gp)
+	if not S.CtrlSpyOn or not isGamepad(i.UserInputType) then return end
+	local pos = i.Position
+	if pos.Magnitude < 0.08 then return end
+	local name = i.KeyCode.Name
+	local now = tick()
+	if lastAxis[name] and now - lastAxis[name] < 0.4 then return end
+	lastAxis[name] = now
+	table.insert(JH.ctrlLog, string.format("%s  AXIS  %s  (%s)  x=%.2f y=%.2f z=%.2f", os.date("%H:%M:%S"), name, i.UserInputType.Name, pos.X, pos.Y, pos.Z))
+	if #JH.ctrlLog > 300 then table.remove(JH.ctrlLog, 1) end
+end)
 end
 end
 -- JUMPSHOT MASTERY INSIDE THE ULTRA GAME RECORDER: which jumpshots in the game have been covered, what was learned for each, and every shot setting the game stores
@@ -11128,7 +11169,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.32", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.33", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -11315,7 +11356,7 @@ local S = {
 	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6,
+	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false,
 	AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 	AGOnlyBall = true,
 	BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
@@ -17846,7 +17887,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.32  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.33  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -20340,7 +20381,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.32"
+				d.Text = "JHub V1.33"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -22007,10 +22048,51 @@ UI.Note(card, "---- Dex and remote spy ----", "Text")
 				end)
 			end },
 			{ "Remote spy", function()
-				local text = Rec.spyText()
-				emit("JHub_remote_spy.txt", text, "Remote spy")
+			local text = Rec.spyText()
+			emit("JHub_remote_spy.txt", text, "Remote spy")
 			end },
-		})
+			})
+			JH.ctrlLog = JH.ctrlLog or {}
+			UI.Toggle(card, "Record controller inputs", "CtrlSpyOn", function(v)
+				if v then
+					JH.ctrlLog = {}
+					notify("Controller spy", "Press every button, stick and trigger on your controller now.", 5)
+				else
+					notify("Controller spy", "Stopped. Tap Copy controller log to get the report.", 4)
+				end
+			end)
+			UI.Buttons(card, {
+			{ "Copy controller log", function()
+			local log = JH.ctrlLog or {}
+			local lines = { "== CONTROLLER INPUTS " .. tostring(VERSION) .. " | " .. os.date("%Y-%m-%d %H:%M:%S") }
+			if #log == 0 then
+			lines[#lines + 1] = "(nothing recorded yet, turn Record controller inputs on and press every button, stick and trigger)"
+			else
+			for _, l in ipairs(log) do lines[#lines + 1] = l end
+			end
+			emit("JHub_controller_log.txt", table.concat(lines, "\n"), "Controller log")
+			end },
+			})
+			local lastAxis = {}
+			local function isGamepad(t)
+				return t == Enum.UserInputType.Gamepad1 or t == Enum.UserInputType.Gamepad2 or t == Enum.UserInputType.Gamepad3 or t == Enum.UserInputType.Gamepad4
+			end
+			bind(UIS.InputBegan, function(i, gp)
+				if not S.CtrlSpyOn or not isGamepad(i.UserInputType) then return end
+				table.insert(JH.ctrlLog, string.format("%s  PRESS  %s  (%s)", os.date("%H:%M:%S"), i.KeyCode.Name, i.UserInputType.Name))
+				if #JH.ctrlLog > 300 then table.remove(JH.ctrlLog, 1) end
+			end)
+			bind(UIS.InputChanged, function(i, gp)
+				if not S.CtrlSpyOn or not isGamepad(i.UserInputType) then return end
+				local pos = i.Position
+				if pos.Magnitude < 0.08 then return end
+				local name = i.KeyCode.Name
+				local now = tick()
+				if lastAxis[name] and now - lastAxis[name] < 0.4 then return end
+				lastAxis[name] = now
+				table.insert(JH.ctrlLog, string.format("%s  AXIS  %s  (%s)  x=%.2f y=%.2f z=%.2f", os.date("%H:%M:%S"), name, i.UserInputType.Name, pos.X, pos.Y, pos.Z))
+				if #JH.ctrlLog > 300 then table.remove(JH.ctrlLog, 1) end
+			end)
 	end
 end
 -- JUMPSHOT MASTERY INSIDE THE ULTRA GAME RECORDER: which jumpshots in the game have been covered, what was learned for each, and every shot setting the game stores
