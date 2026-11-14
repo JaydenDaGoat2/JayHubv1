@@ -6336,7 +6336,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.27  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.28  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -8809,7 +8809,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.27"
+d.Text = "JHub V1.28"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -10602,6 +10602,173 @@ return t .. "\n" .. table.concat(o, "\n")
 end
 end
 end
+-- 10 ALWAYS-ON LIVE HELPS FOR AUTO GREEN: small, clamped nudges on top of the existing learner. No toggle, cannot be turned off.
+do
+local legacySeed = Shot.seedLead
+local function liveChar() return char() end
+local pingAvg, pingN = 70, 0
+local function livePing()
+local ok, p = pcall(function() return Players.LocalPlayer:GetNetworkPing() * 1000 end)
+return ok and p or nil
+end
+local function pingBaseline(p)
+pingN = math.min(pingN + 1, 40)
+pingAvg = pingAvg + (p - pingAvg) / pingN
+return pingAvg
+end
+
+-- 1) a ping spike above your normal ping nudges the live hold a touch later
+local prevSeed1 = Shot.seedLead
+function Shot.seedLead(key)
+local v = prevSeed1(key)
+if Shot.FINAL[key] then return v end
+local p = livePing()
+if p then
+local base = pingBaseline(p)
+v = clamp(v + clamp((p - base) * 0.00004, -0.004, 0.008), 0, 0.1)
+end
+return v
+end
+
+-- 2) low stamina slows the shot animation down a touch, so the lead comes a little later
+local prevSeed2 = Shot.seedLead
+function Shot.seedLead(key)
+local v = prevSeed2(key)
+if Shot.FINAL[key] then return v end
+local c = liveChar()
+local st = c and c:GetAttribute("Stamina")
+if type(st) == "number" and st < 35 then
+v = clamp(v + (35 - st) * 0.00006, 0, 0.1)
+end
+return v
+end
+
+-- 3) standing and moving jumpshots are learned as two separate pools, so one does not drag the other around
+local moveFam, moveFamN = {}, {}
+local function movingNow()
+local c = liveChar()
+local v = c and c:GetAttribute("ServerVelocity")
+return (typeof(v) == "Vector3") and v.Magnitude > 3
+end
+local prevLearn3 = Shot.autoLearn
+function Shot.autoLearn(info, res, strength)
+local r = prevLearn3(info, res, strength)
+if info and info.lead and not info.manual and not Shot.FINAL[info.key] then
+local fam = Shot.familyOf(info.key)
+if fam then
+local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+if idx then
+local off = (idx == 5 and 0) or (idx == 4 and -1) or (idx - 5)
+if math.abs(off) <= 3 then
+local key2 = (movingNow() and "m:" or "s:") .. fam
+local n = moveFamN[key2] or 0
+local est = clamp(info.lead + off * (S.PeakBin or 0.014) * 0.8, 0, 0.1)
+moveFam[key2] = (n < 2) and est or (moveFam[key2] * 0.85 + est * 0.15)
+moveFamN[key2] = math.min(n + 1, 999)
+end
+end
+end
+end
+return r
+end
+local prevSeed3 = Shot.seedLead
+function Shot.seedLead(key)
+local v = prevSeed3(key)
+if Shot.FINAL[key] then return v end
+local fam = Shot.familyOf(key)
+if fam then
+local key2 = (movingNow() and "m:" or "s:") .. fam
+if (moveFamN[key2] or 0) >= 2 then v = clamp(moveFam[key2], 0, 0.1) end
+end
+return v
+end
+
+-- 4) your own character's live ShotSpeed scales the seed, instead of one flat number for every player
+local prevSeed4 = Shot.seedLead
+function Shot.seedLead(key)
+local v = prevSeed4(key)
+if Shot.FINAL[key] then return v end
+local c = liveChar()
+local sp = c and tonumber(c:GetAttribute("ShotSpeed"))
+if sp and sp > 0.3 and sp < 3 then
+local scale = clamp(1 / sp, 0.75, 1.3)
+v = clamp(v * (0.7 + 0.3 * scale), 0, 0.1)
+end
+return v
+end
+
+-- 5) a contested miss teaches the learner less than a wide-open miss
+local prevLearn5 = Shot.autoLearn
+function Shot.autoLearn(info, res, strength)
+if info and not info.manual and strength and res ~= "green" and res ~= "good" then
+local tag = string.match(tostring(Shot.fbText or ""), "Contest %- (%S+)")
+if tag and tag ~= "None" and tag ~= "Open" then strength = math.max(1, strength - 1) end
+end
+return prevLearn5(info, res, strength)
+end
+
+-- 6) a lag spike at the moment you learn from a shot also teaches the learner less
+local prevLearn6 = Shot.autoLearn
+function Shot.autoLearn(info, res, strength)
+if info and not info.manual and strength then
+local p = livePing()
+if p and p > pingAvg + 40 then strength = math.max(1, strength - 1) end
+end
+return prevLearn6(info, res, strength)
+end
+
+-- 7) a jumper you have barely seen moves toward the truth faster than one you already know well
+local prevLearn7 = Shot.autoLearn
+function Shot.autoLearn(info, res, strength)
+local a = Shot.auto and info and Shot.auto[info.key]
+local before, beforeN = a and a.hold, a and a.n or 0
+local r = prevLearn7(info, res, strength)
+if a and before and a.mode == "peak" and not (info and info.manual) and a.hold ~= before then
+local conf = math.min(1, beforeN / 12)
+a.hold = clamp(before + (a.hold - before) * (1.4 - conf * 0.7), 0, 0.1)
+end
+return r
+end
+
+-- 8) catching a pass straight into a shot gets its own small gather adjustment
+local prevSeed8 = Shot.seedLead
+function Shot.seedLead(key)
+local v = prevSeed8(key)
+if Shot.FINAL[key] then return v end
+local c = liveChar()
+local gt = c and tostring(c:GetAttribute("GatherType") or "")
+if gt ~= "" and string.find(string.lower(gt), "catch", 1, true) then
+v = clamp(v - 0.003, 0, 0.1)
+end
+return v
+end
+
+-- 9) one freak result does not swing the hold; it has to show up twice in a row first
+local lastOff = {}
+local prevLearn9 = Shot.autoLearn
+function Shot.autoLearn(info, res, strength)
+if info and info.key and not info.manual then
+local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+if idx then
+local off = (idx == 5 and 0) or (idx == 4 and -1) or (idx - 5)
+local last = lastOff[info.key]
+lastOff[info.key] = off
+if math.abs(off) >= 3 and (not last or math.abs(last) < 2) and strength then
+strength = math.max(1, strength - 1)
+end
+end
+end
+return prevLearn9(info, res, strength)
+end
+
+-- 10) whatever the nine above add up to, the live seed can never drift far from what the shot has actually earned
+local prevSeed10 = Shot.seedLead
+function Shot.seedLead(key)
+local v = prevSeed10(key)
+local orig = legacySeed(key)
+return clamp(clamp(v, orig - 0.015, orig + 0.015), 0, 0.1)
+end
+end
 UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
@@ -10765,7 +10932,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.27", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.28", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -17483,7 +17650,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.27  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.28  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -19964,7 +20131,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.27"
+				d.Text = "JHub V1.28"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -21755,6 +21922,173 @@ o[#o + 1] = string.format("  Jumpshot %d: speed %.3f  random %s", i, c[1], c[2] 
 end
 return t .. "\n" .. table.concat(o, "\n")
 end
+end
+end
+-- 10 ALWAYS-ON LIVE HELPS FOR AUTO GREEN: small, clamped nudges on top of the existing learner. No toggle, cannot be turned off.
+do
+local legacySeed = Shot.seedLead
+local function liveChar() return char() end
+local pingAvg, pingN = 70, 0
+local function livePing()
+local ok, p = pcall(function() return Players.LocalPlayer:GetNetworkPing() * 1000 end)
+return ok and p or nil
+end
+local function pingBaseline(p)
+pingN = math.min(pingN + 1, 40)
+pingAvg = pingAvg + (p - pingAvg) / pingN
+return pingAvg
+end
+
+-- 1) a ping spike above your normal ping nudges the live hold a touch later
+local prevSeed1 = Shot.seedLead
+function Shot.seedLead(key)
+local v = prevSeed1(key)
+if Shot.FINAL[key] then return v end
+local p = livePing()
+if p then
+local base = pingBaseline(p)
+v = clamp(v + clamp((p - base) * 0.00004, -0.004, 0.008), 0, 0.1)
+end
+return v
+end
+
+-- 2) low stamina slows the shot animation down a touch, so the lead comes a little later
+local prevSeed2 = Shot.seedLead
+function Shot.seedLead(key)
+local v = prevSeed2(key)
+if Shot.FINAL[key] then return v end
+local c = liveChar()
+local st = c and c:GetAttribute("Stamina")
+if type(st) == "number" and st < 35 then
+v = clamp(v + (35 - st) * 0.00006, 0, 0.1)
+end
+return v
+end
+
+-- 3) standing and moving jumpshots are learned as two separate pools, so one does not drag the other around
+local moveFam, moveFamN = {}, {}
+local function movingNow()
+local c = liveChar()
+local v = c and c:GetAttribute("ServerVelocity")
+return (typeof(v) == "Vector3") and v.Magnitude > 3
+end
+local prevLearn3 = Shot.autoLearn
+function Shot.autoLearn(info, res, strength)
+local r = prevLearn3(info, res, strength)
+if info and info.lead and not info.manual and not Shot.FINAL[info.key] then
+local fam = Shot.familyOf(info.key)
+if fam then
+local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+if idx then
+local off = (idx == 5 and 0) or (idx == 4 and -1) or (idx - 5)
+if math.abs(off) <= 3 then
+local key2 = (movingNow() and "m:" or "s:") .. fam
+local n = moveFamN[key2] or 0
+local est = clamp(info.lead + off * (S.PeakBin or 0.014) * 0.8, 0, 0.1)
+moveFam[key2] = (n < 2) and est or (moveFam[key2] * 0.85 + est * 0.15)
+moveFamN[key2] = math.min(n + 1, 999)
+end
+end
+end
+end
+return r
+end
+local prevSeed3 = Shot.seedLead
+function Shot.seedLead(key)
+local v = prevSeed3(key)
+if Shot.FINAL[key] then return v end
+local fam = Shot.familyOf(key)
+if fam then
+local key2 = (movingNow() and "m:" or "s:") .. fam
+if (moveFamN[key2] or 0) >= 2 then v = clamp(moveFam[key2], 0, 0.1) end
+end
+return v
+end
+
+-- 4) your own character's live ShotSpeed scales the seed, instead of one flat number for every player
+local prevSeed4 = Shot.seedLead
+function Shot.seedLead(key)
+local v = prevSeed4(key)
+if Shot.FINAL[key] then return v end
+local c = liveChar()
+local sp = c and tonumber(c:GetAttribute("ShotSpeed"))
+if sp and sp > 0.3 and sp < 3 then
+local scale = clamp(1 / sp, 0.75, 1.3)
+v = clamp(v * (0.7 + 0.3 * scale), 0, 0.1)
+end
+return v
+end
+
+-- 5) a contested miss teaches the learner less than a wide-open miss
+local prevLearn5 = Shot.autoLearn
+function Shot.autoLearn(info, res, strength)
+if info and not info.manual and strength and res ~= "green" and res ~= "good" then
+local tag = string.match(tostring(Shot.fbText or ""), "Contest %- (%S+)")
+if tag and tag ~= "None" and tag ~= "Open" then strength = math.max(1, strength - 1) end
+end
+return prevLearn5(info, res, strength)
+end
+
+-- 6) a lag spike at the moment you learn from a shot also teaches the learner less
+local prevLearn6 = Shot.autoLearn
+function Shot.autoLearn(info, res, strength)
+if info and not info.manual and strength then
+local p = livePing()
+if p and p > pingAvg + 40 then strength = math.max(1, strength - 1) end
+end
+return prevLearn6(info, res, strength)
+end
+
+-- 7) a jumper you have barely seen moves toward the truth faster than one you already know well
+local prevLearn7 = Shot.autoLearn
+function Shot.autoLearn(info, res, strength)
+local a = Shot.auto and info and Shot.auto[info.key]
+local before, beforeN = a and a.hold, a and a.n or 0
+local r = prevLearn7(info, res, strength)
+if a and before and a.mode == "peak" and not (info and info.manual) and a.hold ~= before then
+local conf = math.min(1, beforeN / 12)
+a.hold = clamp(before + (a.hold - before) * (1.4 - conf * 0.7), 0, 0.1)
+end
+return r
+end
+
+-- 8) catching a pass straight into a shot gets its own small gather adjustment
+local prevSeed8 = Shot.seedLead
+function Shot.seedLead(key)
+local v = prevSeed8(key)
+if Shot.FINAL[key] then return v end
+local c = liveChar()
+local gt = c and tostring(c:GetAttribute("GatherType") or "")
+if gt ~= "" and string.find(string.lower(gt), "catch", 1, true) then
+v = clamp(v - 0.003, 0, 0.1)
+end
+return v
+end
+
+-- 9) one freak result does not swing the hold; it has to show up twice in a row first
+local lastOff = {}
+local prevLearn9 = Shot.autoLearn
+function Shot.autoLearn(info, res, strength)
+if info and info.key and not info.manual then
+local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+if idx then
+local off = (idx == 5 and 0) or (idx == 4 and -1) or (idx - 5)
+local last = lastOff[info.key]
+lastOff[info.key] = off
+if math.abs(off) >= 3 and (not last or math.abs(last) < 2) and strength then
+strength = math.max(1, strength - 1)
+end
+end
+end
+return prevLearn9(info, res, strength)
+end
+
+-- 10) whatever the nine above add up to, the live seed can never drift far from what the shot has actually earned
+local prevSeed10 = Shot.seedLead
+function Shot.seedLead(key)
+local v = prevSeed10(key)
+local orig = legacySeed(key)
+return clamp(clamp(v, orig - 0.015, orig + 0.015), 0, 0.1)
 end
 end
 UI.syncAuto()
