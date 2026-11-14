@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.83"
+local VERSION = "v1.84"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -11487,6 +11487,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.84 - a jumpshot used to only get shared as a found best timing network-wide if someone hit a literal real Perfect on it; now any jumpshot whose adaptive learner converges with enough real samples (12+) gets shared the same way, so every jumpshot anyone actually plays eventually gets a found-and-shared best timing, not just the rare Perfects",
 "v1.83 - the Owner tab's 2011 code alone could let anyone rename themselves Owner, overwriting whoever had it; now the roles screen loads the current Owner/devs/mods instead of defaulting to you, roles stay set until someone changes them, and changing who the Owner is now needs a separate code on top of 2011",
 "v1.82 - entering the Auto Guard, Locked, or Owner tab code once now sticks - it stays unlocked after the script resets/reloads, no need to retype it",
 "v1.81 - new Owner tab (code 2011) sets who gets a crown/gold/#owner or dev/mod badge in JHub Chat for everyone; chat now pops a notification for new messages; shared jumpshot timing now pushes/pulls every 2-4s instead of 10-20s so one person's locked timing reaches everyone almost instantly; calibration step/speed increased; removed the made-shot ding sound",
@@ -11541,7 +11542,10 @@ UI.Note(ulog, table.concat({
 }, "\n"))
 end
 
--- SHARED TIMING POOL: once a jumpshot is locked on anyone's copy, it is shared so everyone's copy converges faster
+-- SHARED TIMING POOL: once a jumpshot is locked on anyone's copy, it is shared so everyone's copy converges faster.
+-- once that convergence is confident (enough real samples, not just a lucky first guess), broadcast it as a best-known
+-- timing for that jumpshot the same way a real Perfect does, so every jumpshot anyone actually plays eventually gets
+-- a found-and-shared best timing, not just the ones someone happens to hit a literal Perfect on
 local lastPush = {}
 local prevLearnNet = Shot.autoLearn
 function Shot.autoLearn(info, res, strength)
@@ -11551,7 +11555,8 @@ local a = Shot.auto[info.key]
 local now = tick()
 if (lastPush[info.key] or 0) + 2 < now then
 lastPush[info.key] = now
-task.spawn(netPut, "timing/" .. sanitize(info.key), { lead = a.hold, n = a.n or 0, by = myName, t = os.time() })
+local confident = (a.n or 0) >= 12
+task.spawn(netPut, "timing/" .. sanitize(info.key), { lead = a.hold, n = a.n or 0, hard = confident or nil, by = myName, t = os.time() })
 end
 end
 return r
@@ -11854,7 +11859,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.83"
+local VERSION = "v1.84"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -23651,6 +23656,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.84 - a jumpshot used to only get shared as a found best timing network-wide if someone hit a literal real Perfect on it; now any jumpshot whose adaptive learner converges with enough real samples (12+) gets shared the same way, so every jumpshot anyone actually plays eventually gets a found-and-shared best timing, not just the rare Perfects",
 "v1.83 - the Owner tab's 2011 code alone could let anyone rename themselves Owner, overwriting whoever had it; now the roles screen loads the current Owner/devs/mods instead of defaulting to you, roles stay set until someone changes them, and changing who the Owner is now needs a separate code on top of 2011",
 "v1.82 - entering the Auto Guard, Locked, or Owner tab code once now sticks - it stays unlocked after the script resets/reloads, no need to retype it",
 "v1.81 - new Owner tab (code 2011) sets who gets a crown/gold/#owner or dev/mod badge in JHub Chat for everyone; chat now pops a notification for new messages; shared jumpshot timing now pushes/pulls every 2-4s instead of 10-20s so one person's locked timing reaches everyone almost instantly; calibration step/speed increased; removed the made-shot ding sound",
@@ -23705,7 +23711,10 @@ UI.Note(ulog, table.concat({
 }, "\n"))
 end
 
--- SHARED TIMING POOL: once a jumpshot is locked on anyone's copy, it is shared so everyone's copy converges faster
+-- SHARED TIMING POOL: once a jumpshot is locked on anyone's copy, it is shared so everyone's copy converges faster.
+-- once that convergence is confident (enough real samples, not just a lucky first guess), broadcast it as a best-known
+-- timing for that jumpshot the same way a real Perfect does, so every jumpshot anyone actually plays eventually gets
+-- a found-and-shared best timing, not just the ones someone happens to hit a literal Perfect on
 local lastPush = {}
 local prevLearnNet = Shot.autoLearn
 function Shot.autoLearn(info, res, strength)
@@ -23715,7 +23724,8 @@ local a = Shot.auto[info.key]
 local now = tick()
 if (lastPush[info.key] or 0) + 2 < now then
 lastPush[info.key] = now
-task.spawn(netPut, "timing/" .. sanitize(info.key), { lead = a.hold, n = a.n or 0, by = myName, t = os.time() })
+local confident = (a.n or 0) >= 12
+task.spawn(netPut, "timing/" .. sanitize(info.key), { lead = a.hold, n = a.n or 0, hard = confident or nil, by = myName, t = os.time() })
 end
 end
 return r
