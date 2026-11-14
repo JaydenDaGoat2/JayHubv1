@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.52"
+local VERSION = "v1.53"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -145,7 +145,7 @@ ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, St
 LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "",
+FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false,
 AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 AGOnlyBall = true,
 BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
@@ -10409,6 +10409,67 @@ table.insert(UI.lockedTools, 3, c.frame)
 c.frame.Visible = false
 end
 end
+-- REMOTE GUARD RECORDER: catches every animation (not just movement ones) and every bit of movement state while you guard for real, so a real fix can be built from actual data instead of another guess
+do
+local gp2
+for _, p in ipairs(UI.pages) do
+if p.name == "Auto Guard" then gp2 = p end
+end
+if gp2 and UI.lockedTools then
+local rc = UI.Card(gp2, "Remote Guard Recorder")
+UI.Note(rc, "Turn this on, then guard someone for real for 10-15 seconds (walk toward them, away, side to side). It catches every animation that plays on you - priority, speed, looped or not - plus your real position, HoldingG, Action and state each tick.")
+JH.rguardLog = JH.rguardLog or {}
+local conn
+UI.Toggle(rc, "Record everything about guarding", "RGuardOn", function(v)
+if v then
+JH.rguardLog = {}
+local h = hum()
+if h then
+conn = h.AnimationPlayed:Connect(function(track)
+if not S.RGuardOn then return end
+table.insert(JH.rguardLog, string.format("%s  anim  name=%s  id=%s  prio=%s  looped=%s  speed=%.2f",
+os.date("%H:%M:%S"), track.Name, (track.Animation and track.Animation.AnimationId) or "?", track.Priority.Name, tostring(track.Looped), track.Speed))
+if #JH.rguardLog > 500 then table.remove(JH.rguardLog, 1) end
+end)
+end
+notify("Remote Guard Recorder", "Recording. Guard someone for real now.", 5)
+else
+if conn then conn:Disconnect() conn = nil end
+notify("Remote Guard Recorder", "Stopped. Tap Copy to get the report.", 4)
+end
+end)
+local lastPos, lastLog = nil, 0
+bind(RunService.Heartbeat, function()
+if not S.RGuardOn then return end
+local now = tick()
+if now - lastLog < 0.2 then return end
+lastLog = now
+local h, r = hum(), Mover.body()
+if not h or not r then return end
+local speed = 0
+if lastPos then speed = flat(r.Position - lastPos).Magnitude / 0.2 end
+lastPos = r.Position
+local c2 = char()
+table.insert(JH.rguardLog, string.format("%s  move  state=%s  speed=%.1f  holdingG=%s  action=%s  guarding=%s",
+os.date("%H:%M:%S"), h:GetState().Name, speed, tostring(c2 and c2:GetAttribute("HoldingG")), tostring(c2 and c2:GetAttribute("Action")), tostring(Bot.status or "")))
+if #JH.rguardLog > 500 then table.remove(JH.rguardLog, 1) end
+end)
+UI.Button(rc, "Copy remote guard log", function()
+local lines = { "== REMOTE GUARD RECORDER " .. tostring(VERSION) .. " | " .. os.date("%Y-%m-%d %H:%M:%S") }
+if #JH.rguardLog == 0 then
+lines[#lines + 1] = "(nothing recorded yet, turn it on and guard someone for real first)"
+else
+for _, l in ipairs(JH.rguardLog) do lines[#lines + 1] = l end
+end
+local text = table.concat(lines, "\n")
+pcall(function() if type(writefile) == "function" then writefile("JHub_remote_guard_log.txt", text) end end)
+if type(setclipboard) == "function" then pcall(setclipboard, text) end
+notify("Remote Guard Recorder", string.format("%.0f KB, saved as JHub_remote_guard_log.txt and copied", #text / 1024), 6)
+end)
+table.insert(UI.lockedTools, 4, rc.frame)
+rc.frame.Visible = false
+end
+end
 -- UPDATE BUTTON: checks GitHub for the newest version and loads it
 do
 local OWNER, REPO, BRANCH = "jaydendagoat2", "jayhubv1", "claude/claudechud-8cord-executor-wclom3"
@@ -11222,6 +11283,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.53 - added Remote Guard Recorder: catches every animation and movement state while guarding",
 "v1.52 - fixed sideways drift and stuck movement when auto guard stops being called",
 "v1.51 - Auto Guard rebuilt: holds real Guard button, follows with real keys/joystick",
 "v1.50 - Auto Guard holds the real Guard button instead of crafting remote calls",
@@ -11514,7 +11576,7 @@ end
 ]==]
 
 -- DISCORD GATE: the first time the script runs, a window asks for a Discord join before anything else loads
-local GATE_VERSION = "v1.52"
+local GATE_VERSION = "v1.53"
 local okGate, errGate = pcall(function()
 	local FILE = "JHub_discord_ok.txt"
 	local INVITE = "https://discord.gg/fk5TsZMrRM"
@@ -11649,7 +11711,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.52"
+local VERSION = "v1.53"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -11755,7 +11817,7 @@ local S = {
 	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "",
+	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false,
 	AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 	AGOnlyBall = true,
 	BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
@@ -22362,6 +22424,67 @@ do
 		c.frame.Visible = false
 	end
 end
+-- REMOTE GUARD RECORDER: catches every animation (not just movement ones) and every bit of movement state while you guard for real, so a real fix can be built from actual data instead of another guess
+do
+	local gp2
+	for _, p in ipairs(UI.pages) do
+		if p.name == "Auto Guard" then gp2 = p end
+	end
+	if gp2 and UI.lockedTools then
+		local rc = UI.Card(gp2, "Remote Guard Recorder")
+		UI.Note(rc, "Turn this on, then guard someone for real for 10-15 seconds (walk toward them, away, side to side). It catches every animation that plays on you - priority, speed, looped or not - plus your real position, HoldingG, Action and state each tick.")
+		JH.rguardLog = JH.rguardLog or {}
+		local conn
+		UI.Toggle(rc, "Record everything about guarding", "RGuardOn", function(v)
+			if v then
+				JH.rguardLog = {}
+				local h = hum()
+				if h then
+					conn = h.AnimationPlayed:Connect(function(track)
+						if not S.RGuardOn then return end
+						table.insert(JH.rguardLog, string.format("%s  anim  name=%s  id=%s  prio=%s  looped=%s  speed=%.2f",
+							os.date("%H:%M:%S"), track.Name, (track.Animation and track.Animation.AnimationId) or "?", track.Priority.Name, tostring(track.Looped), track.Speed))
+						if #JH.rguardLog > 500 then table.remove(JH.rguardLog, 1) end
+					end)
+				end
+				notify("Remote Guard Recorder", "Recording. Guard someone for real now.", 5)
+			else
+				if conn then conn:Disconnect() conn = nil end
+				notify("Remote Guard Recorder", "Stopped. Tap Copy to get the report.", 4)
+			end
+		end)
+		local lastPos, lastLog = nil, 0
+		bind(RunService.Heartbeat, function()
+			if not S.RGuardOn then return end
+			local now = tick()
+			if now - lastLog < 0.2 then return end
+			lastLog = now
+			local h, r = hum(), Mover.body()
+			if not h or not r then return end
+			local speed = 0
+			if lastPos then speed = flat(r.Position - lastPos).Magnitude / 0.2 end
+			lastPos = r.Position
+			local c2 = char()
+			table.insert(JH.rguardLog, string.format("%s  move  state=%s  speed=%.1f  holdingG=%s  action=%s  guarding=%s",
+				os.date("%H:%M:%S"), h:GetState().Name, speed, tostring(c2 and c2:GetAttribute("HoldingG")), tostring(c2 and c2:GetAttribute("Action")), tostring(Bot.status or "")))
+			if #JH.rguardLog > 500 then table.remove(JH.rguardLog, 1) end
+		end)
+		UI.Button(rc, "Copy remote guard log", function()
+			local lines = { "== REMOTE GUARD RECORDER " .. tostring(VERSION) .. " | " .. os.date("%Y-%m-%d %H:%M:%S") }
+			if #JH.rguardLog == 0 then
+				lines[#lines + 1] = "(nothing recorded yet, turn it on and guard someone for real first)"
+			else
+				for _, l in ipairs(JH.rguardLog) do lines[#lines + 1] = l end
+			end
+			local text = table.concat(lines, "\n")
+			pcall(function() if type(writefile) == "function" then writefile("JHub_remote_guard_log.txt", text) end end)
+			if type(setclipboard) == "function" then pcall(setclipboard, text) end
+			notify("Remote Guard Recorder", string.format("%.0f KB, saved as JHub_remote_guard_log.txt and copied", #text / 1024), 6)
+		end)
+		table.insert(UI.lockedTools, 4, rc.frame)
+		rc.frame.Visible = false
+	end
+end
 -- UPDATE BUTTON: checks GitHub for the newest version and loads it
 do
 	local OWNER, REPO, BRANCH = "jaydendagoat2", "jayhubv1", "claude/claudechud-8cord-executor-wclom3"
@@ -23175,6 +23298,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.53 - added Remote Guard Recorder: catches every animation and movement state while guarding",
 "v1.52 - fixed sideways drift and stuck movement when auto guard stops being called",
 "v1.51 - Auto Guard rebuilt: holds real Guard button, follows with real keys/joystick",
 "v1.50 - Auto Guard holds the real Guard button instead of crafting remote calls",
