@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.41"
+local VERSION = "v1.42"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -151,7 +151,7 @@ AGOnlyBall = true,
 BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
 BindKey1 = "", BindArgs1 = "", BindKey2 = "", BindArgs2 = "", BindKey3 = "", BindArgs3 = "", BindKey4 = "", BindArgs4 = "", BindKey5 = "", BindArgs5 = "", BindKey6 = "", BindArgs6 = "",
 LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
-AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
+AG = false, AGTarget = "Ball handler", AGDist = 4, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true, WalkAnimId = "",
 AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
 AR = false, ARSpeed = 1, ARReact = 0.18, ARRange = 45, ARJump = true, ARMagnet = true, ARMagRange = 4, ARMarker = false,
 AP = false, APBuild = "Small", APPostScore = true, APAllAround = true, APOpenDist = 6, APRange = 24, APThree = true, APDrive = true, APLayups = true, APSprint = true, APMoves = true,
@@ -7394,27 +7394,28 @@ local d = Mover.gameDir
 return d ~= nil and tick() - (Mover.gameDirT or 0) < 0.4 and flat(d).Magnitude > 0.35
 end
 local moveTrack, moveTrackHum
--- pull the game's own real walk animation off the character's own Animate script instead of guessing an asset id, so it's guaranteed to match this rig
-local function findWalkId(c)
-	local animate = c and c:FindFirstChild("Animate")
-	if not animate then return nil end
-	for _, name in ipairs({ "walk", "run" }) do
-		local obj = animate:FindFirstChild(name)
-		local a = obj and (obj:FindFirstChild("WalkAnim") or obj:FindFirstChildOfClass("Animation"))
-		if a and a:IsA("Animation") and a.AnimationId ~= "" then return a.AnimationId end
+-- learn the game's own real walk animation by watching what actually plays while you walk for real (MoveDirection set by the game, not by us), instead of guessing an asset id or digging through a script that may not be structured the way we expect
+bind(RunService.Heartbeat, function()
+	if S.WalkAnimId and S.WalkAnimId ~= "" then return end
+	local h = hum()
+	if not h or h.MoveDirection.Magnitude < 0.1 then return end
+	for _, tr in ipairs(h:GetPlayingAnimationTracks()) do
+		if tr.Priority == Enum.AnimationPriority.Movement and tr.Looped and tr.Animation and tr.Animation.AnimationId ~= "" then
+			S.WalkAnimId = tr.Animation.AnimationId
+			saveSoon()
+			break
+		end
 	end
-	return nil
-end
+end)
 local function walkTrack()
 	local h = hum()
 	if not h then return nil end
 	if moveTrack and moveTrackHum == h then return moveTrack end
+	if not S.WalkAnimId or S.WalkAnimId == "" then return nil end
 	local animator = h:FindFirstChildOfClass("Animator")
 	if not animator then return nil end
-	local id = findWalkId(char())
-	if not id then return nil end
 	local anim = Instance.new("Animation")
-	anim.AnimationId = id
+	anim.AnimationId = S.WalkAnimId
 	local ok, track = pcall(function() return animator:LoadAnimation(anim) end)
 	if not ok or not track then return nil end
 	track.Priority = Enum.AnimationPriority.Movement
@@ -11018,6 +11019,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.42 - walk animation is learned from your own real walk instead of a guessed id",
 "v1.41 - auto guard uses your real walk animation and Players-tab guard speed only",
 "v1.40 - X button on every bind, learned binds shared across the network",
 "v1.29 - JHub network: chat, live feed, shared jumpshot timing",
@@ -11428,7 +11430,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.41"
+local VERSION = "v1.42"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -11540,7 +11542,7 @@ local S = {
 	BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
 	BindKey1 = "", BindArgs1 = "", BindKey2 = "", BindArgs2 = "", BindKey3 = "", BindArgs3 = "", BindKey4 = "", BindArgs4 = "", BindKey5 = "", BindArgs5 = "", BindKey6 = "", BindArgs6 = "",
 	LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
-	AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
+	AG = false, AGTarget = "Ball handler", AGDist = 4, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true, WalkAnimId = "",
 	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
 	AR = false, ARSpeed = 1, ARReact = 0.18, ARRange = 45, ARJump = true, ARMagnet = true, ARMagRange = 4, ARMarker = false,
 	AP = false, APBuild = "Small", APPostScore = true, APAllAround = true, APOpenDist = 6, APRange = 24, APThree = true, APDrive = true, APLayups = true, APSprint = true, APMoves = true,
@@ -19131,27 +19133,28 @@ do
 		return d ~= nil and tick() - (Mover.gameDirT or 0) < 0.4 and flat(d).Magnitude > 0.35
 	end
 	local moveTrack, moveTrackHum
-	-- pull the game's own real walk animation off the character's own Animate script instead of guessing an asset id, so it's guaranteed to match this rig
-	local function findWalkId(c)
-		local animate = c and c:FindFirstChild("Animate")
-		if not animate then return nil end
-		for _, name in ipairs({ "walk", "run" }) do
-			local obj = animate:FindFirstChild(name)
-			local a = obj and (obj:FindFirstChild("WalkAnim") or obj:FindFirstChildOfClass("Animation"))
-			if a and a:IsA("Animation") and a.AnimationId ~= "" then return a.AnimationId end
+	-- learn the game's own real walk animation by watching what actually plays while you walk for real (MoveDirection set by the game, not by us), instead of guessing an asset id or digging through a script that may not be structured the way we expect
+	bind(RunService.Heartbeat, function()
+		if S.WalkAnimId and S.WalkAnimId ~= "" then return end
+		local h = hum()
+		if not h or h.MoveDirection.Magnitude < 0.1 then return end
+		for _, tr in ipairs(h:GetPlayingAnimationTracks()) do
+			if tr.Priority == Enum.AnimationPriority.Movement and tr.Looped and tr.Animation and tr.Animation.AnimationId ~= "" then
+				S.WalkAnimId = tr.Animation.AnimationId
+				saveSoon()
+				break
+			end
 		end
-		return nil
-	end
+	end)
 	local function walkTrack()
 		local h = hum()
 		if not h then return nil end
 		if moveTrack and moveTrackHum == h then return moveTrack end
+		if not S.WalkAnimId or S.WalkAnimId == "" then return nil end
 		local animator = h:FindFirstChildOfClass("Animator")
 		if not animator then return nil end
-		local id = findWalkId(char())
-		if not id then return nil end
 		local anim = Instance.new("Animation")
-		anim.AnimationId = id
+		anim.AnimationId = S.WalkAnimId
 		local ok, track = pcall(function() return animator:LoadAnimation(anim) end)
 		if not ok or not track then return nil end
 		track.Priority = Enum.AnimationPriority.Movement
@@ -22755,6 +22758,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.42 - walk animation is learned from your own real walk instead of a guessed id",
 "v1.41 - auto guard uses your real walk animation and Players-tab guard speed only",
 "v1.40 - X button on every bind, learned binds shared across the network",
 "v1.29 - JHub network: chat, live feed, shared jumpshot timing",
