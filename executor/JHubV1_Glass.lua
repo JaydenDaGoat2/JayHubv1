@@ -6329,7 +6329,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.24  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.25  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -8802,7 +8802,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.24"
+d.Text = "JHub V1.25"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -10557,6 +10557,44 @@ end },
 UI.Note(card, "Lists all 16 jumpshots (left and right): which ones you have shot, what was learned for each, and which still need a few shots. Copy everything now also includes this and every shot setting the game stores.")
 end
 end
+-- PER-JUMPSHOT SETTINGS: the game's own numbers for all 16 jumpshots; shots with random timing are learned more steadily
+do
+Shot.CFG = {
+[1] = { 1.8, 0 }, [2] = { 1.045, 0 }, [3] = { 1.065, 0 }, [4] = { 0.875, 0 },
+[5] = { 1, 0.05 }, [6] = { 1, 0.05 }, [7] = { 1, 0.05 }, [8] = { 0.95, 0.05 },
+[9] = { 0.95, 0 }, [10] = { 0.95, 0.05 }, [11] = { 0.8, 0.05 }, [12] = { 0.8, 0.05 },
+[13] = { 1, 0.05 }, [14] = { 0.825, 0.05 }, [15] = { 1.07, 0.05 }, [16] = { 0.9, 0 },
+}
+local function jumpNum(key)
+for id in string.gmatch(tostring(key), "%d+") do
+local nm = Shot.idName and Shot.idName[id]
+local n = nm and string.match(nm, "^Jumpshot(%d+)[RL]")
+if n then return tonumber(n) end
+end
+end
+Shot.jumpNum = jumpNum
+local prevGain = Shot.adaptGain
+function Shot.adaptGain(key, off)
+local g = prevGain(key, off)
+local n = jumpNum(key)
+local c = n and Shot.CFG[n]
+-- random-timing shots: a miss can be the game's own +-0.05 noise, so never push a step harder than normal
+if c and c[2] > 0 and g > 1 then g = 1 end
+return g
+end
+local prevText = Shot.masteryText
+if prevText then
+function Shot.masteryText()
+local t = prevText()
+local o = { "", "GAME SETTINGS PER JUMPSHOT (speed / random timing)" }
+for i = 1, 16 do
+local c = Shot.CFG[i]
+o[#o + 1] = string.format("  Jumpshot %d: speed %.3f  random %s", i, c[1], c[2] > 0 and "+-0.05" or "none")
+end
+return t .. "\n" .. table.concat(o, "\n")
+end
+end
+end
 UI.syncAuto()
 UI.applyTheme()
 UI.applyFx()
@@ -10720,7 +10758,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.24", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.25", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -17431,7 +17469,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.24  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.25  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -19912,7 +19950,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.24"
+				d.Text = "JHub V1.25"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -21666,6 +21704,44 @@ do
 		})
 		UI.Note(card, "Lists all 16 jumpshots (left and right): which ones you have shot, what was learned for each, and which still need a few shots. Copy everything now also includes this and every shot setting the game stores.")
 	end
+end
+-- PER-JUMPSHOT SETTINGS: the game's own numbers for all 16 jumpshots; shots with random timing are learned more steadily
+do
+Shot.CFG = {
+[1] = { 1.8, 0 }, [2] = { 1.045, 0 }, [3] = { 1.065, 0 }, [4] = { 0.875, 0 },
+[5] = { 1, 0.05 }, [6] = { 1, 0.05 }, [7] = { 1, 0.05 }, [8] = { 0.95, 0.05 },
+[9] = { 0.95, 0 }, [10] = { 0.95, 0.05 }, [11] = { 0.8, 0.05 }, [12] = { 0.8, 0.05 },
+[13] = { 1, 0.05 }, [14] = { 0.825, 0.05 }, [15] = { 1.07, 0.05 }, [16] = { 0.9, 0 },
+}
+local function jumpNum(key)
+for id in string.gmatch(tostring(key), "%d+") do
+local nm = Shot.idName and Shot.idName[id]
+local n = nm and string.match(nm, "^Jumpshot(%d+)[RL]")
+if n then return tonumber(n) end
+end
+end
+Shot.jumpNum = jumpNum
+local prevGain = Shot.adaptGain
+function Shot.adaptGain(key, off)
+local g = prevGain(key, off)
+local n = jumpNum(key)
+local c = n and Shot.CFG[n]
+-- random-timing shots: a miss can be the game's own +-0.05 noise, so never push a step harder than normal
+if c and c[2] > 0 and g > 1 then g = 1 end
+return g
+end
+local prevText = Shot.masteryText
+if prevText then
+function Shot.masteryText()
+local t = prevText()
+local o = { "", "GAME SETTINGS PER JUMPSHOT (speed / random timing)" }
+for i = 1, 16 do
+local c = Shot.CFG[i]
+o[#o + 1] = string.format("  Jumpshot %d: speed %.3f  random %s", i, c[1], c[2] > 0 and "+-0.05" or "none")
+end
+return t .. "\n" .. table.concat(o, "\n")
+end
+end
 end
 UI.syncAuto()
 UI.applyTheme()
