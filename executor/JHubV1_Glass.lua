@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.74"
+local VERSION = "v1.75"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -8299,7 +8299,7 @@ UI.Slider(c, "Fade and step back timing (later)", "FadeNudge", -30, 40, 1, 0, " 
 UI.Toggle(c, "Auto adapt: learn every shot from the first one", "AutoAdaptAll")
 UI.Toggle(c, "Instant green (works at low FPS and high ping)", "InstantGreen")
 UI.Toggle(c, "Smart steps (faster learning, no bouncing)", "SmartSteps")
-UI.Toggle(c, "Show shot contest above my head", "ContestShow")
+UI.Toggle(c, "Show live open/contested feedback while dribbling", "ContestShow")
 UI.Toggle(c, "Keep glides away from my shot", "GlideShotSafe")
 UI.Buttons(c, { { "Copy my locked timings", function() local t = Shot.exportTimings() if setclipboard then setclipboard(t) end notify("Timings", t == "" and "Nothing locked yet" or "Copied to clipboard", 3) end } })
 UI.Input(c, "Import timings", "ImportTimes", nil, "paste copied timings, then rejoin")
@@ -8544,8 +8544,10 @@ local gain = S.AGLock and 1 or math.min(1, d / 3)
 dir = to.Unit * gain
 Bot.move(dir, mul)
 end
-Bot.dbg = { target = t.pl.Name, targetPos = t.pos, spot = Bot.spot, dist = d, dir = dir,
-reason = d < 0.5 and "within 0.5 studs of ideal spot, stopped" or nil }
+-- merge, don't replace - Bot.move/Bot.stopMove already wrote sentVia/sentVec/sentOk/humState into Bot.dbg just above, overwriting the whole table here was wiping that out of the log
+Bot.dbg = Bot.dbg or {}
+Bot.dbg.target, Bot.dbg.targetPos, Bot.dbg.spot, Bot.dbg.dist, Bot.dbg.dir = t.pl.Name, t.pos, Bot.spot, d, dir
+Bot.dbg.reason = d < 0.5 and "within 0.5 studs of ideal spot, stopped" or nil
 if S.AGFace then Bot.faceAt(t.pos) end
 Bot.status = "Guarding " .. t.pl.Name
 return true
@@ -10099,46 +10101,32 @@ if not active then return end
 return baseNS()
 end
 
--- shot contest above your head, colored from open (green) to heavily contested (red)
-local bb, label, cached, lastScan = nil, nil, nil, 0
-local STOPS = { { 0, Color3.fromRGB(70, 235, 110) }, { 10, Color3.fromRGB(40, 175, 80) }, { 25, Color3.fromRGB(255, 225, 60) }, { 40, Color3.fromRGB(255, 150, 40) }, { 60, Color3.fromRGB(255, 60, 60) } }
-local function colorFor(n)
-if n <= STOPS[1][1] then return STOPS[1][2] end
-for i = 2, #STOPS do
-if n <= STOPS[i][1] then
-local a, b = STOPS[i - 1], STOPS[i]
-return a[2]:Lerp(b[2], (n - a[1]) / (b[1] - a[1]))
-end
-end
-return STOPS[#STOPS][2]
-end
+-- live open/contested feedback while you have the ball, from the real distance to the nearest real defender - updates continuously as you move, instead of only scraping the game's own post-shot "Contested" label once you've already released
+local bb, label, hl
 task.spawn(function()
 while JH.Running do
 task.wait(0.1)
 local show = S.ContestShow
 local c = char()
-local head = c and (c:FindFirstChild("Head") or c:FindFirstChild("HumanoidRootPart"))
-if show and head then
-if not cached or not cached.Parent then
-cached = nil
-if tick() - lastScan > 1 then
-lastScan = tick()
-for _, root in ipairs({ c, LP:FindFirstChild("PlayerGui") }) do
-if root then
-for _, d in ipairs(root:GetDescendants()) do
-if d:IsA("TextLabel") and string.find(d.Text, "Contested", 1, true) and not d:IsDescendantOf(gui) then cached = d break end
-end
-end
-if cached then break end
+local r = c and (c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart)
+local okHB, hb = pcall(Feat.hasBall)
+local hasBall = show and r and okHB and hb
+if show and r and hasBall then
+local nearest
+local okO, others = pcall(Bot.others)
+if okO and others then
+for _, o in ipairs(others) do
+if not o.mate then
+local d = flat(o.pos - r.Position).Magnitude
+if not nearest or d < nearest then nearest = d end
 end
 end
 end
-local n = cached and tonumber(string.match(cached.Text, "(%d+)%s*%%"))
-if n then
+if nearest then
 if not bb then
 bb = Instance.new("BillboardGui")
 bb.Name = "JHContest"
-bb.Size = UDim2.fromOffset(150, 30)
+bb.Size = UDim2.fromOffset(170, 30)
 bb.StudsOffset = Vector3.new(0, 4.2, 0)
 bb.AlwaysOnTop = true
 label = Instance.new("TextLabel")
@@ -10150,15 +10138,35 @@ label.TextStrokeTransparency = 0.3
 label.Parent = bb
 pcall(function() bb.Parent = (gethui and gethui()) or game:GetService("CoreGui") end)
 end
-bb.Adornee = head
-bb.Enabled = true
-label.Text = n .. "% contested"
-label.TextColor3 = colorFor(n)
-elseif bb then
-bb.Enabled = false
+if not hl or not hl.Parent then
+hl = Instance.new("Highlight")
+hl.Name = "JHOpenness"
+hl.FillTransparency = 0.65
+hl.OutlineTransparency = 0
+pcall(function() hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop end)
 end
-elseif bb then
-bb.Enabled = false
+bb.Adornee = c:FindFirstChild("Head") or r
+bb.Enabled = true
+hl.Parent = c
+local word, col
+if nearest >= 6 then
+word, col = "OPEN", Color3.fromRGB(70, 235, 110)
+elseif nearest >= 3.5 then
+word, col = "SLIGHTLY OPEN", Color3.fromRGB(255, 225, 60)
+else
+word, col = "CONTESTED", Color3.fromRGB(255, 60, 60)
+end
+local pct = math.clamp(math.floor(100 - nearest * 12), 0, 100)
+label.Text = string.format("%s (%d%%)", word, pct)
+label.TextColor3 = col
+hl.FillColor, hl.OutlineColor = col, col
+else
+if bb then bb.Enabled = false end
+if hl then hl.Parent = nil end
+end
+else
+if bb then bb.Enabled = false end
+if hl then hl.Parent = nil end
 end
 end
 end)
@@ -11342,6 +11350,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.75 - diagnostics found AGRange was blocking Auto Guard from even trying to move whenever the opponent was past it (check your Guard range slider); fixed a logging bug that hid confirmed Mover.send calls; open/contested is now live while dribbling with a character highlight, not just a post-shot label",
 "v1.74 - added live diagnostics to the Remote Guard Recorder log: target, distance, calculated direction, what actually got sent, whether it was blocked, and humanoid state, no logic changed",
 "v1.73 - found the real reason Auto Guard never followed: this game is server-authoritative and ignores Humanoid:Move entirely - movement now fires the same MoveDirection remote the game itself uses",
 "v1.72 - Auto Guard target lock now sticks to the same opponent (with hysteresis) instead of re-picking best every tick, and velocity is read from the real AssemblyLinearVelocity (now including AI) instead of estimated",
@@ -11700,7 +11709,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.74"
+local VERSION = "v1.75"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -20309,7 +20318,7 @@ do
 		UI.Toggle(c, "Auto adapt: learn every shot from the first one", "AutoAdaptAll")
 		UI.Toggle(c, "Instant green (works at low FPS and high ping)", "InstantGreen")
 		UI.Toggle(c, "Smart steps (faster learning, no bouncing)", "SmartSteps")
-		UI.Toggle(c, "Show shot contest above my head", "ContestShow")
+		UI.Toggle(c, "Show live open/contested feedback while dribbling", "ContestShow")
 		UI.Toggle(c, "Keep glides away from my shot", "GlideShotSafe")
 		UI.Buttons(c, { { "Copy my locked timings", function() local t = Shot.exportTimings() if setclipboard then setclipboard(t) end notify("Timings", t == "" and "Nothing locked yet" or "Copied to clipboard", 3) end } })
 		UI.Input(c, "Import timings", "ImportTimes", nil, "paste copied timings, then rejoin")
@@ -20554,8 +20563,10 @@ do
 			dir = to.Unit * gain
 			Bot.move(dir, mul)
 		end
-		Bot.dbg = { target = t.pl.Name, targetPos = t.pos, spot = Bot.spot, dist = d, dir = dir,
-			reason = d < 0.5 and "within 0.5 studs of ideal spot, stopped" or nil }
+		-- merge, don't replace - Bot.move/Bot.stopMove already wrote sentVia/sentVec/sentOk/humState into Bot.dbg just above, overwriting the whole table here was wiping that out of the log
+		Bot.dbg = Bot.dbg or {}
+		Bot.dbg.target, Bot.dbg.targetPos, Bot.dbg.spot, Bot.dbg.dist, Bot.dbg.dir = t.pl.Name, t.pos, Bot.spot, d, dir
+		Bot.dbg.reason = d < 0.5 and "within 0.5 studs of ideal spot, stopped" or nil
 		if S.AGFace then Bot.faceAt(t.pos) end
 		Bot.status = "Guarding " .. t.pl.Name
 		return true
@@ -22109,46 +22120,32 @@ do
 		return baseNS()
 	end
 
-	-- shot contest above your head, colored from open (green) to heavily contested (red)
-	local bb, label, cached, lastScan = nil, nil, nil, 0
-	local STOPS = { { 0, Color3.fromRGB(70, 235, 110) }, { 10, Color3.fromRGB(40, 175, 80) }, { 25, Color3.fromRGB(255, 225, 60) }, { 40, Color3.fromRGB(255, 150, 40) }, { 60, Color3.fromRGB(255, 60, 60) } }
-	local function colorFor(n)
-		if n <= STOPS[1][1] then return STOPS[1][2] end
-		for i = 2, #STOPS do
-			if n <= STOPS[i][1] then
-				local a, b = STOPS[i - 1], STOPS[i]
-				return a[2]:Lerp(b[2], (n - a[1]) / (b[1] - a[1]))
-			end
-		end
-		return STOPS[#STOPS][2]
-	end
+	-- live open/contested feedback while you have the ball, from the real distance to the nearest real defender - updates continuously as you move, instead of only scraping the game's own post-shot "Contested" label once you've already released
+	local bb, label, hl
 	task.spawn(function()
 		while JH.Running do
 			task.wait(0.1)
 			local show = S.ContestShow
 			local c = char()
-			local head = c and (c:FindFirstChild("Head") or c:FindFirstChild("HumanoidRootPart"))
-			if show and head then
-				if not cached or not cached.Parent then
-					cached = nil
-					if tick() - lastScan > 1 then
-						lastScan = tick()
-						for _, root in ipairs({ c, LP:FindFirstChild("PlayerGui") }) do
-							if root then
-								for _, d in ipairs(root:GetDescendants()) do
-									if d:IsA("TextLabel") and string.find(d.Text, "Contested", 1, true) and not d:IsDescendantOf(gui) then cached = d break end
-								end
-							end
-							if cached then break end
+			local r = c and (c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart)
+			local okHB, hb = pcall(Feat.hasBall)
+			local hasBall = show and r and okHB and hb
+			if show and r and hasBall then
+				local nearest
+				local okO, others = pcall(Bot.others)
+				if okO and others then
+					for _, o in ipairs(others) do
+						if not o.mate then
+							local d = flat(o.pos - r.Position).Magnitude
+							if not nearest or d < nearest then nearest = d end
 						end
 					end
 				end
-				local n = cached and tonumber(string.match(cached.Text, "(%d+)%s*%%"))
-				if n then
+				if nearest then
 					if not bb then
 						bb = Instance.new("BillboardGui")
 						bb.Name = "JHContest"
-						bb.Size = UDim2.fromOffset(150, 30)
+						bb.Size = UDim2.fromOffset(170, 30)
 						bb.StudsOffset = Vector3.new(0, 4.2, 0)
 						bb.AlwaysOnTop = true
 						label = Instance.new("TextLabel")
@@ -22160,15 +22157,35 @@ do
 						label.Parent = bb
 						pcall(function() bb.Parent = (gethui and gethui()) or game:GetService("CoreGui") end)
 					end
-					bb.Adornee = head
+					if not hl or not hl.Parent then
+						hl = Instance.new("Highlight")
+						hl.Name = "JHOpenness"
+						hl.FillTransparency = 0.65
+						hl.OutlineTransparency = 0
+						pcall(function() hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop end)
+					end
+					bb.Adornee = c:FindFirstChild("Head") or r
 					bb.Enabled = true
-					label.Text = n .. "% contested"
-					label.TextColor3 = colorFor(n)
-				elseif bb then
-					bb.Enabled = false
+					hl.Parent = c
+					local word, col
+					if nearest >= 6 then
+						word, col = "OPEN", Color3.fromRGB(70, 235, 110)
+					elseif nearest >= 3.5 then
+						word, col = "SLIGHTLY OPEN", Color3.fromRGB(255, 225, 60)
+					else
+						word, col = "CONTESTED", Color3.fromRGB(255, 60, 60)
+					end
+					local pct = math.clamp(math.floor(100 - nearest * 12), 0, 100)
+					label.Text = string.format("%s (%d%%)", word, pct)
+					label.TextColor3 = col
+					hl.FillColor, hl.OutlineColor = col, col
+				else
+					if bb then bb.Enabled = false end
+					if hl then hl.Parent = nil end
 				end
-			elseif bb then
-				bb.Enabled = false
+			else
+				if bb then bb.Enabled = false end
+				if hl then hl.Parent = nil end
 			end
 		end
 	end)
@@ -23352,6 +23369,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.75 - diagnostics found AGRange was blocking Auto Guard from even trying to move whenever the opponent was past it (check your Guard range slider); fixed a logging bug that hid confirmed Mover.send calls; open/contested is now live while dribbling with a character highlight, not just a post-shot label",
 "v1.74 - added live diagnostics to the Remote Guard Recorder log: target, distance, calculated direction, what actually got sent, whether it was blocked, and humanoid state, no logic changed",
 "v1.73 - found the real reason Auto Guard never followed: this game is server-authoritative and ignores Humanoid:Move entirely - movement now fires the same MoveDirection remote the game itself uses",
 "v1.72 - Auto Guard target lock now sticks to the same opponent (with hysteresis) instead of re-picking best every tick, and velocity is read from the real AssemblyLinearVelocity (now including AI) instead of estimated",
