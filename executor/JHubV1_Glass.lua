@@ -6329,7 +6329,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.26  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.25  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -8802,7 +8802,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.26"
+d.Text = "JHub V1.25"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -10594,21 +10594,6 @@ end
 return t .. "\n" .. table.concat(o, "\n")
 end
 end
--- a jumpshot you have not locked yet starts from the family average, scaled by its own speed from the game's settings
-local prevSeed4 = Shot.seedLead
-function Shot.seedLead(key)
-local v = prevSeed4(key)
-local n = jumpNum(key)
-local c = n and Shot.CFG[n]
-if c and not Shot.FINAL[key] then
-local locked = Shot.auto and Shot.auto[key] and Shot.auto[key].locked
-if not locked then
-local scale = clamp(1 / c[1], 0.6, 1.6)
-v = clamp(v * scale, 0, 0.1)
-end
-end
-return v
-end
 end
 UI.syncAuto()
 UI.applyTheme()
@@ -10773,7 +10758,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.26", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.25", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -17484,7 +17469,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.26  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.25  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -19965,7 +19950,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.26"
+				d.Text = "JHub V1.25"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -21756,21 +21741,6 @@ o[#o + 1] = string.format("  Jumpshot %d: speed %.3f  random %s", i, c[1], c[2] 
 end
 return t .. "\n" .. table.concat(o, "\n")
 end
-end
--- a jumpshot you have not locked yet starts from the family average, scaled by its own speed from the game's settings
-local prevSeed4 = Shot.seedLead
-function Shot.seedLead(key)
-local v = prevSeed4(key)
-local n = jumpNum(key)
-local c = n and Shot.CFG[n]
-if c and not Shot.FINAL[key] then
-local locked = Shot.auto and Shot.auto[key] and Shot.auto[key].locked
-if not locked then
-local scale = clamp(1 / c[1], 0.6, 1.6)
-v = clamp(v * scale, 0, 0.1)
-end
-end
-return v
 end
 end
 UI.syncAuto()
