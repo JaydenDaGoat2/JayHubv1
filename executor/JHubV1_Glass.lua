@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.72"
+local VERSION = "v1.73"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -7377,10 +7377,13 @@ function Bot.move(dir, mul)
 if dir.Magnitude > 1 then dir = dir.Unit end
 Bot.cmd, Bot.cmdT, Bot.mul = dir, tick(), mul or 1
 Mover.override, Mover.overrideT = dir, tick()
+-- this game is server-authoritative and never reads Humanoid.MoveDirection/Humanoid:Move at all (confirmed back in v1.45's "this game does not use MoveDirection" finding, re-confirmed by Humanoid:Move producing zero real displacement) - the only thing that actually moves a character here is the same MoveDirection RemoteEvent the game's own control script fires, which Mover.send already drives for other features like Glide. Fire it directly instead of waiting on the passive Mover.override hook to catch a call that may not come often enough while idle.
+pcall(Mover.send, dir * (mul or 1))
 end
 function Bot.stopMove()
 Bot.cmd = nil
 Mover.override = nil
+pcall(Mover.send, Vector3.new())
 end
 function Bot.faceAt(pos)
 local r = Mover.body()
@@ -7504,20 +7507,7 @@ bind(RunService.Stepped, function(_, dt)
 	local r = Mover.body()
 	if not r then return end
 	local now = tick()
-	local moving = Bot.cmd and now - Bot.cmdT < 0.35 and Bot.cmd.Magnitude > 0.05
-	-- drive movement through Humanoid:Move, same mechanism a real player's input turns into, so the game's own Animate script picks the right walk/defensive-slide animation automatically - re-confirmed from a real recorder log that this does produce real displacement while actively chasing; it only reads speed=0 once the guard spot logic (Bot.guardStep) has it holding at the ideal distance, which is the dead-zone working as intended, not a stall
-	local h2 = hum()
-	if moving then
-		if h2 then
-			h2.AutoRotate = false
-			h2:Move(Bot.cmd, false)
-		end
-	else
-		if h2 then
-			h2:Move(Vector3.new(), false)
-			if h2.AutoRotate == false then h2.AutoRotate = true end
-		end
-	end
+	-- actual movement is driven by Mover.send inside Bot.move/Bot.stopMove, which fires this game's real MoveDirection remote directly - Humanoid:Move does nothing here since this game never reads Humanoid.MoveDirection (confirmed, see Bot.move). This block only handles facing: rotate to face the man while Auto Guard is driving, without touching position.
 if Bot.face and now - Bot.faceT < 0.35 then
 local p = r.Position
 r.CFrame = CFrame.new(p, p + Bot.face)
@@ -11326,6 +11316,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.73 - found the real reason Auto Guard never followed: this game is server-authoritative and ignores Humanoid:Move entirely - movement now fires the same MoveDirection remote the game itself uses",
 "v1.72 - Auto Guard target lock now sticks to the same opponent (with hysteresis) instead of re-picking best every tick, and velocity is read from the real AssemblyLinearVelocity (now including AI) instead of estimated",
 "v1.71 - back on Humanoid:Move for good: re-read the last log correctly - speed=0 was the guard distance dead-zone working as intended, not a stall; movement is smooth, animations are the game\'s own, target lock/tracking unchanged",
 "v1.70 - Humanoid:Move produced zero actual movement in this game (confirmed: speed stuck at 0 the whole time), reverted to CFrame for position while keeping the confirmed real walk/defensive animation ids playing on top",
@@ -11682,7 +11673,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.72"
+local VERSION = "v1.73"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -19368,10 +19359,13 @@ do
 		if dir.Magnitude > 1 then dir = dir.Unit end
 		Bot.cmd, Bot.cmdT, Bot.mul = dir, tick(), mul or 1
 		Mover.override, Mover.overrideT = dir, tick()
+		-- this game is server-authoritative and never reads Humanoid.MoveDirection/Humanoid:Move at all (confirmed back in v1.45's "this game does not use MoveDirection" finding, re-confirmed by Humanoid:Move producing zero real displacement) - the only thing that actually moves a character here is the same MoveDirection RemoteEvent the game's own control script fires, which Mover.send already drives for other features like Glide. Fire it directly instead of waiting on the passive Mover.override hook to catch a call that may not come often enough while idle.
+		pcall(Mover.send, dir * (mul or 1))
 	end
 	function Bot.stopMove()
 		Bot.cmd = nil
 		Mover.override = nil
+		pcall(Mover.send, Vector3.new())
 	end
 	function Bot.faceAt(pos)
 		local r = Mover.body()
@@ -19495,21 +19489,7 @@ do
 		local r = Mover.body()
 		if not r then return end
 		local now = tick()
-		local moving = Bot.cmd and now - Bot.cmdT < 0.35 and Bot.cmd.Magnitude > 0.05
-		-- drive movement through Humanoid:Move, same mechanism a real player's input turns into, so the game's own Animate script picks the right walk/defensive-slide animation automatically - re-confirmed from a real recorder log that this does produce real displacement while actively chasing; it only reads speed=0 once the guard spot logic (Bot.guardStep) has it holding at the ideal distance, which is the dead-zone working as intended, not a stall
-		local h2 = hum()
-		if moving then
-			if h2 then
-				-- Move auto-faces the direction it's given, which would fight the deliberate "face the man while shuffling sideways/backward" below - only turn that off while we're actually driving, restored the instant we stop
-				h2.AutoRotate = false
-				h2:Move(Bot.cmd, false)
-			end
-		else
-			if h2 then
-				h2:Move(Vector3.new(), false)
-				if h2.AutoRotate == false then h2.AutoRotate = true end
-			end
-		end
+		-- actual movement is driven by Mover.send inside Bot.move/Bot.stopMove, which fires this game's real MoveDirection remote directly - Humanoid:Move does nothing here since this game never reads Humanoid.MoveDirection (confirmed, see Bot.move). This block only handles facing: rotate to face the man while Auto Guard is driving, without touching position.
 		if Bot.face and now - Bot.faceT < 0.35 then
 			local p = r.Position
 			r.CFrame = CFrame.new(p, p + Bot.face)
@@ -23319,6 +23299,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.73 - found the real reason Auto Guard never followed: this game is server-authoritative and ignores Humanoid:Move entirely - movement now fires the same MoveDirection remote the game itself uses",
 "v1.72 - Auto Guard target lock now sticks to the same opponent (with hysteresis) instead of re-picking best every tick, and velocity is read from the real AssemblyLinearVelocity (now including AI) instead of estimated",
 "v1.71 - back on Humanoid:Move for good: re-read the last log correctly - speed=0 was the guard distance dead-zone working as intended, not a stall; movement is smooth, animations are the game\'s own, target lock/tracking unchanged",
 "v1.70 - Humanoid:Move produced zero actual movement in this game (confirmed: speed stuck at 0 the whole time), reverted to CFrame for position while keeping the confirmed real walk/defensive animation ids playing on top",
