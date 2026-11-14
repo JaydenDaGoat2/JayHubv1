@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.68"
+local VERSION = "v1.69"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -7494,33 +7494,16 @@ bind(RunService.Stepped, function(_, dt)
 	if not r then return end
 	local now = tick()
 	local moving = Bot.cmd and now - Bot.cmdT < 0.35 and Bot.cmd.Magnitude > 0.05
+	-- Humanoid:Move hands movement back to Roblox's own character controller instead of us overwriting CFrame - the game's real Animate script then picks the correct walk/defensive-slide animation on its own (the same way it does for a real player holding the real Guard button), so we don't need to load or play any animation track ourselves anymore
+	local h2 = hum()
 	if moving then
-		-- moving the root by CFrame alone never clears the humanoid's own fall velocity/state, so it sits stuck in Freefall/FallingDown and the walk animation never visually reads as walking even while it's technically playing - force it back to Running and kill vertical velocity every tick we're driving movement
-		local h2 = hum()
 		if h2 then
-			local st = h2:GetState()
-			if st == Enum.HumanoidStateType.Freefall or st == Enum.HumanoidStateType.FallingDown or st == Enum.HumanoidStateType.Ragdoll then
-				h2:ChangeState(Enum.HumanoidStateType.Running)
-			end
+			-- Move auto-faces the direction it's given by default, which would fight the deliberate "face the man while shuffling sideways/backward" below - only turn that off while we're the one actually driving, and only for as long as that lasts
+			h2.AutoRotate = false
+			h2:Move(Bot.cmd, false)
 		end
-		local vel = r.AssemblyLinearVelocity
-		if vel and math.abs(vel.Y) > 0.5 then r.AssemblyLinearVelocity = Vector3.new(vel.X, 0, vel.Z) end
-		r.CFrame = r.CFrame + Bot.cmd * Speed.gameWS * Bot.mul * dt
-		Mover.sync(r)
-		-- while guarding (set just before Bot.move is called to guard), prefer the real defensive slide animation over the plain walk
-		local guarding = now - (Bot.guardingNow or 0) < 0.3
-		local id = (guarding and S.GuardAnimId and S.GuardAnimId ~= "") and S.GuardAnimId or S.WalkAnimId
-		if id ~= activeId then
-			if activeTrack then pcall(function() activeTrack:Stop(0.1) end) end
-			activeTrack = trackFor(id)
-			activeId = id
-		end
-		if activeTrack then
-			activeTrack.Speed = math.clamp(Bot.mul or 1, 0.6, 1.8)
-			if not activeTrack.IsPlaying then activeTrack:Play(0.15) end
-		end
-	elseif activeTrack and activeTrack.IsPlaying then
-		activeTrack:Stop(0.15)
+	elseif h2 and h2.AutoRotate == false then
+		h2.AutoRotate = true
 	end
 if Bot.face and now - Bot.faceT < 0.35 then
 local p = r.Position
@@ -11307,6 +11290,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.69 - Auto Guard no longer moves by CFrame at all - it now uses Humanoid:Move like a real player does, so the game\'s own Animate script picks the correct walk/defensive-slide animation automatically",
 "v1.68 - found the real reason the walk animation never showed: moving the root by CFrame alone left the humanoid stuck in Freefall/FallingDown state forever, which hid the walk animation even though it was technically playing - fixed",
 "v1.67 - removed the Discord join gate entirely, replaced with a Discord button in the top right of the menu that copies the invite link",
 "v1.66 - fixed the Discord join gate freezing the whole script for anyone whose click or isfile/writefile did not register - it no longer blocks the real menu from loading",
@@ -11659,7 +11643,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.68"
+local VERSION = "v1.69"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -19462,32 +19446,16 @@ do
 		if not r then return end
 		local now = tick()
 		local moving = Bot.cmd and now - Bot.cmdT < 0.35 and Bot.cmd.Magnitude > 0.05
+		-- Humanoid:Move hands movement back to Roblox's own character controller instead of us overwriting CFrame - the game's real Animate script then picks the correct walk/defensive-slide animation on its own (the same way it does for a real player holding the real Guard button), so we don't need to load or play any animation track ourselves anymore
+		local h2 = hum()
 		if moving then
-			-- moving the root by CFrame alone never clears the humanoid's own fall velocity/state, so it sits stuck in Freefall/FallingDown and the walk animation never visually reads as walking even while it's technically playing - force it back to Running and kill vertical velocity every tick we're driving movement
-			local h2 = hum()
 			if h2 then
-				local st = h2:GetState()
-				if st == Enum.HumanoidStateType.Freefall or st == Enum.HumanoidStateType.FallingDown or st == Enum.HumanoidStateType.Ragdoll then
-					h2:ChangeState(Enum.HumanoidStateType.Running)
-				end
+				-- Move auto-faces the direction it's given by default, which would fight the deliberate "face the man while shuffling sideways/backward" below - only turn that off while we're the one actually driving, and only for as long as that lasts
+				h2.AutoRotate = false
+				h2:Move(Bot.cmd, false)
 			end
-			local vel = r.AssemblyLinearVelocity
-			if vel and math.abs(vel.Y) > 0.5 then r.AssemblyLinearVelocity = Vector3.new(vel.X, 0, vel.Z) end
-			r.CFrame = r.CFrame + Bot.cmd * Speed.gameWS * Bot.mul * dt
-			Mover.sync(r)
-			local guarding = now - (Bot.guardingNow or 0) < 0.3
-			local id = (guarding and S.GuardAnimId and S.GuardAnimId ~= "") and S.GuardAnimId or S.WalkAnimId
-			if id ~= activeId then
-				if activeTrack then pcall(function() activeTrack:Stop(0.1) end) end
-				activeTrack = trackFor(id)
-				activeId = id
-			end
-			if activeTrack then
-				activeTrack.Speed = math.clamp(Bot.mul or 1, 0.6, 1.8)
-				if not activeTrack.IsPlaying then activeTrack:Play(0.15) end
-			end
-		elseif activeTrack and activeTrack.IsPlaying then
-			activeTrack:Stop(0.15)
+		elseif h2 and h2.AutoRotate == false then
+			h2.AutoRotate = true
 		end
 		if Bot.face and now - Bot.faceT < 0.35 then
 			local p = r.Position
@@ -23275,6 +23243,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.69 - Auto Guard no longer moves by CFrame at all - it now uses Humanoid:Move like a real player does, so the game\'s own Animate script picks the correct walk/defensive-slide animation automatically",
 "v1.68 - found the real reason the walk animation never showed: moving the root by CFrame alone left the humanoid stuck in Freefall/FallingDown state forever, which hid the walk animation even though it was technically playing - fixed",
 "v1.67 - removed the Discord join gate entirely, replaced with a Discord button in the top right of the menu that copies the invite link",
 "v1.66 - fixed the Discord join gate freezing the whole script for anyone whose click or isfile/writefile did not register - it no longer blocks the real menu from loading",
