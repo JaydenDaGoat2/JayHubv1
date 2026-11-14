@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.85"
+local VERSION = "v1.86"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -145,7 +145,7 @@ ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, St
 LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false,
+FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false, ShotIntelDB = "",
 AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 AGOnlyBall = true,
 BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
@@ -9507,29 +9507,40 @@ local sId = UI.Stat(c, "Animation ID")
 local sStatus = UI.Stat(c, "Calibration status")
 local sConf = UI.Stat(c, "Confidence")
 local sHold = UI.Stat(c, "Active timing")
+local sSeen = UI.Stat(c, "Recognized before")
+local sTimes = UI.Stat(c, "Times seen")
+local sSit = UI.Stat(c, "Situations seen")
+local sRetest = UI.Stat(c, "Needs retest")
 local sKnown = UI.Stat(c, "Known profiles")
 UI.Button(c, "Copy every known shot profile", function()
 local lines = { "== JHub shot intelligence profiles ==" }
 local seen = {}
+local db = (JH.ShotIntel and JH.ShotIntel.DB) or {}
 for key in pairs(Shot.FINAL) do
 seen[key] = true
-lines[#lines + 1] = string.format("%s | %s | built-in, confirmed | hold %.3fs", Shot.nameFor(key), key, Shot.FINAL[key])
+local rec = db[key]
+lines[#lines + 1] = string.format("%s | %s | built-in, confirmed | hold %.3fs | seen %dx%s", Shot.nameFor(key), key, Shot.FINAL[key],
+rec and rec.timesSeen or 0, (rec and rec.needsRetest) and " | NEEDS RETEST" or "")
 end
 for key, a in pairs(Shot.auto or {}) do
 if not seen[key] then
-lines[#lines + 1] = string.format("%s | %s | %s | %d samples | hold %.3fs", Shot.nameFor(key), key,
-a.locked and "locked" or "learning", a.n or 0, a.hold or 0)
+local rec = db[key]
+lines[#lines + 1] = string.format("%s | %s | %s | %d samples | hold %.3fs | seen %dx%s", Shot.nameFor(key), key,
+a.locked and "locked" or "learning", a.n or 0, a.hold or 0, rec and rec.timesSeen or 0,
+(rec and rec.needsRetest) and " | NEEDS RETEST" or (rec and not rec.identified) and " | unidentified animation" or "")
 end
 end
 copy(table.concat(lines, "\n"), "Shot profiles")
 end)
-UI.Note(c, "Each jumpshot animation gets its own timing profile automatically - switching jumpshots switches profiles, no setup needed. A profile needs enough consistent real shots before it is trusted (locked); until then it is still learning.")
+UI.Note(c, "Each jumpshot animation gets its own timing profile automatically - switching jumpshots switches profiles, no setup needed. A profile needs enough consistent real shots before it is trusted (locked); until then it is still learning. If a locked profile starts missing consistently, it is automatically unlocked and flagged to retest instead of staying trusted forever.")
 task.spawn(function()
 while true do
 local cur = Shot.cur
+local db = (JH.ShotIntel and JH.ShotIntel.DB) or {}
 if cur and cur.key then
 local key = cur.key
 local a = Shot.auto and Shot.auto[key]
+local rec = db[key]
 sName.Text = Shot.nameFor(key, cur.anim)
 sId.Text = string.sub(tostring(key), 1, 22)
 sStatus.Text = cur.state or "-"
@@ -9541,8 +9552,21 @@ else
 sConf.Text = "No data yet"
 end
 sHold.Text = string.format("%.3fs", cur.hold or 0)
+sSeen.Text = rec and "Yes" or "No"
+sTimes.Text = rec and tostring(rec.timesSeen or 0) or "0"
+if rec and rec.sits and next(rec.sits) then
+local parts = {}
+for sitName, cnt in pairs(rec.sits) do parts[#parts + 1] = sitName .. " x" .. cnt end
+table.sort(parts)
+sSit.Text = table.concat(parts, ", ")
+else
+sSit.Text = "-"
+end
+sRetest.Text = (rec and rec.needsRetest) and "Yes - flagged" or "No"
+if rec and not rec.identified then sStatus.Text = "Unidentified animation" end
 else
 sName.Text, sId.Text, sStatus.Text, sConf.Text, sHold.Text = "-", "-", "Shoot to see it", "-", "-"
+sSeen.Text, sTimes.Text, sSit.Text, sRetest.Text = "-", "-", "-", "-"
 end
 local known = 0
 for _ in pairs(Shot.FINAL) do known = known + 1 end
@@ -11545,6 +11569,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.86 - Universal Shot Intelligence: every jumpshot animation now gets a persisted profile (name, length, times seen, situations seen, first/last seen, identified or not), a locked profile that starts missing consistently is automatically unlocked and flagged to retest instead of staying trusted forever, and an animation that cannot be identified is labeled as such instead of silently reusing another profile's data - all shown on the Shot Intelligence card",
 "v1.85 - new Shot Intelligence card shows the detected jumpshot, its animation ID, calibration status, confidence (sample count/locked/built-in), active timing, and how many profiles are known, plus a button to copy every profile - this is the existing per-animation timing-profile system (automatic per-jumpshot profiles, auto switching when you change jumpshots) made visible instead of hidden",
 "v1.84 - a jumpshot used to only get shared as a found best timing network-wide if someone hit a literal real Perfect on it; now any jumpshot whose adaptive learner converges with enough real samples (12+) gets shared the same way, so every jumpshot anyone actually plays eventually gets a found-and-shared best timing, not just the rare Perfects",
 "v1.83 - the Owner tab's 2011 code alone could let anyone rename themselves Owner, overwriting whoever had it; now the roles screen loads the current Owner/devs/mods instead of defaulting to you, roles stay set until someone changes them, and changing who the Owner is now needs a separate code on top of 2011",
@@ -11698,6 +11723,86 @@ a.hold, a.locked, a.mode, a.greens, a.bin = net.lead, true, "peak", a.greens or 
 return a.hold
 end
 return prevSeedHL(key)
+end
+-- UNIVERSAL SHOT INTELLIGENCE: a per-animation profile database (Shot ID Scanner + Animation Recognition Engine + Profile
+-- Database) built on top of the real per-key data that already flows through every shot (Shot.keyOf/Shot.holdFor/Shot.remoteKey
+-- already derive a key from the actual equipped animation, dedup automatically, and already switch profiles automatically
+-- when the equipped jumpshot changes - that part needed no new code). What's added here: a persisted record per discovered
+-- animation (name, length, times seen, situations seen, first/last seen - the Profile Database), a Confidence and Validation
+-- System that watches a locked profile's recent results and flags it for retesting if it starts missing consistently instead
+-- of trusting it forever, and explicit handling for animations that can't be identified instead of silently reusing another
+-- profile's data.
+do
+local ShotIntel = {}
+JH.ShotIntel = ShotIntel
+local ok0, data0 = pcall(function() return HttpService:JSONDecode(S.ShotIntelDB or "") end)
+ShotIntel.DB = (ok0 and type(data0) == "table") and data0 or {}
+local dbDirty = false
+task.spawn(function()
+while true do
+if dbDirty then
+dbDirty = false
+local ok, body = pcall(function() return HttpService:JSONEncode(ShotIntel.DB) end)
+if ok then S.ShotIntelDB = body saveSoon() end
+end
+task.wait(5)
+end
+end)
+-- CONFIDENCE AND VALIDATION SYSTEM: per-key ring buffer of recent verdicts, kept in memory only (not persisted, lightweight)
+local recent = {}
+ShotIntel.lastKey = nil
+-- SHOT CLASSIFICATION ENGINE + RELEASE-POINT ANALYSIS + AUTOMATIC SHOT DETECTION feed into the same record below
+local function record(info, res, strength)
+if not (info and info.key) then return end
+local key = info.key
+local identified = string.sub(key, 1, 4) ~= "sit:"
+local rec = ShotIntel.DB[key]
+if not rec then
+rec = { id = key, name = Shot.nameFor(key, info.anim), length = (info.track and info.track.Length) or 0,
+firstSeen = os.time(), lastSeen = os.time(), timesSeen = 0, sits = {}, ver = 1, identified = identified, needsRetest = false }
+ShotIntel.DB[key] = rec
+end
+rec.lastSeen = os.time()
+rec.timesSeen = (rec.timesSeen or 0) + 1
+if info.sit then rec.sits[info.sit] = (rec.sits[info.sit] or 0) + 1 end
+if not rec.identified and identified then rec.identified = true end
+if ShotIntel.lastKey ~= key then
+ShotIntel.switched = { from = ShotIntel.lastKey, to = key, t = tick() }
+ShotIntel.lastKey = key
+end
+local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+if idx then
+local buf = recent[key]
+if not buf then buf = {} recent[key] = buf end
+table.insert(buf, 1, idx)
+while #buf > 10 do table.remove(buf) end
+local a = Shot.auto and Shot.auto[key]
+if a and a.locked and #buf >= 5 then
+local offSide = 0
+for i = 1, math.min(5, #buf) do if math.abs(buf[i] - 5) >= 2 then offSide = offSide + 1 end end
+if offSide >= 3 then
+a.locked = false
+rec.needsRetest = true
+notify("Shot Intelligence", "Timing for " .. tostring(rec.name) .. " started missing consistently - unlocked for retesting.", 4)
+elseif rec.needsRetest and offSide == 0 then
+rec.needsRetest = false
+end
+end
+end
+dbDirty = true
+end
+local prevLR2 = Shot.learnRemote
+function Shot.learnRemote(info, res, strength)
+local r = prevLR2(info, res, strength)
+pcall(record, info, res, strength)
+return r
+end
+local prevLT2 = Shot.learnTiming
+function Shot.learnTiming(info, res, strength)
+local r = prevLT2(info, res, strength)
+pcall(record, info, res, strength)
+return r
+end
 end
 -- SHARED BINDS: a dribble move learned on anyone's copy is pushed to the network and picked up by everyone else who hasn't learned it yet
 function JH.onBindLearned(name, args)
@@ -11918,7 +12023,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.85"
+local VERSION = "v1.86"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -12024,7 +12129,7 @@ local S = {
 	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false,
+	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false, ShotIntelDB = "",
 	AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 	AGOnlyBall = true,
 	BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
@@ -21735,29 +21840,40 @@ local sId = UI.Stat(c, "Animation ID")
 local sStatus = UI.Stat(c, "Calibration status")
 local sConf = UI.Stat(c, "Confidence")
 local sHold = UI.Stat(c, "Active timing")
+local sSeen = UI.Stat(c, "Recognized before")
+local sTimes = UI.Stat(c, "Times seen")
+local sSit = UI.Stat(c, "Situations seen")
+local sRetest = UI.Stat(c, "Needs retest")
 local sKnown = UI.Stat(c, "Known profiles")
 UI.Button(c, "Copy every known shot profile", function()
 local lines = { "== JHub shot intelligence profiles ==" }
 local seen = {}
+local db = (JH.ShotIntel and JH.ShotIntel.DB) or {}
 for key in pairs(Shot.FINAL) do
 seen[key] = true
-lines[#lines + 1] = string.format("%s | %s | built-in, confirmed | hold %.3fs", Shot.nameFor(key), key, Shot.FINAL[key])
+local rec = db[key]
+lines[#lines + 1] = string.format("%s | %s | built-in, confirmed | hold %.3fs | seen %dx%s", Shot.nameFor(key), key, Shot.FINAL[key],
+rec and rec.timesSeen or 0, (rec and rec.needsRetest) and " | NEEDS RETEST" or "")
 end
 for key, a in pairs(Shot.auto or {}) do
 if not seen[key] then
-lines[#lines + 1] = string.format("%s | %s | %s | %d samples | hold %.3fs", Shot.nameFor(key), key,
-a.locked and "locked" or "learning", a.n or 0, a.hold or 0)
+local rec = db[key]
+lines[#lines + 1] = string.format("%s | %s | %s | %d samples | hold %.3fs | seen %dx%s", Shot.nameFor(key), key,
+a.locked and "locked" or "learning", a.n or 0, a.hold or 0, rec and rec.timesSeen or 0,
+(rec and rec.needsRetest) and " | NEEDS RETEST" or (rec and not rec.identified) and " | unidentified animation" or "")
 end
 end
 copy(table.concat(lines, "\n"), "Shot profiles")
 end)
-UI.Note(c, "Each jumpshot animation gets its own timing profile automatically - switching jumpshots switches profiles, no setup needed. A profile needs enough consistent real shots before it is trusted (locked); until then it is still learning.")
+UI.Note(c, "Each jumpshot animation gets its own timing profile automatically - switching jumpshots switches profiles, no setup needed. A profile needs enough consistent real shots before it is trusted (locked); until then it is still learning. If a locked profile starts missing consistently, it is automatically unlocked and flagged to retest instead of staying trusted forever.")
 task.spawn(function()
 while true do
 local cur = Shot.cur
+local db = (JH.ShotIntel and JH.ShotIntel.DB) or {}
 if cur and cur.key then
 local key = cur.key
 local a = Shot.auto and Shot.auto[key]
+local rec = db[key]
 sName.Text = Shot.nameFor(key, cur.anim)
 sId.Text = string.sub(tostring(key), 1, 22)
 sStatus.Text = cur.state or "-"
@@ -21769,8 +21885,21 @@ else
 sConf.Text = "No data yet"
 end
 sHold.Text = string.format("%.3fs", cur.hold or 0)
+sSeen.Text = rec and "Yes" or "No"
+sTimes.Text = rec and tostring(rec.timesSeen or 0) or "0"
+if rec and rec.sits and next(rec.sits) then
+local parts = {}
+for sitName, cnt in pairs(rec.sits) do parts[#parts + 1] = sitName .. " x" .. cnt end
+table.sort(parts)
+sSit.Text = table.concat(parts, ", ")
+else
+sSit.Text = "-"
+end
+sRetest.Text = (rec and rec.needsRetest) and "Yes - flagged" or "No"
+if rec and not rec.identified then sStatus.Text = "Unidentified animation" end
 else
 sName.Text, sId.Text, sStatus.Text, sConf.Text, sHold.Text = "-", "-", "Shoot to see it", "-", "-"
+sSeen.Text, sTimes.Text, sSit.Text, sRetest.Text = "-", "-", "-", "-"
 end
 local known = 0
 for _ in pairs(Shot.FINAL) do known = known + 1 end
@@ -23773,6 +23902,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.86 - Universal Shot Intelligence: every jumpshot animation now gets a persisted profile (name, length, times seen, situations seen, first/last seen, identified or not), a locked profile that starts missing consistently is automatically unlocked and flagged to retest instead of staying trusted forever, and an animation that cannot be identified is labeled as such instead of silently reusing another profile's data - all shown on the Shot Intelligence card",
 "v1.85 - new Shot Intelligence card shows the detected jumpshot, its animation ID, calibration status, confidence (sample count/locked/built-in), active timing, and how many profiles are known, plus a button to copy every profile - this is the existing per-animation timing-profile system (automatic per-jumpshot profiles, auto switching when you change jumpshots) made visible instead of hidden",
 "v1.84 - a jumpshot used to only get shared as a found best timing network-wide if someone hit a literal real Perfect on it; now any jumpshot whose adaptive learner converges with enough real samples (12+) gets shared the same way, so every jumpshot anyone actually plays eventually gets a found-and-shared best timing, not just the rare Perfects",
 "v1.83 - the Owner tab's 2011 code alone could let anyone rename themselves Owner, overwriting whoever had it; now the roles screen loads the current Owner/devs/mods instead of defaulting to you, roles stay set until someone changes them, and changing who the Owner is now needs a separate code on top of 2011",
@@ -23926,6 +24056,86 @@ a.hold, a.locked, a.mode, a.greens, a.bin = net.lead, true, "peak", a.greens or 
 return a.hold
 end
 return prevSeedHL(key)
+end
+-- UNIVERSAL SHOT INTELLIGENCE: a per-animation profile database (Shot ID Scanner + Animation Recognition Engine + Profile
+-- Database) built on top of the real per-key data that already flows through every shot (Shot.keyOf/Shot.holdFor/Shot.remoteKey
+-- already derive a key from the actual equipped animation, dedup automatically, and already switch profiles automatically
+-- when the equipped jumpshot changes - that part needed no new code). What's added here: a persisted record per discovered
+-- animation (name, length, times seen, situations seen, first/last seen - the Profile Database), a Confidence and Validation
+-- System that watches a locked profile's recent results and flags it for retesting if it starts missing consistently instead
+-- of trusting it forever, and explicit handling for animations that can't be identified instead of silently reusing another
+-- profile's data.
+do
+local ShotIntel = {}
+JH.ShotIntel = ShotIntel
+local ok0, data0 = pcall(function() return HttpService:JSONDecode(S.ShotIntelDB or "") end)
+ShotIntel.DB = (ok0 and type(data0) == "table") and data0 or {}
+local dbDirty = false
+task.spawn(function()
+while true do
+if dbDirty then
+dbDirty = false
+local ok, body = pcall(function() return HttpService:JSONEncode(ShotIntel.DB) end)
+if ok then S.ShotIntelDB = body saveSoon() end
+end
+task.wait(5)
+end
+end)
+-- CONFIDENCE AND VALIDATION SYSTEM: per-key ring buffer of recent verdicts, kept in memory only (not persisted, lightweight)
+local recent = {}
+ShotIntel.lastKey = nil
+-- SHOT CLASSIFICATION ENGINE + RELEASE-POINT ANALYSIS + AUTOMATIC SHOT DETECTION feed into the same record below
+local function record(info, res, strength)
+if not (info and info.key) then return end
+local key = info.key
+local identified = string.sub(key, 1, 4) ~= "sit:"
+local rec = ShotIntel.DB[key]
+if not rec then
+rec = { id = key, name = Shot.nameFor(key, info.anim), length = (info.track and info.track.Length) or 0,
+firstSeen = os.time(), lastSeen = os.time(), timesSeen = 0, sits = {}, ver = 1, identified = identified, needsRetest = false }
+ShotIntel.DB[key] = rec
+end
+rec.lastSeen = os.time()
+rec.timesSeen = (rec.timesSeen or 0) + 1
+if info.sit then rec.sits[info.sit] = (rec.sits[info.sit] or 0) + 1 end
+if not rec.identified and identified then rec.identified = true end
+if ShotIntel.lastKey ~= key then
+ShotIntel.switched = { from = ShotIntel.lastKey, to = key, t = tick() }
+ShotIntel.lastKey = key
+end
+local idx = info.idx or (res == "green" and 5) or (res == "good" and 4) or (res == "early" and 4 - (strength or 2)) or (res == "late" and 5 + (strength or 2))
+if idx then
+local buf = recent[key]
+if not buf then buf = {} recent[key] = buf end
+table.insert(buf, 1, idx)
+while #buf > 10 do table.remove(buf) end
+local a = Shot.auto and Shot.auto[key]
+if a and a.locked and #buf >= 5 then
+local offSide = 0
+for i = 1, math.min(5, #buf) do if math.abs(buf[i] - 5) >= 2 then offSide = offSide + 1 end end
+if offSide >= 3 then
+a.locked = false
+rec.needsRetest = true
+notify("Shot Intelligence", "Timing for " .. tostring(rec.name) .. " started missing consistently - unlocked for retesting.", 4)
+elseif rec.needsRetest and offSide == 0 then
+rec.needsRetest = false
+end
+end
+end
+dbDirty = true
+end
+local prevLR2 = Shot.learnRemote
+function Shot.learnRemote(info, res, strength)
+local r = prevLR2(info, res, strength)
+pcall(record, info, res, strength)
+return r
+end
+local prevLT2 = Shot.learnTiming
+function Shot.learnTiming(info, res, strength)
+local r = prevLT2(info, res, strength)
+pcall(record, info, res, strength)
+return r
+end
 end
 -- SHARED BINDS: a dribble move learned on anyone's copy is pushed to the network and picked up by everyone else who hasn't learned it yet
 function JH.onBindLearned(name, args)
