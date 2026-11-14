@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.63"
+local VERSION = "v1.64"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -7912,13 +7912,26 @@ UI.Note(g2, "Blocks by jumping at the shooter. If your game blocks with another 
 local rc = UI.Card(GP, "Remote Guard Recorder")
 rc.frame.Visible = false
 contentFrames[#contentFrames + 1] = rc.frame
-UI.Note(rc, "Turn this on, then guard someone for real for 10-15 seconds (walk toward them, away, side to side). It catches every animation that plays on you - priority, speed, looped or not - plus your real position, HoldingG, Action and state each tick.")
+UI.Note(rc, "Turn this on, then either guard someone for real (10-15s, walk toward/away/side to side) or have someone guard YOU. It catches every animation on you AND on whoever is nearest to you - priority, speed, looped or not - plus position, HoldingG, Action and state each tick.")
 JH.rguardAnimLog = JH.rguardAnimLog or {}
 JH.rguardMoveLog = JH.rguardMoveLog or {}
-local rconn
+JH.rguardOppAnimLog = JH.rguardOppAnimLog or {}
+local rconn, roppConn, roppHum
+local function hookOpp(h)
+if roppConn then roppConn:Disconnect() roppConn = nil end
+roppHum = h
+if h then
+roppConn = h.AnimationPlayed:Connect(function(track)
+if not S.RGuardOn then return end
+table.insert(JH.rguardOppAnimLog, string.format("%s  oppanim  name=%s  id=%s  prio=%s  looped=%s  speed=%.2f",
+os.date("%H:%M:%S"), track.Name, (track.Animation and track.Animation.AnimationId) or "?", track.Priority.Name, tostring(track.Looped), track.Speed))
+if #JH.rguardOppAnimLog > 400 then table.remove(JH.rguardOppAnimLog, 1) end
+end)
+end
+end
 UI.Toggle(rc, "Record everything about guarding", "RGuardOn", function(v)
 if v then
-JH.rguardAnimLog, JH.rguardMoveLog = {}, {}
+JH.rguardAnimLog, JH.rguardMoveLog, JH.rguardOppAnimLog = {}, {}, {}
 local h = hum()
 if h then
 rconn = h.AnimationPlayed:Connect(function(track)
@@ -7928,9 +7941,11 @@ os.date("%H:%M:%S"), track.Name, (track.Animation and track.Animation.AnimationI
 if #JH.rguardAnimLog > 400 then table.remove(JH.rguardAnimLog, 1) end
 end)
 end
-notify("Remote Guard Recorder", "Recording. Guard someone for real now.", 5)
+notify("Remote Guard Recorder", "Recording. Guard someone, or have someone guard you.", 5)
 else
 if rconn then rconn:Disconnect() rconn = nil end
+if roppConn then roppConn:Disconnect() roppConn = nil end
+roppHum = nil
 notify("Remote Guard Recorder", "Stopped. Tap Copy to get the report.", 4)
 end
 end)
@@ -7951,17 +7966,42 @@ for _, tr in ipairs(h:GetPlayingAnimationTracks()) do
 local tid = tr.Animation and tr.Animation.AnimationId or "?"
 tracks[#tracks + 1] = string.format("%s(%s,%s,spd=%.1f)", tid, tr.Priority.Name, tostring(tr.Looped), tr.Speed)
 end
-table.insert(JH.rguardMoveLog, string.format("%s  move  state=%s  speed=%.1f  holdingG=%s  action=%s  guarding=%s  playing=%s",
-os.date("%H:%M:%S"), h:GetState().Name, speed, tostring(c2 and c2:GetAttribute("HoldingG")), tostring(c2 and c2:GetAttribute("Action")), tostring(Bot.status or ""), #tracks > 0 and table.concat(tracks, " | ") or "none"))
+local nearest, nearestDist
+local ok, others = pcall(Bot.others)
+if ok and others then
+for _, o in ipairs(others) do
+local d = (o.pos - r.Position).Magnitude
+if not nearestDist or d < nearestDist then nearest, nearestDist = o, d end
+end
+end
+local oppName, oppTracks = "none", {}
+if nearest and nearestDist and nearestDist < 30 then
+oppName = (nearest.pl and nearest.pl.Name) or "?"
+local oh = nearest.c and nearest.c:FindFirstChildOfClass("Humanoid")
+if oh then
+if oh ~= roppHum then hookOpp(oh) end
+for _, tr in ipairs(oh:GetPlayingAnimationTracks()) do
+local tid = tr.Animation and tr.Animation.AnimationId or "?"
+oppTracks[#oppTracks + 1] = string.format("%s(%s,%s,spd=%.1f)", tid, tr.Priority.Name, tostring(tr.Looped), tr.Speed)
+end
+end
+elseif roppHum then
+hookOpp(nil)
+end
+table.insert(JH.rguardMoveLog, string.format("%s  move  state=%s  speed=%.1f  holdingG=%s  action=%s  guarding=%s  playing=%s  opp=%s  oppDist=%s  oppPlaying=%s",
+os.date("%H:%M:%S"), h:GetState().Name, speed, tostring(c2 and c2:GetAttribute("HoldingG")), tostring(c2 and c2:GetAttribute("Action")), tostring(Bot.status or ""),
+#tracks > 0 and table.concat(tracks, " | ") or "none", oppName, nearestDist and string.format("%.1f", nearestDist) or "?", #oppTracks > 0 and table.concat(oppTracks, " | ") or "none"))
 if #JH.rguardMoveLog > 200 then table.remove(JH.rguardMoveLog, 1) end
 end)
 UI.Button(rc, "Copy remote guard log", function()
 local rlines = { "== REMOTE GUARD RECORDER " .. tostring(VERSION) .. " | " .. os.date("%Y-%m-%d %H:%M:%S") }
-if #JH.rguardAnimLog == 0 and #JH.rguardMoveLog == 0 then
+if #JH.rguardAnimLog == 0 and #JH.rguardMoveLog == 0 and #JH.rguardOppAnimLog == 0 then
 rlines[#rlines + 1] = "(nothing recorded yet, turn it on and guard someone for real first)"
 else
-rlines[#rlines + 1] = "-- animations (every one played, any priority) --"
+rlines[#rlines + 1] = "-- your animations (every one played, any priority) --"
 for _, l in ipairs(JH.rguardAnimLog) do rlines[#rlines + 1] = l end
+rlines[#rlines + 1] = "-- opponent animations (nearest player/bot to you, every one played) --"
+for _, l in ipairs(JH.rguardOppAnimLog) do rlines[#rlines + 1] = l end
 rlines[#rlines + 1] = "-- movement/state snapshots --"
 for _, l in ipairs(JH.rguardMoveLog) do rlines[#rlines + 1] = l end
 end
@@ -11248,6 +11288,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.64 - Remote Guard Recorder now also watches whoever is nearest to you, not just yourself, and logs their walk/guard animation ids too",
 "v1.63 - Auto Guard now detects AI opponents (no Player object) and uses the real HomeTeam attribute instead of Player.Team",
 "v1.62 - recorder now polls currently-playing animations directly instead of waiting on a play event",
 "v1.61 - fixed the recorder: move spam was evicting every animation entry from the log",
@@ -11686,7 +11727,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.63"
+local VERSION = "v1.64"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -19906,13 +19947,26 @@ JH.AGContentFrames = contentFrames
 		local rc = UI.Card(GP, "Remote Guard Recorder")
 		rc.frame.Visible = false
 		contentFrames[#contentFrames + 1] = rc.frame
-		UI.Note(rc, "Turn this on, then guard someone for real for 10-15 seconds (walk toward them, away, side to side). It catches every animation that plays on you - priority, speed, looped or not - plus your real position, HoldingG, Action and state each tick.")
+		UI.Note(rc, "Turn this on, then either guard someone for real (10-15s, walk toward/away/side to side) or have someone guard YOU. It catches every animation on you AND on whoever is nearest to you - priority, speed, looped or not - plus position, HoldingG, Action and state each tick.")
 		JH.rguardAnimLog = JH.rguardAnimLog or {}
 		JH.rguardMoveLog = JH.rguardMoveLog or {}
-		local rconn
+		JH.rguardOppAnimLog = JH.rguardOppAnimLog or {}
+		local rconn, roppConn, roppHum
+		local function hookOpp(h)
+			if roppConn then roppConn:Disconnect() roppConn = nil end
+			roppHum = h
+			if h then
+				roppConn = h.AnimationPlayed:Connect(function(track)
+					if not S.RGuardOn then return end
+					table.insert(JH.rguardOppAnimLog, string.format("%s  oppanim  name=%s  id=%s  prio=%s  looped=%s  speed=%.2f",
+						os.date("%H:%M:%S"), track.Name, (track.Animation and track.Animation.AnimationId) or "?", track.Priority.Name, tostring(track.Looped), track.Speed))
+					if #JH.rguardOppAnimLog > 400 then table.remove(JH.rguardOppAnimLog, 1) end
+				end)
+			end
+		end
 		UI.Toggle(rc, "Record everything about guarding", "RGuardOn", function(v)
 			if v then
-				JH.rguardAnimLog, JH.rguardMoveLog = {}, {}
+				JH.rguardAnimLog, JH.rguardMoveLog, JH.rguardOppAnimLog = {}, {}, {}
 				local h = hum()
 				if h then
 					rconn = h.AnimationPlayed:Connect(function(track)
@@ -19922,9 +19976,11 @@ JH.AGContentFrames = contentFrames
 						if #JH.rguardAnimLog > 400 then table.remove(JH.rguardAnimLog, 1) end
 					end)
 				end
-				notify("Remote Guard Recorder", "Recording. Guard someone for real now.", 5)
+				notify("Remote Guard Recorder", "Recording. Guard someone, or have someone guard you.", 5)
 			else
 				if rconn then rconn:Disconnect() rconn = nil end
+				if roppConn then roppConn:Disconnect() roppConn = nil end
+				roppHum = nil
 				notify("Remote Guard Recorder", "Stopped. Tap Copy to get the report.", 4)
 			end
 		end)
@@ -19945,17 +20001,43 @@ JH.AGContentFrames = contentFrames
 				local tid = tr.Animation and tr.Animation.AnimationId or "?"
 				tracks[#tracks + 1] = string.format("%s(%s,%s,spd=%.1f)", tid, tr.Priority.Name, tostring(tr.Looped), tr.Speed)
 			end
-			table.insert(JH.rguardMoveLog, string.format("%s  move  state=%s  speed=%.1f  holdingG=%s  action=%s  guarding=%s  playing=%s",
-				os.date("%H:%M:%S"), h:GetState().Name, speed, tostring(c2 and c2:GetAttribute("HoldingG")), tostring(c2 and c2:GetAttribute("Action")), tostring(Bot.status or ""), #tracks > 0 and table.concat(tracks, " | ") or "none"))
+			-- watch whoever is nearest to us right now, so a bot (or real player) guarding you shows up too, not just your own animations
+			local nearest, nearestDist
+			local ok, others = pcall(Bot.others)
+			if ok and others then
+				for _, o in ipairs(others) do
+					local d = (o.pos - r.Position).Magnitude
+					if not nearestDist or d < nearestDist then nearest, nearestDist = o, d end
+				end
+			end
+			local oppName, oppTracks = "none", {}
+			if nearest and nearestDist and nearestDist < 30 then
+				oppName = (nearest.pl and nearest.pl.Name) or "?"
+				local oh = nearest.c and nearest.c:FindFirstChildOfClass("Humanoid")
+				if oh then
+					if oh ~= roppHum then hookOpp(oh) end
+					for _, tr in ipairs(oh:GetPlayingAnimationTracks()) do
+						local tid = tr.Animation and tr.Animation.AnimationId or "?"
+						oppTracks[#oppTracks + 1] = string.format("%s(%s,%s,spd=%.1f)", tid, tr.Priority.Name, tostring(tr.Looped), tr.Speed)
+					end
+				end
+			elseif roppHum then
+				hookOpp(nil)
+			end
+			table.insert(JH.rguardMoveLog, string.format("%s  move  state=%s  speed=%.1f  holdingG=%s  action=%s  guarding=%s  playing=%s  opp=%s  oppDist=%s  oppPlaying=%s",
+				os.date("%H:%M:%S"), h:GetState().Name, speed, tostring(c2 and c2:GetAttribute("HoldingG")), tostring(c2 and c2:GetAttribute("Action")), tostring(Bot.status or ""),
+				#tracks > 0 and table.concat(tracks, " | ") or "none", oppName, nearestDist and string.format("%.1f", nearestDist) or "?", #oppTracks > 0 and table.concat(oppTracks, " | ") or "none"))
 			if #JH.rguardMoveLog > 200 then table.remove(JH.rguardMoveLog, 1) end
 		end)
 		UI.Button(rc, "Copy remote guard log", function()
 			local rlines = { "== REMOTE GUARD RECORDER " .. tostring(VERSION) .. " | " .. os.date("%Y-%m-%d %H:%M:%S") }
-			if #JH.rguardAnimLog == 0 and #JH.rguardMoveLog == 0 then
+			if #JH.rguardAnimLog == 0 and #JH.rguardMoveLog == 0 and #JH.rguardOppAnimLog == 0 then
 				rlines[#rlines + 1] = "(nothing recorded yet, turn it on and guard someone for real first)"
 			else
-				rlines[#rlines + 1] = "-- animations (every one played, any priority) --"
+				rlines[#rlines + 1] = "-- your animations (every one played, any priority) --"
 				for _, l in ipairs(JH.rguardAnimLog) do rlines[#rlines + 1] = l end
+				rlines[#rlines + 1] = "-- opponent animations (nearest player/bot to you, every one played) --"
+				for _, l in ipairs(JH.rguardOppAnimLog) do rlines[#rlines + 1] = l end
 				rlines[#rlines + 1] = "-- movement/state snapshots --"
 				for _, l in ipairs(JH.rguardMoveLog) do rlines[#rlines + 1] = l end
 			end
@@ -23242,6 +23324,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.64 - Remote Guard Recorder now also watches whoever is nearest to you, not just yourself, and logs their walk/guard animation ids too",
 "v1.63 - Auto Guard now detects AI opponents (no Player object) and uses the real HomeTeam attribute instead of Player.Team",
 "v1.62 - recorder now polls currently-playing animations directly instead of waiting on a play event",
 "v1.61 - fixed the recorder: move spam was evicting every animation entry from the log",
