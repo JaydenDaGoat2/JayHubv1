@@ -6246,6 +6246,13 @@ end
 end
 return
 end
+local gpType = i.UserInputType
+if UI.listening and (gpType == Enum.UserInputType.Gamepad1 or gpType == Enum.UserInputType.Gamepad2 or gpType == Enum.UserInputType.Gamepad3 or gpType == Enum.UserInputType.Gamepad4) then
+	local f = UI.listening
+	UI.listening = nil
+	f(i.KeyCode.Name)
+	return
+end
 if i.UserInputType ~= KEYBOARD then return end
 if UI.listening then
 local f = UI.listening
@@ -6336,7 +6343,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.35  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.36  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -8822,7 +8829,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.35"
+d.Text = "JHub V1.36"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -10155,7 +10162,8 @@ end
 UIS.InputBegan:Connect(function(i, gp)
 local it = i.UserInputType
 local isBindInput = it == Enum.UserInputType.Keyboard or it == Enum.UserInputType.Gamepad1 or it == Enum.UserInputType.Gamepad2 or it == Enum.UserInputType.Gamepad3 or it == Enum.UserInputType.Gamepad4
-if gp or not isBindInput then return end
+if not isBindInput then return end
+if gp and it == Enum.UserInputType.Keyboard then return end
 for slot = 1, N do
 local k = S["BindKey" .. slot]
 if k and k ~= "" and k == i.KeyCode.Name then
@@ -11216,7 +11224,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.35", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.36", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -17836,6 +17844,13 @@ bind(UIS.InputBegan, function(i, gp)
 		end
 		return
 	end
+	local gpType = i.UserInputType
+	if UI.listening and (gpType == Enum.UserInputType.Gamepad1 or gpType == Enum.UserInputType.Gamepad2 or gpType == Enum.UserInputType.Gamepad3 or gpType == Enum.UserInputType.Gamepad4) then
+		local f = UI.listening
+		UI.listening = nil
+		f(i.KeyCode.Name)
+		return
+	end
 	if i.UserInputType ~= KEYBOARD then return end
 	if UI.listening then
 		local f = UI.listening
@@ -17934,7 +17949,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.35  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.36  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -20428,7 +20443,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.35"
+				d.Text = "JHub V1.36"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -21761,7 +21776,8 @@ do
 	UIS.InputBegan:Connect(function(i, gp)
 		local it = i.UserInputType
 		local isBindInput = it == Enum.UserInputType.Keyboard or it == Enum.UserInputType.Gamepad1 or it == Enum.UserInputType.Gamepad2 or it == Enum.UserInputType.Gamepad3 or it == Enum.UserInputType.Gamepad4
-		if gp or not isBindInput then return end
+		if not isBindInput then return end
+		if gp and it == Enum.UserInputType.Keyboard then return end
 		for slot = 1, N do
 			local k = S["BindKey" .. slot]
 			if k and k ~= "" and k == i.KeyCode.Name then
