@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.61"
+local VERSION = "v1.62"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -7920,8 +7920,13 @@ local speed = 0
 if rLastPos then speed = flat(r.Position - rLastPos).Magnitude / 0.2 end
 rLastPos = r.Position
 local c2 = char()
-table.insert(JH.rguardMoveLog, string.format("%s  move  state=%s  speed=%.1f  holdingG=%s  action=%s  guarding=%s",
-os.date("%H:%M:%S"), h:GetState().Name, speed, tostring(c2 and c2:GetAttribute("HoldingG")), tostring(c2 and c2:GetAttribute("Action")), tostring(Bot.status or "")))
+local tracks = {}
+for _, tr in ipairs(h:GetPlayingAnimationTracks()) do
+local tid = tr.Animation and tr.Animation.AnimationId or "?"
+tracks[#tracks + 1] = string.format("%s(%s,%s,spd=%.1f)", tid, tr.Priority.Name, tostring(tr.Looped), tr.Speed)
+end
+table.insert(JH.rguardMoveLog, string.format("%s  move  state=%s  speed=%.1f  holdingG=%s  action=%s  guarding=%s  playing=%s",
+os.date("%H:%M:%S"), h:GetState().Name, speed, tostring(c2 and c2:GetAttribute("HoldingG")), tostring(c2 and c2:GetAttribute("Action")), tostring(Bot.status or ""), #tracks > 0 and table.concat(tracks, " | ") or "none"))
 if #JH.rguardMoveLog > 200 then table.remove(JH.rguardMoveLog, 1) end
 end)
 UI.Button(rc, "Copy remote guard log", function()
@@ -11217,6 +11222,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.62 - recorder now polls currently-playing animations directly instead of waiting on a play event",
 "v1.61 - fixed the recorder: move spam was evicting every animation entry from the log",
 "v1.60 - found the real cause of the blank Auto Guard tab: a leftover block re-hid every card on it",
 "v1.59 - fixed the in-script update checker pointing at the wrong, stale branch",
@@ -11518,7 +11524,7 @@ end
 ]==]
 
 -- DISCORD GATE: the first time the script runs, a window asks for a Discord join before anything else loads
-local GATE_VERSION = "v1.61"
+local GATE_VERSION = "v1.62"
 local okGate, errGate = pcall(function()
 	local FILE = "JHub_discord_ok.txt"
 	local INVITE = "https://discord.gg/fk5TsZMrRM"
@@ -11653,7 +11659,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.61"
+local VERSION = "v1.62"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -19881,8 +19887,13 @@ JH.AGContentFrames = contentFrames
 			if rLastPos then speed = flat(r.Position - rLastPos).Magnitude / 0.2 end
 			rLastPos = r.Position
 			local c2 = char()
-			table.insert(JH.rguardMoveLog, string.format("%s  move  state=%s  speed=%.1f  holdingG=%s  action=%s  guarding=%s",
-				os.date("%H:%M:%S"), h:GetState().Name, speed, tostring(c2 and c2:GetAttribute("HoldingG")), tostring(c2 and c2:GetAttribute("Action")), tostring(Bot.status or "")))
+			local tracks = {}
+			for _, tr in ipairs(h:GetPlayingAnimationTracks()) do
+				local tid = tr.Animation and tr.Animation.AnimationId or "?"
+				tracks[#tracks + 1] = string.format("%s(%s,%s,spd=%.1f)", tid, tr.Priority.Name, tostring(tr.Looped), tr.Speed)
+			end
+			table.insert(JH.rguardMoveLog, string.format("%s  move  state=%s  speed=%.1f  holdingG=%s  action=%s  guarding=%s  playing=%s",
+				os.date("%H:%M:%S"), h:GetState().Name, speed, tostring(c2 and c2:GetAttribute("HoldingG")), tostring(c2 and c2:GetAttribute("Action")), tostring(Bot.status or ""), #tracks > 0 and table.concat(tracks, " | ") or "none"))
 			if #JH.rguardMoveLog > 200 then table.remove(JH.rguardMoveLog, 1) end
 		end)
 		UI.Button(rc, "Copy remote guard log", function()
@@ -23178,6 +23189,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.62 - recorder now polls currently-playing animations directly instead of waiting on a play event",
 "v1.61 - fixed the recorder: move spam was evicting every animation entry from the log",
 "v1.60 - found the real cause of the blank Auto Guard tab: a leftover block re-hid every card on it",
 "v1.59 - fixed the in-script update checker pointing at the wrong, stale branch",
