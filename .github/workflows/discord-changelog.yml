@@ -1,0 +1,30 @@
+name: Discord changelog
+
+on:
+  push:
+    branches:
+      - claude/claudechud-8cord-executor-x86h7a
+      - claude/claudechud-8cord-executor-wclom3
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Post commit message to Discord
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "DISCORD_WEBHOOK secret not set, skipping."
+            exit 0
+          fi
+          MSG=$(git log -1 --pretty=%B | sed -n '1p')
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          ESCAPED=$(printf '%s' "$MSG" | sed 's/\\/\\\\/g; s/"/\\"/g')
+          curl -sf -H "Content-Type: application/json" -X POST \
+            -d "{\"content\": \"**JHub update (${BRANCH}):** ${ESCAPED}\"}" \
+            "$WEBHOOK"
