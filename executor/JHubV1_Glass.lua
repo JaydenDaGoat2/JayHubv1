@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.39"
+local VERSION = "v1.80"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -145,13 +145,13 @@ ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, St
 LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, HardLock = "",
+FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false,
 AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 AGOnlyBall = true,
 BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
 BindKey1 = "", BindArgs1 = "", BindKey2 = "", BindArgs2 = "", BindKey3 = "", BindArgs3 = "", BindKey4 = "", BindArgs4 = "", BindKey5 = "", BindArgs5 = "", BindKey6 = "", BindArgs6 = "",
 LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
-AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
+AG = false, AGTarget = "Ball handler", AGDist = 4, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true, AGHoldToUse = false, WalkAnimId = "", GuardAnimId = "",
 AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
 AR = false, ARSpeed = 1, ARReact = 0.18, ARRange = 45, ARJump = true, ARMagnet = true, ARMagRange = 4, ARMarker = false,
 AP = false, APBuild = "Small", APPostScore = true, APAllAround = true, APOpenDist = 6, APRange = 24, APThree = true, APDrive = true, APLayups = true, APSprint = true, APMoves = true,
@@ -545,7 +545,7 @@ if not o then return nil end
 end
 return o
 end
-local ACTION_WORDS = { Shoot = { "shoot", "shot" }, Sprint = { "sprint", "run" } }
+local ACTION_WORDS = { Shoot = { "shoot", "shot" }, Sprint = { "sprint", "run" }, Guard = { "guard" } }
 function Input.findButton(action)
 if action == "Shoot" and S.ShootButtonPath ~= "" then
 local b = Input.resolve(S.ShootButtonPath)
@@ -5302,6 +5302,15 @@ UI.stroke(b, 0.55)
 UI.label({ Text = text, TextSize = 14, Size = UDim2.fromScale(1, 1), Parent = b }, true, "Text")
 return b
 end
+local DiscordBtn = new("TextButton", { Text = "", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -92, 0.5, 0),
+	Size = UDim2.fromOffset(32, 28), AutoButtonColor = false, BackgroundColor3 = Color3.fromRGB(88, 101, 242), Parent = Header })
+UI.corner(DiscordBtn, 0.7)
+UI.label({ Text = "D", TextSize = 14, Font = Enum.Font.GothamBlack, TextColor3 = WHITE, Size = UDim2.fromScale(1, 1), Parent = DiscordBtn }, true, false)
+DiscordBtn.Activated:Connect(function()
+	local INVITE = "https://discord.gg/fk5TsZMrRM"
+	local ok = type(setclipboard) == "function" and pcall(setclipboard, INVITE)
+	notify("JHub", ok and "Discord invite copied - paste it in your browser to join." or ("Join my Discord: " .. INVITE), 5)
+end)
 local CollapseBtn = headerButton("-", -52)
 local CloseBtn = headerButton("X", -12)
 local HeadLine = new("Frame", { Position = UDim2.new(0, 10, 1, -1), Size = UDim2.new(1, -20, 0, 1), BorderSizePixel = 0,
@@ -7249,40 +7258,77 @@ local af = c:FindFirstChild("Attributes")
 local bv = af and af:FindFirstChild("Basketball")
 return (bv and bv.Value ~= nil) and true or false
 end
+-- reads real root.AssemblyLinearVelocity instead of estimating speed from position deltas - the engine already knows the opponent's true instantaneous velocity and replicates it, no need to re-derive a laggier copy of it
+local function sampleRoot(root, now)
+local v = root.AssemblyLinearVelocity
+local flatV = Vector3.new(v.X, 0, v.Z)
+local tr = Bot.track[root]
+if not tr then
+Bot.track[root] = { p = root.Position, t = now, v = flatV }
+else
+tr.v = tr.v * 0.6 + flatV * 0.4
+tr.p, tr.t = root.Position, now
+end
+end
 function Bot.sample()
 local now = tick()
 for _, pl in ipairs(Players:GetPlayers()) do
 if pl ~= LP then
 local c = Bot.charOf(pl)
 local root = c and (c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart)
-if root then
-local tr = Bot.track[root]
-if not tr then
-Bot.track[root] = { p = root.Position, t = now, v = Vector3.new(0, 0, 0) }
-else
-local dt = now - tr.t
-if dt > 0.001 then
-local nv = (root.Position - tr.p) / dt
-tr.v = tr.v * 0.6 + Vector3.new(nv.X, 0, nv.Z) * 0.4
-tr.p, tr.t = root.Position, now
+if root then sampleRoot(root, now) end
+end
+end
+-- AI opponents have no Player object, so the loop above never samples their velocity - without this, Bot.guardStep's prediction always assumed AI stood still
+local myChar = char()
+local folder = workspace:FindFirstChild("Characters")
+if folder then
+for _, c in ipairs(folder:GetChildren()) do
+if c:IsA("Model") and c ~= myChar and c.Name ~= "InvisCharacter" then
+local root = c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart
+if root then sampleRoot(root, now) end
 end
 end
 end
 end
-end
+-- this game never sets Player.Team (confirmed nil on real players in a remote spy log), it uses a custom HomeTeam attribute on the character instead
+local function sameSide(c1, c2)
+if not c1 or not c2 then return false end
+local h1, h2 = c1:GetAttribute("HomeTeam"), c2:GetAttribute("HomeTeam")
+if h1 == nil or h2 == nil then return false end
+return h1 == h2
 end
 function Bot.others()
 local out = {}
+local seen = {}
+local myChar = char()
 for _, pl in ipairs(Players:GetPlayers()) do
 if pl ~= LP then
 local c = Bot.charOf(pl)
 local root = c and (c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart)
 local hm = c and c:FindFirstChildOfClass("Humanoid")
 if root and hm and hm.Health > 0 then
+seen[c] = true
 local tr = Bot.track[root]
 out[#out + 1] = { pl = pl, c = c, root = root, pos = root.Position, vel = tr and tr.v or Vector3.new(0, 0, 0),
-mate = (S.APTeam == "By team" and LP.Team ~= nil and pl.Team == LP.Team) and true or false,
+mate = S.APTeam == "By team" and sameSide(myChar, c),
 ball = Bot.hasBall(c), shooting = c:GetAttribute("Action") == "Shooting" }
+end
+end
+end
+-- AI opponents are real characters in the game but have no Player object behind them, so the loop above never finds them
+local folder = workspace:FindFirstChild("Characters")
+if folder then
+for _, c in ipairs(folder:GetChildren()) do
+if c:IsA("Model") and c ~= myChar and not seen[c] and c.Name ~= "InvisCharacter" then
+local root = c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart
+local hm = c:FindFirstChildOfClass("Humanoid")
+if root and hm and hm.Health > 0 then
+local tr = Bot.track[root]
+out[#out + 1] = { pl = { Name = c.Name }, c = c, root = root, pos = root.Position, vel = tr and tr.v or Vector3.new(0, 0, 0),
+mate = S.APTeam == "By team" and sameSide(myChar, c),
+ball = Bot.hasBall(c), shooting = c:GetAttribute("Action") == "Shooting" }
+end
 end
 end
 end
@@ -7331,10 +7377,20 @@ function Bot.move(dir, mul)
 if dir.Magnitude > 1 then dir = dir.Unit end
 Bot.cmd, Bot.cmdT, Bot.mul = dir, tick(), mul or 1
 Mover.override, Mover.overrideT = dir, tick()
+-- this game is server-authoritative and never reads Humanoid.MoveDirection/Humanoid:Move at all (confirmed back in v1.45's "this game does not use MoveDirection" finding, re-confirmed by Humanoid:Move producing zero real displacement) - the only thing that actually moves a character here is the same MoveDirection RemoteEvent the game's own control script fires, which Mover.send already drives for other features like Glide. Fire it directly instead of waiting on the passive Mover.override hook to catch a call that may not come often enough while idle.
+local sentVec = dir * (mul or 1)
+local ok = pcall(Mover.send, sentVec)
+Bot.dbg = Bot.dbg or {}
+Bot.dbg.sentVia, Bot.dbg.sentVec, Bot.dbg.sentOk, Bot.dbg.sentAt = "Mover.send", sentVec, ok, tick()
+local h3 = hum()
+Bot.dbg.humState = h3 and h3:GetState().Name or "no humanoid"
 end
 function Bot.stopMove()
 Bot.cmd = nil
 Mover.override = nil
+local ok = pcall(Mover.send, Vector3.new())
+Bot.dbg = Bot.dbg or {}
+Bot.dbg.sentVia, Bot.dbg.sentVec, Bot.dbg.sentOk, Bot.dbg.sentAt = "Mover.send(stop)", Vector3.new(), ok, tick()
 end
 function Bot.faceAt(pos)
 local r = Mover.body()
@@ -7393,20 +7449,64 @@ if not S.APPause then return false end
 local d = Mover.gameDir
 return d ~= nil and tick() - (Mover.gameDirT or 0) < 0.4 and flat(d).Magnitude > 0.35
 end
-local moveTrack, moveTrackHum
-local function walkTrack()
+-- confirmed from a real remote guard recorder log (this game's real Jog/defensive slide ids) - bootstrap these so Auto Guard has a walk animation immediately instead of waiting on another learning pass, now that the old bad exclusion is gone
+if not S.WalkAnimId or S.WalkAnimId == "" then S.WalkAnimId = "rbxassetid://135438934392621" saveSoon() end
+if not S.GuardAnimId or S.GuardAnimId == "" then S.GuardAnimId = "rbxassetid://16597565910" saveSoon() end
+-- learn two real animations from how you actually move: a normal walk (facing roughly the way you're moving) and a defensive slide (facing one way, moving sideways/backward - the real signature of guarding someone), instead of guessing an id or treating all movement the same
+local walkLastPos, walkLastT
+bind(RunService.Heartbeat, function()
+	local needWalk = not S.WalkAnimId or S.WalkAnimId == ""
+	local needGuard = not S.GuardAnimId or S.GuardAnimId == ""
+	if not needWalk and not needGuard then return end
+	if Bot.cmd then return end
+	local h, r = hum(), Mover.body()
+	if not h or not r then return end
+	local now = tick()
+	local moveDelta, moving = Vector3.new(), false
+	if walkLastPos and walkLastT and now - walkLastT > 0 then
+		moveDelta = flat(r.Position - walkLastPos)
+		moving = moveDelta.Magnitude / (now - walkLastT) > 3
+	end
+	walkLastPos, walkLastT = r.Position, now
+	if not moving then return end
+	local facing = flat(r.CFrame.LookVector)
+	local isGuardMove = false
+	if facing.Magnitude > 0.1 and moveDelta.Magnitude > 0.1 then
+		isGuardMove = facing.Unit:Dot(moveDelta.Unit) < 0.3
+	end
+	for _, tr in ipairs(h:GetPlayingAnimationTracks()) do
+		local id = tr.Animation and tr.Animation.AnimationId
+		if tr.Priority == Enum.AnimationPriority.Movement and tr.Looped and id and id ~= "" then
+			if isGuardMove and needGuard then
+				S.GuardAnimId = id
+				saveSoon()
+				notify("JHub", "Learned your real defensive slide animation.", 3)
+			elseif not isGuardMove and needWalk then
+				S.WalkAnimId = id
+				saveSoon()
+				notify("JHub", "Learned your real walk animation.", 3)
+			end
+			break
+		end
+	end
+end)
+local activeId, activeTrack
+local moveTracks = {}
+local function trackFor(id)
+	if not id or id == "" then return nil end
 	local h = hum()
 	if not h then return nil end
-	if moveTrack and moveTrackHum == h then return moveTrack end
+	local cached = moveTracks[id]
+	if cached and cached.hum == h then return cached.track end
 	local animator = h:FindFirstChildOfClass("Animator")
 	if not animator then return nil end
 	local anim = Instance.new("Animation")
-	anim.AnimationId = "rbxassetid://135438934392621"
+	anim.AnimationId = id
 	local ok, track = pcall(function() return animator:LoadAnimation(anim) end)
 	if not ok or not track then return nil end
 	track.Priority = Enum.AnimationPriority.Movement
 	track.Looped = true
-	moveTrack, moveTrackHum = track, h
+	moveTracks[id] = { track = track, hum = h }
 	return track
 end
 bind(RunService.Stepped, function(_, dt)
@@ -7415,16 +7515,23 @@ bind(RunService.Stepped, function(_, dt)
 	if not r then return end
 	local now = tick()
 	local moving = Bot.cmd and now - Bot.cmdT < 0.35 and Bot.cmd.Magnitude > 0.05
+	-- Humanoid:Move produced zero effect on animation too (confirmed: the real guard/defensive animation only shows up because it's tied directly to the HoldingG attribute by the game's own systems, not because of anything we send through Humanoid.MoveDirection - same "this game doesn't react to MoveDirection" finding as the movement side). CFrame drives position; load and play the confirmed real walk animation ourselves on top of it.
 	if moving then
 		r.CFrame = r.CFrame + Bot.cmd * Speed.gameWS * Bot.mul * dt
 		Mover.sync(r)
-		local ok, tr = pcall(walkTrack)
-		if ok and tr then
-			tr.Speed = math.clamp(Bot.mul or 1, 0.6, 1.8)
-			if not tr.IsPlaying then tr:Play(0.15) end
+		-- GuardAnimId never actually won out over the game's own real defensive animation in any recorder log, stationary or moving - so stop competing with it and just always play the real walk animation whenever actually moving, guarding or not
+		local id = S.WalkAnimId
+		if id ~= activeId then
+			if activeTrack then pcall(function() activeTrack:Stop(0.1) end) end
+			activeTrack = trackFor(id)
+			activeId = id
 		end
-	elseif moveTrack and moveTrack.IsPlaying then
-		moveTrack:Stop(0.15)
+		if activeTrack then
+			activeTrack.Speed = math.clamp(Bot.mul or 1, 0.6, 1.8)
+			if not activeTrack.IsPlaying then activeTrack:Play(0.15) end
+		end
+	elseif activeTrack and activeTrack.IsPlaying then
+		activeTrack:Stop(0.15)
 	end
 if Bot.face and now - Bot.faceT < 0.35 then
 local p = r.Position
@@ -7436,53 +7543,45 @@ end)
 -- AUTO GUARD AND AUTO BLOCK
 ---------------------------------------------------------------------
 function Bot.pickTarget(others, me, forced)
-local best, bd
 local mode = forced or S.AGTarget
+local function scoreOf(o)
+local d = flat(o.pos - me).Magnitude
+if mode == "Ball handler" then return o.ball and (d - 1000) or d end
+if mode == "Closest to hoop" then
+local h = Bot.nearestHoop(o.pos)
+return h and flat(o.pos - h).Magnitude or d
+end
+return d
+end
+local best, bd
 for _, o in ipairs(others) do
 if not o.mate then
-local d = flat(o.pos - me).Magnitude
-local score = d
-if mode == "Ball handler" then
-score = o.ball and (d - 1000) or d
-elseif mode == "Closest to hoop" then
-local h = Bot.nearestHoop(o.pos)
-score = h and flat(o.pos - h).Magnitude or d
-end
+local score = scoreOf(o)
 if not bd or score < bd then best, bd = o, score end
 end
 end
+-- stick to whoever is already locked unless they're gone/dead, or a clearly better target has stayed clearly better for a bit - stops the target flickering between two near-equal candidates every tick, which is what caused jittery, indecisive movement
+local now = tick()
+if Bot.lockedChar then
+local still
+for _, o in ipairs(others) do
+if o.c == Bot.lockedChar and not o.mate then still = o break end
+end
+if still then
+if best and best.c ~= still.c and bd < scoreOf(still) - 2 then
+if Bot.lockBetterChar ~= best.c then Bot.lockBetterChar, Bot.lockBetterSince = best.c, now end
+if now - Bot.lockBetterSince >= 0.5 then
+Bot.lockedChar, Bot.lockBetterChar, Bot.lockBetterSince = best.c, nil, nil
 return best
 end
-function Bot.guardStep(me, others, forced)
-local t = Bot.pickTarget(others, me, forced)
-if not t then return false end
-local dist = flat(t.pos - me).Magnitude
-if dist > S.AGRange and not S.AGLock then return false end
-local now = tick()
-local react = S.AGLock and 0 or S.AGReact
-if not Bot.spot or Bot.spotTarget ~= t or now - Bot.spotT >= react then
-local ppos = t.pos + t.vel * S.AGPredict
-local hoop = Bot.nearestHoop(ppos)
-local dirf = hoop and flat(hoop - ppos) or flat(t.vel)
-if dirf.Magnitude < 0.1 then dirf = flat(me - ppos) end
-if dirf.Magnitude < 0.1 then dirf = Vector3.new(0, 0, 1) end
-Bot.spot, Bot.spotTarget, Bot.spotT = ppos + dirf.Unit * S.AGDist, t, now
-end
-local to = flat(Bot.spot - me)
-local d = to.Magnitude
-local strength = S.AGStrength / 100
-local mul = S.AGSpeed * (0.7 + strength * 1.3)
-if S.AGLock then mul = mul * 2 end
-if d < 0.5 then
-Bot.stopMove()
 else
-local gain = S.AGLock and 1 or math.min(1, d / 3)
-Bot.move(to.Unit * gain, mul)
+Bot.lockBetterChar, Bot.lockBetterSince = nil, nil
 end
-if S.AGFace then Bot.faceAt(t.pos) end
-Bot.setSprint(S.AGSprint and d > 7)
-Bot.status = "Guarding " .. t.pl.Name
-return true
+return still
+end
+end
+Bot.lockedChar, Bot.lockBetterChar, Bot.lockBetterSince = best and best.c or nil, nil, nil
+return best
 end
 function Bot.blockStep(others, me)
 if not S.AB then return end
@@ -7775,12 +7874,19 @@ if S.AP then
 acted = Bot.play(me, others, hasBall)
 else
 if S.AR and not hasBall then acted = Bot.reboundStep(me) end
-if not acted and S.AG and not hasBall then acted = Bot.guardStep(me, others) end
+local wantGuard = S.AG and not hasBall
+if wantGuard and S.AGHoldToUse then
+local c3 = char()
+wantGuard = c3 and c3:GetAttribute("HoldingG") == true
+end
+if not acted and wantGuard then acted = Bot.guardStep(me, others) end
 end
 if not acted then
 Bot.stopMove()
 Bot.setSprint(false)
-if not S.AP then Bot.status = "Waiting" end
+if not S.AP then
+Bot.status = (S.AG and S.AGHoldToUse and not hasBall) and "Hold Guard to drive" or "Waiting"
+end
 end
 end
 task.spawn(function()
@@ -7819,28 +7925,160 @@ UI.Note(ns, "Stops stun animations, clears stun flags on your character and gets
 end
 
 local GP = UI.Page("Auto Guard", "A")
+do
+local AG_CODE = "6022"
+local typed = ""
+local lock = UI.Card(GP, "Auto Guard (locked)")
+UI.Input(lock, "Code", { get = function() return typed end, set = function(v) typed = tostring(v or "") end }, nil, "enter the code")
+UI.Note(lock, "Auto Guard is locked. Enter the code to open it.")
+local contentFrames = {}
+JH.AGContentFrames = contentFrames
+UI.Button(lock, "Unlock", function()
+if string.gsub(typed, "%s", "") == AG_CODE then
+lock.frame.Visible = false
+for _, f in ipairs(contentFrames) do f.Visible = true end
+notify("Auto Guard", "Unlocked", 3)
+else
+notify("Auto Guard", "Wrong code", 3)
+end
+end, true)
 local g1 = UI.Card(GP, "Auto guard")
+g1.frame.Visible = false
+contentFrames[#contentFrames + 1] = g1.frame
 UI.Toggle(g1, "Auto guard", "AG")
 UI.Dropdown(g1, "Who to guard", "AGTarget", { "Ball handler", "Closest to me", "Closest to hoop" })
+UI.Toggle(g1, "Only guard the player who has the ball", "AGOnlyBall")
 UI.Slider(g1, "Guard distance (studs in front)", "AGDist", 1, 12, 0.5, 1)
-UI.Slider(g1, "Guard speed", "AGSpeed", 0.5, 3, 0.1, 1, "x")
-UI.Slider(g1, "Strength (how hard it corrects)", "AGStrength", 0, 100, 5, 0, "%")
+UI.Note(g1, "Holds the real Guard button while guarding, same as a real player, and uses Guard speed from the Players tab for how fast it closes out.")
+UI.Keybind(g1, "Guard key (keyboard, only if there is no on-screen Guard button)", function() return S.GuardKey end, function(v) S.GuardKey = v end)
 UI.Slider(g1, "Reaction time", "AGReact", 0, 0.5, 0.01, 2, "s")
 UI.Slider(g1, "Prediction (looks ahead)", "AGPredict", 0, 0.6, 0.02, 2, "s")
 UI.Slider(g1, "Guard range", "AGRange", 10, 120, 5, 0, " studs")
 UI.Toggle(g1, "Stay in front no matter what", "AGLock")
+UI.Toggle(g1, "Only drive while I hold the real Guard button myself", "AGHoldToUse")
 UI.Toggle(g1, "Face the player I guard", "AGFace")
 UI.Toggle(g1, "Sprint to catch up", "AGSprint")
 UI.Toggle(g1, "Look human (sway, hesitate, player speed)", "AGHuman")
 UI.Slider(g1, "How human", "AGHumanAmt", 0, 100, 5, 0, "%")
 UI.Note(g1, "It stands between the player and the hoop, and leads where they are going. Stay in front no matter what ignores range and reaction and chases at double speed.")
 local g2 = UI.Card(GP, "Auto block")
+g2.frame.Visible = false
+contentFrames[#contentFrames + 1] = g2.frame
 UI.Toggle(g2, "Auto block", "AB")
 UI.Slider(g2, "Block range", "ABRange", 4, 30, 1, 0, " studs")
 UI.Slider(g2, "Block timing (delay after the shot starts)", "ABDelay", 0, 0.5, 0.01, 2, "s")
 UI.Slider(g2, "Block chance", "ABChance", 0, 100, 5, 0, "%")
 UI.Keybind(g2, "Block / jump key", function() return S.ABKey end, function(v) S.ABKey = (v ~= "" and v) or "Space" end)
 UI.Note(g2, "Blocks by jumping at the shooter. If your game blocks with another button, set it here.")
+local rc = UI.Card(GP, "Remote Guard Recorder")
+rc.frame.Visible = false
+contentFrames[#contentFrames + 1] = rc.frame
+UI.Note(rc, "Turn this on, then either guard someone for real (10-15s, walk toward/away/side to side) or have someone guard YOU. It catches every animation on you AND on whoever is nearest to you - priority, speed, looped or not - plus position, HoldingG, Action and state each tick.")
+JH.rguardAnimLog = JH.rguardAnimLog or {}
+JH.rguardMoveLog = JH.rguardMoveLog or {}
+JH.rguardOppAnimLog = JH.rguardOppAnimLog or {}
+local rconn, roppConn, roppHum
+local function hookOpp(h)
+if roppConn then roppConn:Disconnect() roppConn = nil end
+roppHum = h
+if h then
+roppConn = h.AnimationPlayed:Connect(function(track)
+if not S.RGuardOn then return end
+table.insert(JH.rguardOppAnimLog, string.format("%s  oppanim  name=%s  id=%s  prio=%s  looped=%s  speed=%.2f",
+os.date("%H:%M:%S"), track.Name, (track.Animation and track.Animation.AnimationId) or "?", track.Priority.Name, tostring(track.Looped), track.Speed))
+if #JH.rguardOppAnimLog > 400 then table.remove(JH.rguardOppAnimLog, 1) end
+end)
+end
+end
+UI.Toggle(rc, "Record everything about guarding", "RGuardOn", function(v)
+if v then
+JH.rguardAnimLog, JH.rguardMoveLog, JH.rguardOppAnimLog = {}, {}, {}
+local h = hum()
+if h then
+rconn = h.AnimationPlayed:Connect(function(track)
+if not S.RGuardOn then return end
+table.insert(JH.rguardAnimLog, string.format("%s  anim  name=%s  id=%s  prio=%s  looped=%s  speed=%.2f",
+os.date("%H:%M:%S"), track.Name, (track.Animation and track.Animation.AnimationId) or "?", track.Priority.Name, tostring(track.Looped), track.Speed))
+if #JH.rguardAnimLog > 400 then table.remove(JH.rguardAnimLog, 1) end
+end)
+end
+notify("Remote Guard Recorder", "Recording. Guard someone, or have someone guard you.", 5)
+else
+if rconn then rconn:Disconnect() rconn = nil end
+if roppConn then roppConn:Disconnect() roppConn = nil end
+roppHum = nil
+notify("Remote Guard Recorder", "Stopped. Tap Copy to get the report.", 4)
+end
+end)
+local rLastPos, rLastLog = nil, 0
+bind(RunService.Heartbeat, function()
+if not S.RGuardOn then return end
+local now = tick()
+if now - rLastLog < 0.2 then return end
+rLastLog = now
+local h, r = hum(), Mover.body()
+if not h or not r then return end
+local speed = 0
+if rLastPos then speed = flat(r.Position - rLastPos).Magnitude / 0.2 end
+rLastPos = r.Position
+local c2 = char()
+local tracks = {}
+for _, tr in ipairs(h:GetPlayingAnimationTracks()) do
+local tid = tr.Animation and tr.Animation.AnimationId or "?"
+tracks[#tracks + 1] = string.format("%s(%s,%s,spd=%.1f)", tid, tr.Priority.Name, tostring(tr.Looped), tr.Speed)
+end
+local nearest, nearestDist
+local ok, others = pcall(Bot.others)
+if ok and others then
+for _, o in ipairs(others) do
+local d = (o.pos - r.Position).Magnitude
+if not nearestDist or d < nearestDist then nearest, nearestDist = o, d end
+end
+end
+local oppName, oppTracks = "none", {}
+if nearest and nearestDist and nearestDist < 30 then
+oppName = (nearest.pl and nearest.pl.Name) or "?"
+local oh = nearest.c and nearest.c:FindFirstChildOfClass("Humanoid")
+if oh then
+if oh ~= roppHum then hookOpp(oh) end
+for _, tr in ipairs(oh:GetPlayingAnimationTracks()) do
+local tid = tr.Animation and tr.Animation.AnimationId or "?"
+oppTracks[#oppTracks + 1] = string.format("%s(%s,%s,spd=%.1f)", tid, tr.Priority.Name, tostring(tr.Looped), tr.Speed)
+end
+end
+elseif roppHum then
+hookOpp(nil)
+end
+local dbg = Bot.dbg or {}
+local dbgLine = string.format("dbgTarget=%s dbgDist=%s dbgDir=%s dbgSent=%s dbgSentOk=%s dbgSentVia=%s dbgHumState=%s dbgBlockedReason=%s",
+tostring(dbg.target or "none"),
+dbg.dist and string.format("%.1f", dbg.dist) or "?",
+dbg.dir and string.format("(%.2f,%.2f,%.2f)", dbg.dir.X, dbg.dir.Y, dbg.dir.Z) or "?",
+dbg.sentVec and string.format("(%.2f,%.2f,%.2f)", dbg.sentVec.X, dbg.sentVec.Y, dbg.sentVec.Z) or "?",
+tostring(dbg.sentOk), tostring(dbg.sentVia), tostring(dbg.humState), tostring(dbg.reason or "none"))
+table.insert(JH.rguardMoveLog, string.format("%s  move  state=%s  speed=%.1f  holdingG=%s  action=%s  guarding=%s  playing=%s  opp=%s  oppDist=%s  oppPlaying=%s  %s",
+os.date("%H:%M:%S"), h:GetState().Name, speed, tostring(c2 and c2:GetAttribute("HoldingG")), tostring(c2 and c2:GetAttribute("Action")), tostring(Bot.status or ""),
+#tracks > 0 and table.concat(tracks, " | ") or "none", oppName, nearestDist and string.format("%.1f", nearestDist) or "?", #oppTracks > 0 and table.concat(oppTracks, " | ") or "none", dbgLine))
+if #JH.rguardMoveLog > 200 then table.remove(JH.rguardMoveLog, 1) end
+end)
+UI.Button(rc, "Copy remote guard log", function()
+local rlines = { "== REMOTE GUARD RECORDER " .. tostring(VERSION) .. " | " .. os.date("%Y-%m-%d %H:%M:%S") }
+if #JH.rguardAnimLog == 0 and #JH.rguardMoveLog == 0 and #JH.rguardOppAnimLog == 0 then
+rlines[#rlines + 1] = "(nothing recorded yet, turn it on and guard someone for real first)"
+else
+rlines[#rlines + 1] = "-- your animations (every one played, any priority) --"
+for _, l in ipairs(JH.rguardAnimLog) do rlines[#rlines + 1] = l end
+rlines[#rlines + 1] = "-- opponent animations (nearest player/bot to you, every one played) --"
+for _, l in ipairs(JH.rguardOppAnimLog) do rlines[#rlines + 1] = l end
+rlines[#rlines + 1] = "-- movement/state snapshots --"
+for _, l in ipairs(JH.rguardMoveLog) do rlines[#rlines + 1] = l end
+end
+local text = table.concat(rlines, "\n")
+pcall(function() if type(writefile) == "function" then writefile("JHub_remote_guard_log.txt", text) end end)
+if type(setclipboard) == "function" then pcall(setclipboard, text) end
+notify("Remote Guard Recorder", string.format("%.0f KB, saved as JHub_remote_guard_log.txt and copied", #text / 1024), 6)
+end)
+end
 
 local RP = UI.Page("Rebound", "R")
 local r1 = UI.Card(RP, "Auto rebound")
@@ -7906,10 +8144,9 @@ task.wait(0.4)
 end
 end)
 
--- Auto Guard and Auto Grind are removed for now: tabs hidden, features forced off
-S.AG, S.AB, S.AP = false, false, false
+-- Auto Grind is unfinished and stays hidden; Auto Guard no longer force-hidden or force-disabled
 for _, p in ipairs(UI.pages) do
-	if p.name == "Auto Guard" or p.name == "Auto Grind" then p.lbl.Parent.Visible = false end
+if p.name == "Auto Grind" then p.lbl.Parent.Visible = false end
 end
 
 -- UI customizations goes to the bottom of the tab list
@@ -8088,7 +8325,7 @@ UI.Slider(c, "Fade and step back timing (later)", "FadeNudge", -30, 40, 1, 0, " 
 UI.Toggle(c, "Auto adapt: learn every shot from the first one", "AutoAdaptAll")
 UI.Toggle(c, "Instant green (works at low FPS and high ping)", "InstantGreen")
 UI.Toggle(c, "Smart steps (faster learning, no bouncing)", "SmartSteps")
-UI.Toggle(c, "Show shot contest above my head", "ContestShow")
+UI.Toggle(c, "Show live open/contested feedback while dribbling", "ContestShow")
 UI.Toggle(c, "Keep glides away from my shot", "GlideShotSafe")
 UI.Buttons(c, { { "Copy my locked timings", function() local t = Shot.exportTimings() if setclipboard then setclipboard(t) end notify("Timings", t == "" and "Nothing locked yet" or "Copied to clipboard", 3) end } })
 UI.Input(c, "Import timings", "ImportTimes", nil, "paste copied timings, then rejoin")
@@ -8270,12 +8507,29 @@ Shot.finalSave()
 end
 end
 
+-- real guarding, rebuilt plain and simple: move the character to the spot with CFrame (same as every other bot movement in this script), hold the real Guard button so HoldingG is genuinely true, and play your own real walk/guard animation on top. No simulated keys, no simulated touches - those were freezing the camera.
+local guardHeld = false
+function Bot.setGuardHold(on)
+if S.AGHoldToUse then return end
+if on == guardHeld then return end
+Input.action("Guard", on)
+guardHeld = on
+end
+bind(RunService.Heartbeat, function()
+if not S.AG and guardHeld then Bot.setGuardHold(false) end
+end)
 -- the guard looks like a player: it sways, reacts a little differently each time, sometimes hesitates and never runs faster than a player can
 function Bot.guardStep(me, others, forced)
 local t = Bot.pickTarget(others, me, forced)
-if not t then return false end
+if not t then
+Bot.dbg = { reason = "no target found" }
+return false
+end
 local dist = flat(t.pos - me).Magnitude
-if dist > S.AGRange and not S.AGLock then return false end
+if dist > S.AGRange and not S.AGLock then
+Bot.dbg = { target = t.pl.Name, targetPos = t.pos, dist = dist, reason = string.format("out of AGRange (%.0f > %.0f) and AGLock is off", dist, S.AGRange) }
+return false
+end
 local now = tick()
 local amt = S.AGHuman and (S.AGHumanAmt or 50) / 100 or 0
 local w = Bot.wob
@@ -8296,27 +8550,36 @@ local spot = ppos + dirf.Unit * S.AGDist
 if w and amt > 0 then spot = spot + Vector3.new(w.ox, 0, w.oz) end
 Bot.spot, Bot.spotTarget, Bot.spotT = spot, t, now
 end
+Bot.setGuardHold(true)
+local mul = 1 + (S.GuardSpeed or 0) / 100
+if amt > 0 then mul = math.min(mul * w.sp, (S.AGLock and (1 + 0.8 * amt) or (1 + 0.35 * amt))) end
 if w and amt > 0 and w.pause > now then
 Bot.stopMove()
+Bot.dbg = { target = t.pl.Name, targetPos = t.pos, spot = Bot.spot, dir = Vector3.new(), reason = "human-wobble pause" }
 if S.AGFace then Bot.faceAt(t.pos) end
 Bot.status = "Guarding " .. t.pl.Name
 return true
 end
 local to = flat(Bot.spot - me)
 local d = to.Magnitude
-local mul = 1 + (S.GuardSpeed or 0) / 100
-if amt > 0 then mul = math.min(mul * w.sp, (S.AGLock and (1 + 0.8 * amt) or (1 + 0.35 * amt))) end
+local dir
 if d < 0.5 then
 Bot.stopMove()
+dir = Vector3.new()
 else
 local gain = S.AGLock and 1 or math.min(1, d / 3)
-Bot.move(to.Unit * gain, mul)
+dir = to.Unit * gain
+Bot.move(dir, mul)
 end
+-- merge, don't replace - Bot.move/Bot.stopMove already wrote sentVia/sentVec/sentOk/humState into Bot.dbg just above, overwriting the whole table here was wiping that out of the log
+Bot.dbg = Bot.dbg or {}
+Bot.dbg.target, Bot.dbg.targetPos, Bot.dbg.spot, Bot.dbg.dist, Bot.dbg.dir = t.pl.Name, t.pos, Bot.spot, d, dir
+Bot.dbg.reason = d < 0.5 and "within 0.5 studs of ideal spot, stopped" or nil
 if S.AGFace then Bot.faceAt(t.pos) end
-Bot.setSprint(S.AGSprint and d > 7)
 Bot.status = "Guarding " .. t.pl.Name
 return true
 end
+
 
 -- your own logo pictures: paste the image number from a Roblox image link
 function V.customId(key)
@@ -9865,46 +10128,32 @@ if not active then return end
 return baseNS()
 end
 
--- shot contest above your head, colored from open (green) to heavily contested (red)
-local bb, label, cached, lastScan = nil, nil, nil, 0
-local STOPS = { { 0, Color3.fromRGB(70, 235, 110) }, { 10, Color3.fromRGB(40, 175, 80) }, { 25, Color3.fromRGB(255, 225, 60) }, { 40, Color3.fromRGB(255, 150, 40) }, { 60, Color3.fromRGB(255, 60, 60) } }
-local function colorFor(n)
-if n <= STOPS[1][1] then return STOPS[1][2] end
-for i = 2, #STOPS do
-if n <= STOPS[i][1] then
-local a, b = STOPS[i - 1], STOPS[i]
-return a[2]:Lerp(b[2], (n - a[1]) / (b[1] - a[1]))
-end
-end
-return STOPS[#STOPS][2]
-end
+-- live open/contested feedback while you have the ball, from the real distance to the nearest real defender - updates continuously as you move, instead of only scraping the game's own post-shot "Contested" label once you've already released
+local bb, label, hl
 task.spawn(function()
 while JH.Running do
 task.wait(0.1)
 local show = S.ContestShow
 local c = char()
-local head = c and (c:FindFirstChild("Head") or c:FindFirstChild("HumanoidRootPart"))
-if show and head then
-if not cached or not cached.Parent then
-cached = nil
-if tick() - lastScan > 1 then
-lastScan = tick()
-for _, root in ipairs({ c, LP:FindFirstChild("PlayerGui") }) do
-if root then
-for _, d in ipairs(root:GetDescendants()) do
-if d:IsA("TextLabel") and string.find(d.Text, "Contested", 1, true) and not d:IsDescendantOf(gui) then cached = d break end
-end
-end
-if cached then break end
+local r = c and (c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart)
+local okHB, hb = pcall(Feat.hasBall)
+local hasBall = show and r and okHB and hb
+if show and r and hasBall then
+local nearest
+local okO, others = pcall(Bot.others)
+if okO and others then
+for _, o in ipairs(others) do
+if not o.mate then
+local d = flat(o.pos - r.Position).Magnitude
+if not nearest or d < nearest then nearest = d end
 end
 end
 end
-local n = cached and tonumber(string.match(cached.Text, "(%d+)%s*%%"))
-if n then
+if nearest then
 if not bb then
 bb = Instance.new("BillboardGui")
 bb.Name = "JHContest"
-bb.Size = UDim2.fromOffset(150, 30)
+bb.Size = UDim2.fromOffset(170, 30)
 bb.StudsOffset = Vector3.new(0, 4.2, 0)
 bb.AlwaysOnTop = true
 label = Instance.new("TextLabel")
@@ -9916,15 +10165,35 @@ label.TextStrokeTransparency = 0.3
 label.Parent = bb
 pcall(function() bb.Parent = (gethui and gethui()) or game:GetService("CoreGui") end)
 end
-bb.Adornee = head
-bb.Enabled = true
-label.Text = n .. "% contested"
-label.TextColor3 = colorFor(n)
-elseif bb then
-bb.Enabled = false
+if not hl or not hl.Parent then
+hl = Instance.new("Highlight")
+hl.Name = "JHOpenness"
+hl.FillTransparency = 0.65
+hl.OutlineTransparency = 0
+pcall(function() hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop end)
 end
-elseif bb then
-bb.Enabled = false
+bb.Adornee = c:FindFirstChild("Head") or r
+bb.Enabled = true
+hl.Parent = c
+local word, col
+if nearest >= 6 then
+word, col = "OPEN", Color3.fromRGB(70, 235, 110)
+elseif nearest >= 3.5 then
+word, col = "SLIGHTLY OPEN", Color3.fromRGB(255, 225, 60)
+else
+word, col = "CONTESTED", Color3.fromRGB(255, 60, 60)
+end
+local pct = math.clamp(math.floor(100 - nearest * 12), 0, 100)
+label.Text = string.format("%s (%d%%)", word, pct)
+label.TextColor3 = col
+hl.FillColor, hl.OutlineColor = col, col
+else
+if bb then bb.Enabled = false end
+if hl then hl.Parent = nil end
+end
+else
+if bb then bb.Enabled = false end
+if hl then hl.Parent = nil end
 end
 end
 end)
@@ -10049,7 +10318,7 @@ for _, p in ipairs(UI.pages) do
 if p.name == "Auto Guard" then gp = p end
 if p.name == "Auto Grind" then ap = p end
 end
-if gp and UI.lockedTools then
+if gp then
 local c1 = UI.Card(gp, "Guard mistakes")
 UI.Toggle(c1, "Make mistakes sometimes", "AGMistakes")
 UI.Slider(c1, "How often", "AGMistakeAmt", 0, 60, 1, 0, "%")
@@ -10062,14 +10331,20 @@ UI.Slider(c3, "Steal distance", "ASRange", 3, 9, 0.5, 1, " studs")
 UI.Slider(c3, "Steal chance", "ASChance", 10, 100, 5, 0, "%")
 UI.Slider(c3, "Steal reaction time", "ASReact", 0, 0.5, 0.01, 2, "s")
 UI.Keybind(c3, "Steal key (empty uses the on-screen button)", function() return S.ASKey end, function(v) S.ASKey = v end)
-for _, page in ipairs({ gp, ap }) do
-if page then
-for _, f in ipairs(page.frame:GetChildren()) do
+if JH.AGContentFrames then
+c1.frame.Visible = false
+c2.frame.Visible = false
+c3.frame.Visible = false
+table.insert(JH.AGContentFrames, c1.frame)
+table.insert(JH.AGContentFrames, c2.frame)
+table.insert(JH.AGContentFrames, c3.frame)
+end
+end
+if ap and UI.lockedTools then
+for _, f in ipairs(ap.frame:GetChildren()) do
 if f:IsA("Frame") then
 f.Visible = false
 table.insert(UI.lockedTools, f)
-end
-end
 end
 end
 end
@@ -10119,6 +10394,8 @@ for name, args in pairs(lib) do parts[#parts + 1] = name .. "@@" .. ser(args) ..
 S.BindLib = table.concat(parts)
 saveSoon()
 end
+-- let the network layer (loaded later) read/write this move library and share it
+JH.bindLib, JH.bindSer, JH.bindDeser, JH.bindSaveLib = lib, ser, deser, saveLib
 local function remote()
 local d = game:GetService("ReplicatedStorage"):FindFirstChild("Dribble", true)
 return (d and d:IsA("RemoteEvent")) and d or Mover.lastDribbleRemote
@@ -10157,6 +10434,7 @@ local name = type(raw) == "string" and (string.match(raw, "^(.-)%s+[LR]$") or ra
 if type(name) == "string" and name ~= "" and ser(lib[name] or { n = 0 }) ~= ser(copy) then
 lib[name] = copy
 saveLib()
+if JH.onBindLearned then task.spawn(JH.onBindLearned, name, copy) end
 end
 end)
 return prevOD(args)
@@ -10197,6 +10475,12 @@ local c = UI.Card(pg, "Bind " .. slot)
 c.frame.Size = UDim2.new(0.5, -4, 0, 0)
 UI.Dropdown(c, "Move", "BindMove" .. slot, MOVES)
 UI.Keybind(c, "Key", function() return S["BindKey" .. slot] end, function(v) S["BindKey" .. slot] = v end)
+UI.Button(c, "X - clear this bind", function()
+S["BindMove" .. slot], S["BindKey" .. slot], S["BindArgs" .. slot] = "None", "", ""
+saveSoon()
+UI.refreshAll()
+notify("Binds", "Bind " .. slot .. " cleared.", 2)
+end)
 end
 end
 -- LESS OBVIOUS GUARD, AUTO PLAY CARD, AUTO BLOCK BUTTON WORDS
@@ -10221,8 +10505,12 @@ return prevMove(dir, mul)
 end
 local prevGuard = Bot.guardStep
 function Bot.guardStep(me, others, forced)
+local ok = prevGuard(me, others, forced)
+-- only count as "actively guarding" (for animation purposes) once close to the real guard spot - this used to set guardingNow on every single call, which is every tick Auto Guard runs at all including while still chasing from far away, so the guard/defensive animation got picked almost 100% of the time and the walk animation never got a chance to show during approach
+if ok and Bot.dbg and Bot.dbg.dist and Bot.dbg.dist < 3 then
 Bot.guardingNow = tick()
-return prevGuard(me, others, forced)
+end
+return ok
 end
 -- the guard gives some room by default instead of hugging him
 if (S.AGDist or 0) < 4 then S.AGDist = 4.5 end
@@ -10274,26 +10562,15 @@ local handler
 for _, o in ipairs(others) do
 if o.ball and not o.mate then handler = o end
 end
-if not handler then return false end
+if not handler then Bot.setGuardHold(false) return false end
 forced = "Ball handler"
 end
 return prevG(me, others, forced)
 end
-local gp
-for _, p in ipairs(UI.pages) do
-if p.name == "Auto Guard" then gp = p end
-end
-if gp and UI.lockedTools then
-local c = UI.Card(gp, "Who to guard")
-UI.Toggle(c, "Only guard the player who has the ball", "AGOnlyBall")
-UI.Note(c, "When nobody on the other team has the ball, auto guard stops and does nothing.")
-table.insert(UI.lockedTools, 3, c.frame)
-c.frame.Visible = false
-end
 end
 -- UPDATE BUTTON: checks GitHub for the newest version and loads it
 do
-local OWNER, REPO, BRANCH = "jaydendagoat2", "jayhubv1", "claude/claudechud-8cord-executor-wclom3"
+local OWNER, REPO, BRANCH = "jaydendagoat2", "jayhubv1", "claude/claudechud-8cord-executor-x86h7a"
 local function http(url) return game:HttpGet(url) end
 local function latestSha()
 local branch = string.gsub(BRANCH, "/", "%%2F")
@@ -10613,6 +10890,82 @@ local full = table.concat(parts, "\n\n")
 emit("JHub_dex_dribble.txt", full, "Dribble move data")
 notify("Dribble scan", "Done. Paste JHub_dex_dribble.txt to me so I can build real auto-fill from whatever the game actually stores.", 7)
 end)
+end },
+})
+end
+end
+-- GUARD RECORDER INSIDE THE ULTRA GAME RECORDER: records your own real guarding (state, animation, distance) and reports the learned walk animation id
+do
+local ultra = UI.lockedTools and UI.lockedTools[1]
+if ultra then
+local order = 0
+for _, ch in ipairs(ultra:GetChildren()) do
+if ch:IsA("GuiObject") then order = math.max(order, ch.LayoutOrder) end
+end
+local card = { frame = ultra, order = order }
+local function emit(file, text, what)
+pcall(function() if type(writefile) == "function" then writefile(file, text) end end)
+local clip = text
+if #clip > 900000 then clip = string.sub(clip, 1, 900000) .. "\n-- (cut here, the rest is in the file " .. file .. ")" end
+if type(setclipboard) == "function" then pcall(setclipboard, clip) end
+notify("Dex", string.format("%s: %.0f KB, saved as %s%s", what, #text / 1024, file, type(setclipboard) == "function" and " and copied" or ""), 6)
+end
+JH.guardLog = JH.guardLog or {}
+local function nearestOther()
+local r = Mover.body()
+if not r then return nil end
+local best, bd
+for _, pl in ipairs(Players:GetPlayers()) do
+if pl ~= LP and pl.Character then
+local hrp = pl.Character:FindFirstChild("HumanoidRootPart")
+if hrp then
+local d = flat(hrp.Position - r.Position).Magnitude
+if not bd or d < bd then best, bd = pl, d end
+end
+end
+end
+return best, bd
+end
+local lastLog = 0
+bind(RunService.Heartbeat, function()
+if not S.GuardSpyOn then return end
+local now = tick()
+if now - lastLog < 0.5 then return end
+lastLog = now
+local h = hum()
+if not h then return end
+local _, dist = nearestOther()
+local tracks = {}
+for _, tr in ipairs(h:GetPlayingAnimationTracks()) do
+local id = tr.Animation and tr.Animation.AnimationId or "?"
+tracks[#tracks + 1] = string.format("%s(%s,%s)", id, tr.Priority.Name, tostring(tr.Looped))
+end
+table.insert(JH.guardLog, string.format("%s  state=%s  holdingG=%s  moveDir=%.2f  dist=%.1f  guarding=%s  tracks=%s",
+os.date("%H:%M:%S"), h:GetState().Name, tostring(char() and char():GetAttribute("HoldingG")), h.MoveDirection.Magnitude, dist or -1, tostring(Bot.status or ""), #tracks > 0 and table.concat(tracks, " | ") or "none"))
+if #JH.guardLog > 300 then table.remove(JH.guardLog, 1) end
+end)
+UI.Toggle(card, "Record guarding", "GuardSpyOn", function(v)
+if v then
+JH.guardLog = {}
+notify("Guard recorder", "Recording. Play normally, guard someone for a bit, then tap Copy guard log.", 5)
+else
+notify("Guard recorder", "Stopped. Tap Copy guard log to get the report.", 4)
+end
+end)
+UI.Buttons(card, {
+{ "Copy guard log", function()
+local log = JH.guardLog or {}
+local lines = { "== GUARD RECORDER " .. tostring(VERSION) .. " | " .. os.date("%Y-%m-%d %H:%M:%S"),
+"Learned walk animation id: " .. tostring(S.WalkAnimId ~= "" and S.WalkAnimId or "(not learned yet, walk for real once)"),
+				"Learned guard/slide animation id: " .. tostring(S.GuardAnimId ~= "" and S.GuardAnimId or "(not learned yet, guard someone for real once)"),
+string.format("Guard settings: dist=%s react=%s predict=%s range=%s guardSpeed=%s", tostring(S.AGDist), tostring(S.AGReact), tostring(S.AGPredict), tostring(S.AGRange), tostring(S.GuardSpeed)),
+"" }
+if #log == 0 then
+lines[#lines + 1] = "(nothing recorded yet, turn Record guarding on and guard someone for a bit)"
+else
+for _, l in ipairs(log) do lines[#lines + 1] = l end
+end
+emit("JHub_guard_log.txt", table.concat(lines, "\n"), "Guard log")
 end },
 })
 end
@@ -11028,6 +11381,47 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.80 - GuardAnimId never once beat the game\'s own real defensive animation in testing, so stopped fighting it - Auto Guard now always plays the real walk animation whenever actually moving, guarding or not",
+"v1.79 - found why Auto Rebound had a walk animation but Auto Guard did not: a wobble wrapper was marking Auto Guard as actively guarding on every single tick it ran, even mid-chase, so the walk animation never got picked - fixed",
+"v1.78 - Humanoid:Move did nothing for the walk animation either (same reason it did nothing for movement) - now manually plays the confirmed real walk/guard animation on top of CFrame movement",
+"v1.77 - added an option to only drive Auto Guard while you hold the real Guard button yourself, instead of it pressing the button for you",
+"v1.76 - confirmed Mover.send also produced zero real movement (sent ok, speed stayed 0); back to CFrame for actual position, with Humanoid:Move running alongside it at the same time purely so the real walk animation plays",
+"v1.75 - diagnostics found AGRange was blocking Auto Guard from even trying to move whenever the opponent was past it (check your Guard range slider); fixed a logging bug that hid confirmed Mover.send calls; open/contested is now live while dribbling with a character highlight, not just a post-shot label",
+"v1.74 - added live diagnostics to the Remote Guard Recorder log: target, distance, calculated direction, what actually got sent, whether it was blocked, and humanoid state, no logic changed",
+"v1.73 - found the real reason Auto Guard never followed: this game is server-authoritative and ignores Humanoid:Move entirely - movement now fires the same MoveDirection remote the game itself uses",
+"v1.72 - Auto Guard target lock now sticks to the same opponent (with hysteresis) instead of re-picking best every tick, and velocity is read from the real AssemblyLinearVelocity (now including AI) instead of estimated",
+"v1.71 - back on Humanoid:Move for good: re-read the last log correctly - speed=0 was the guard distance dead-zone working as intended, not a stall; movement is smooth, animations are the game\'s own, target lock/tracking unchanged",
+"v1.70 - Humanoid:Move produced zero actual movement in this game (confirmed: speed stuck at 0 the whole time), reverted to CFrame for position while keeping the confirmed real walk/defensive animation ids playing on top",
+"v1.69 - Auto Guard no longer moves by CFrame at all - it now uses Humanoid:Move like a real player does, so the game\'s own Animate script picks the correct walk/defensive-slide animation automatically",
+"v1.68 - found the real reason the walk animation never showed: moving the root by CFrame alone left the humanoid stuck in Freefall/FallingDown state forever, which hid the walk animation even though it was technically playing - fixed",
+"v1.67 - removed the Discord join gate entirely, replaced with a Discord button in the top right of the menu that copies the invite link",
+"v1.66 - fixed the Discord join gate freezing the whole script for anyone whose click or isfile/writefile did not register - it no longer blocks the real menu from loading",
+"v1.65 - found it: the real walk animation id was being auto-deleted by a leftover bad-id filter, so Auto Guard could never have one; fixed and bootstrapped the confirmed real ids",
+"v1.64 - Remote Guard Recorder now also watches whoever is nearest to you, not just yourself, and logs their walk/guard animation ids too",
+"v1.63 - Auto Guard now detects AI opponents (no Player object) and uses the real HomeTeam attribute instead of Player.Team",
+"v1.62 - recorder now polls currently-playing animations directly instead of waiting on a play event",
+"v1.61 - fixed the recorder: move spam was evicting every animation entry from the log",
+"v1.60 - found the real cause of the blank Auto Guard tab: a leftover block re-hid every card on it",
+"v1.59 - fixed the in-script update checker pointing at the wrong, stale branch",
+"v1.58 - removed the lock code from the visible update log",
+"v1.57 - found it: a leftover line was hiding the Auto Guard tab and force-disabling it every load",
+"v1.56 - rebuilt Auto Guard tab self-contained with its own code lock",
+"v1.55 - Auto Guard now locked behind the Locked tab code, same as the other tools",
+"v1.54 - Auto Guard rebuilt plain again (CFrame + real animation, no simulated input); recorder moved onto its own tab",
+"v1.53 - added Remote Guard Recorder: catches every animation and movement state while guarding",
+"v1.52 - fixed sideways drift and stuck movement when auto guard stops being called",
+"v1.51 - Auto Guard rebuilt: holds real Guard button, follows with real keys/joystick",
+"v1.50 - Auto Guard holds the real Guard button instead of crafting remote calls",
+"v1.49 - fixed HoldG toggling itself back off every frame before the server caught up",
+"v1.48 - Auto Guard now presses the real Guard button and lets the server drive movement",
+"v1.47 - learns your real defensive slide animation separately from your walk",
+"v1.46 - fixed the walk animation learner relearning its own old fake id",
+"v1.45 - fixed walk animation never being learned (this game does not use MoveDirection)",
+"v1.44 - guard recorder: records your real guarding and reports the learned walk animation id",
+"v1.43 - fixed a frozen black/blue screen on first run for some users (Discord gate crash)",
+"v1.42 - walk animation is learned from your own real walk instead of a guessed id",
+"v1.41 - auto guard uses your real walk animation and Players-tab guard speed only",
+"v1.40 - X button on every bind, learned binds shared across the network",
 "v1.29 - JHub network: chat, live feed, shared jumpshot timing",
 "v1.28 - 10 always-on live helps for Auto Green",
 "v1.27 - Sweep locked off at all times",
@@ -11132,6 +11526,31 @@ return a.hold
 end
 return prevSeedHL(key)
 end
+-- SHARED BINDS: a dribble move learned on anyone's copy is pushed to the network and picked up by everyone else who hasn't learned it yet
+function JH.onBindLearned(name, args)
+if JH.bindSer then
+task.spawn(netPut, "bindlib/" .. sanitize(name), { text = JH.bindSer(args), name = name, by = myName, t = os.time() })
+end
+end
+task.spawn(function()
+local res = netGet("bindlib")
+if type(res) == "table" and JH.bindLib and JH.bindDeser then
+local changed = false
+for key, rowv in pairs(res) do
+if type(rowv) == "table" and type(rowv.text) == "string" then
+local realName = type(rowv.name) == "string" and rowv.name or key
+if not JH.bindLib[realName] then
+local args = JH.bindDeser(rowv.text)
+if args then
+JH.bindLib[realName] = args
+changed = true
+end
+end
+end
+end
+if changed and JH.bindSaveLib then JH.bindSaveLib() end
+end
+end)
 end
 -- LIVE ADAPT, SHARPER: steps shrink the more a jumpshot has actually been seen (so it locks in fast early, then stops wobbling), and one freak result against a steady trend gets a lighter step, not a full swing
 do
@@ -11281,91 +11700,6 @@ end)
 end
 ]==]
 
--- DISCORD GATE: the first time the script runs, a window asks for a Discord join before anything else loads
-do
-	local FILE = "JHub_discord_ok.txt"
-	local INVITE = "https://discord.gg/fk5TsZMrRM"
-	local seen = false
-	pcall(function() seen = type(isfile) == "function" and isfile(FILE) == true end)
-	if not seen then
-		local gui = Instance.new("ScreenGui")
-		gui.Name = "JHubDiscordGate"
-		gui.ResetOnSpawn = false
-		gui.IgnoreGuiInset = true
-		gui.DisplayOrder = 2000
-		local okP = pcall(function() gui.Parent = (gethui and gethui()) or game:GetService("CoreGui") end)
-		if not okP or not gui.Parent then gui.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui") end
-		local shade = Instance.new("TextButton")
-		shade.Text = ""
-		shade.AutoButtonColor = false
-		shade.Size = UDim2.fromScale(1, 1)
-		shade.BackgroundColor3 = Color3.new(0, 0, 0)
-		shade.BackgroundTransparency = 0.35
-		shade.BorderSizePixel = 0
-		shade.Parent = gui
-		local box = Instance.new("Frame")
-		box.AnchorPoint = Vector2.new(0.5, 0.5)
-		box.Position = UDim2.fromScale(0.5, 0.5)
-		box.Size = UDim2.fromOffset(340, 230)
-		box.BackgroundColor3 = Color3.fromRGB(6, 6, 10)
-		box.BorderSizePixel = 0
-		box.Parent = shade
-		local c = Instance.new("UICorner")
-		c.CornerRadius = UDim.new(0, 14)
-		c.Parent = box
-		local st = Instance.new("UIStroke")
-		st.Color = Color3.fromRGB(70, 140, 255)
-		st.Thickness = 2
-		st.Parent = box
-		local function label(text, size, y, h, color)
-			local l = Instance.new("TextLabel")
-			l.BackgroundTransparency = 1
-			l.Position = UDim2.new(0, 16, 0, y)
-			l.Size = UDim2.new(1, -32, 0, h)
-			l.Font = Enum.Font.GothamBold
-			l.TextSize = size
-			l.TextWrapped = true
-			l.TextColor3 = color
-			l.Text = text
-			l.Parent = box
-			return l
-		end
-		label("JHub V" .. VERSION:sub(2), 22, 14, 28, Color3.fromRGB(255, 255, 255))
-		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
-		msg.Font = Enum.Font.Gotham
-		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
-		local function button(text, x, fill)
-			local b = Instance.new("TextButton")
-			b.Text = text
-			b.Font = Enum.Font.GothamBold
-			b.TextSize = 15
-			b.TextColor3 = Color3.fromRGB(255, 255, 255)
-			b.AutoButtonColor = true
-			b.BackgroundColor3 = fill
-			b.BorderSizePixel = 0
-			b.Position = UDim2.new(0, x, 1, -64)
-			b.Size = UDim2.new(0.5, -22, 0, 44)
-			b.Parent = box
-			local bc = Instance.new("UICorner")
-			bc.CornerRadius = UDim.new(0, 10)
-			bc.Parent = b
-			return b
-		end
-		local copy = button("Copy invite", 16, Color3.fromRGB(30, 40, 90))
-		local joined = button("I joined", 170, Color3.fromRGB(120, 70, 230))
-		local done = false
-		copy.Activated:Connect(function()
-			local ok = type(setclipboard) == "function" and pcall(setclipboard, INVITE)
-			msg.Text = ok and "Invite copied. Paste it in your browser, join the server, then tap I joined." or "Copy the invite link shown above, join the server, then tap I joined."
-		end)
-		joined.Activated:Connect(function()
-			done = true
-			pcall(function() if type(writefile) == "function" then writefile(FILE, "1") end end)
-		end)
-		while not done and gui.Parent do task.wait(0.1) end
-		pcall(function() gui:Destroy() end)
-	end
-end
 
 local function JHubMain()
 
@@ -11411,7 +11745,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.39"
+local VERSION = "v1.80"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -11517,13 +11851,13 @@ local S = {
 	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, HardLock = "",
+	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false,
 	AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 	AGOnlyBall = true,
 	BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
 	BindKey1 = "", BindArgs1 = "", BindKey2 = "", BindArgs2 = "", BindKey3 = "", BindArgs3 = "", BindKey4 = "", BindArgs4 = "", BindKey5 = "", BindArgs5 = "", BindKey6 = "", BindArgs6 = "",
 	LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
-	AG = false, AGTarget = "Ball handler", AGDist = 4, AGSpeed = 1.2, AGStrength = 60, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true,
+	AG = false, AGTarget = "Ball handler", AGDist = 4, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true, AGHoldToUse = false, WalkAnimId = "", GuardAnimId = "",
 	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
 	AR = false, ARSpeed = 1, ARReact = 0.18, ARRange = 45, ARJump = true, ARMagnet = true, ARMagRange = 4, ARMarker = false,
 	AP = false, APBuild = "Small", APPostScore = true, APAllAround = true, APOpenDist = 6, APRange = 24, APThree = true, APDrive = true, APLayups = true, APSprint = true, APMoves = true,
@@ -11943,7 +12277,7 @@ function Input.resolve(path)
 	end
 	return o
 end
-local ACTION_WORDS = { Shoot = { "shoot", "shot" }, Sprint = { "sprint", "run" } }
+local ACTION_WORDS = { Shoot = { "shoot", "shot" }, Sprint = { "sprint", "run" }, Guard = { "guard" } }
 -- scanning every PlayerGui descendant is expensive, so results are cached briefly
 function Input.findButton(action)
 	if action == "Shoot" and S.ShootButtonPath ~= "" then
@@ -16927,6 +17261,15 @@ local function headerButton(text, xoff)
 	UI.label({ Text = text, TextSize = 14, Size = UDim2.fromScale(1, 1), Parent = b }, true, "Text")
 	return b
 end
+local DiscordBtn = new("TextButton", { Text = "", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -92, 0.5, 0),
+	Size = UDim2.fromOffset(32, 28), AutoButtonColor = false, BackgroundColor3 = Color3.fromRGB(88, 101, 242), Parent = Header })
+UI.corner(DiscordBtn, 0.7)
+UI.label({ Text = "D", TextSize = 14, Font = Enum.Font.GothamBlack, TextColor3 = WHITE, Size = UDim2.fromScale(1, 1), Parent = DiscordBtn }, true, false)
+DiscordBtn.Activated:Connect(function()
+	local INVITE = "https://discord.gg/fk5TsZMrRM"
+	local ok = type(setclipboard) == "function" and pcall(setclipboard, INVITE)
+	notify("JHub", ok and "Discord invite copied - paste it in your browser to join." or ("Join my Discord: " .. INVITE), 5)
+end)
 local CollapseBtn = headerButton("-", -52)
 local CloseBtn = headerButton("X", -12)
 local HeadLine = new("Frame", { Position = UDim2.new(0, 10, 1, -1), Size = UDim2.new(1, -20, 0, 1), BorderSizePixel = 0,
@@ -18969,40 +19312,77 @@ do
 		local bv = af and af:FindFirstChild("Basketball")
 		return (bv and bv.Value ~= nil) and true or false
 	end
+	-- reads real root.AssemblyLinearVelocity instead of estimating speed from position deltas - the engine already knows the opponent's true instantaneous velocity and replicates it, no need to re-derive a laggier copy of it
+	local function sampleRoot(root, now)
+		local v = root.AssemblyLinearVelocity
+		local flatV = Vector3.new(v.X, 0, v.Z)
+		local tr = Bot.track[root]
+		if not tr then
+			Bot.track[root] = { p = root.Position, t = now, v = flatV }
+		else
+			tr.v = tr.v * 0.6 + flatV * 0.4
+			tr.p, tr.t = root.Position, now
+		end
+	end
 	function Bot.sample()
 		local now = tick()
 		for _, pl in ipairs(Players:GetPlayers()) do
 			if pl ~= LP then
 				local c = Bot.charOf(pl)
 				local root = c and (c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart)
-				if root then
-					local tr = Bot.track[root]
-					if not tr then
-						Bot.track[root] = { p = root.Position, t = now, v = Vector3.new(0, 0, 0) }
-					else
-						local dt = now - tr.t
-						if dt > 0.001 then
-							local nv = (root.Position - tr.p) / dt
-							tr.v = tr.v * 0.6 + Vector3.new(nv.X, 0, nv.Z) * 0.4
-							tr.p, tr.t = root.Position, now
-						end
-					end
+				if root then sampleRoot(root, now) end
+			end
+		end
+		-- AI opponents have no Player object, so the loop above never samples their velocity - without this, Bot.guardStep's prediction always assumed AI stood still
+		local myChar = char()
+		local folder = workspace:FindFirstChild("Characters")
+		if folder then
+			for _, c in ipairs(folder:GetChildren()) do
+				if c:IsA("Model") and c ~= myChar and c.Name ~= "InvisCharacter" then
+					local root = c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart
+					if root then sampleRoot(root, now) end
 				end
 			end
 		end
 	end
+	-- this game never sets Player.Team (confirmed nil on real players in a remote spy log), it uses a custom HomeTeam attribute on the character instead
+	local function sameSide(c1, c2)
+		if not c1 or not c2 then return false end
+		local h1, h2 = c1:GetAttribute("HomeTeam"), c2:GetAttribute("HomeTeam")
+		if h1 == nil or h2 == nil then return false end
+		return h1 == h2
+	end
 	function Bot.others()
 		local out = {}
+		local seen = {}
+		local myChar = char()
 		for _, pl in ipairs(Players:GetPlayers()) do
 			if pl ~= LP then
 				local c = Bot.charOf(pl)
 				local root = c and (c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart)
 				local hm = c and c:FindFirstChildOfClass("Humanoid")
 				if root and hm and hm.Health > 0 then
+					seen[c] = true
 					local tr = Bot.track[root]
 					out[#out + 1] = { pl = pl, c = c, root = root, pos = root.Position, vel = tr and tr.v or Vector3.new(0, 0, 0),
-						mate = (S.APTeam == "By team" and LP.Team ~= nil and pl.Team == LP.Team) and true or false,
+						mate = S.APTeam == "By team" and sameSide(myChar, c),
 						ball = Bot.hasBall(c), shooting = c:GetAttribute("Action") == "Shooting" }
+				end
+			end
+		end
+		-- AI opponents are real characters in the game but have no Player object behind them, so the loop above never finds them
+		local folder = workspace:FindFirstChild("Characters")
+		if folder then
+			for _, c in ipairs(folder:GetChildren()) do
+				if c:IsA("Model") and c ~= myChar and not seen[c] and c.Name ~= "InvisCharacter" then
+					local root = c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart
+					local hm = c:FindFirstChildOfClass("Humanoid")
+					if root and hm and hm.Health > 0 then
+						local tr = Bot.track[root]
+						out[#out + 1] = { pl = { Name = c.Name }, c = c, root = root, pos = root.Position, vel = tr and tr.v or Vector3.new(0, 0, 0),
+							mate = S.APTeam == "By team" and sameSide(myChar, c),
+							ball = Bot.hasBall(c), shooting = c:GetAttribute("Action") == "Shooting" }
+					end
 				end
 			end
 		end
@@ -19051,10 +19431,20 @@ do
 		if dir.Magnitude > 1 then dir = dir.Unit end
 		Bot.cmd, Bot.cmdT, Bot.mul = dir, tick(), mul or 1
 		Mover.override, Mover.overrideT = dir, tick()
+		-- this game is server-authoritative and never reads Humanoid.MoveDirection/Humanoid:Move at all (confirmed back in v1.45's "this game does not use MoveDirection" finding, re-confirmed by Humanoid:Move producing zero real displacement) - the only thing that actually moves a character here is the same MoveDirection RemoteEvent the game's own control script fires, which Mover.send already drives for other features like Glide. Fire it directly instead of waiting on the passive Mover.override hook to catch a call that may not come often enough while idle.
+		local sentVec = dir * (mul or 1)
+		local ok = pcall(Mover.send, sentVec)
+		Bot.dbg = Bot.dbg or {}
+		Bot.dbg.sentVia, Bot.dbg.sentVec, Bot.dbg.sentOk, Bot.dbg.sentAt = "Mover.send", sentVec, ok, tick()
+		local h3 = hum()
+		Bot.dbg.humState = h3 and h3:GetState().Name or "no humanoid"
 	end
 	function Bot.stopMove()
 		Bot.cmd = nil
 		Mover.override = nil
+		local ok = pcall(Mover.send, Vector3.new())
+		Bot.dbg = Bot.dbg or {}
+		Bot.dbg.sentVia, Bot.dbg.sentVec, Bot.dbg.sentOk, Bot.dbg.sentAt = "Mover.send(stop)", Vector3.new(), ok, tick()
 	end
 	function Bot.faceAt(pos)
 		local r = Mover.body()
@@ -19113,20 +19503,64 @@ do
 		local d = Mover.gameDir
 		return d ~= nil and tick() - (Mover.gameDirT or 0) < 0.4 and flat(d).Magnitude > 0.35
 	end
-	local moveTrack, moveTrackHum
-	local function walkTrack()
+	-- confirmed from a real remote guard recorder log (this game's real Jog/defensive slide ids) - bootstrap these so Auto Guard has a walk animation immediately instead of waiting on another learning pass, now that the old bad exclusion is gone
+	if not S.WalkAnimId or S.WalkAnimId == "" then S.WalkAnimId = "rbxassetid://135438934392621" saveSoon() end
+	if not S.GuardAnimId or S.GuardAnimId == "" then S.GuardAnimId = "rbxassetid://16597565910" saveSoon() end
+	-- learn two real animations from how you actually move: a normal walk (facing roughly the way you're moving) and a defensive slide (facing one way, moving sideways/backward - the real signature of guarding someone), instead of guessing an id or treating all movement the same
+	local walkLastPos, walkLastT
+	bind(RunService.Heartbeat, function()
+		local needWalk = not S.WalkAnimId or S.WalkAnimId == ""
+		local needGuard = not S.GuardAnimId or S.GuardAnimId == ""
+		if not needWalk and not needGuard then return end
+		if Bot.cmd then return end
+		local h, r = hum(), Mover.body()
+		if not h or not r then return end
+		local now = tick()
+		local moveDelta, moving = Vector3.new(), false
+		if walkLastPos and walkLastT and now - walkLastT > 0 then
+			moveDelta = flat(r.Position - walkLastPos)
+			moving = moveDelta.Magnitude / (now - walkLastT) > 3
+		end
+		walkLastPos, walkLastT = r.Position, now
+		if not moving then return end
+		local facing = flat(r.CFrame.LookVector)
+		local isGuardMove = false
+		if facing.Magnitude > 0.1 and moveDelta.Magnitude > 0.1 then
+			isGuardMove = facing.Unit:Dot(moveDelta.Unit) < 0.3
+		end
+		for _, tr in ipairs(h:GetPlayingAnimationTracks()) do
+			local id = tr.Animation and tr.Animation.AnimationId
+			if tr.Priority == Enum.AnimationPriority.Movement and tr.Looped and id and id ~= "" then
+				if isGuardMove and needGuard then
+					S.GuardAnimId = id
+					saveSoon()
+					notify("JHub", "Learned your real defensive slide animation.", 3)
+				elseif not isGuardMove and needWalk then
+					S.WalkAnimId = id
+					saveSoon()
+					notify("JHub", "Learned your real walk animation.", 3)
+				end
+				break
+			end
+		end
+	end)
+	local activeId, activeTrack
+	local moveTracks = {}
+	local function trackFor(id)
+		if not id or id == "" then return nil end
 		local h = hum()
 		if not h then return nil end
-		if moveTrack and moveTrackHum == h then return moveTrack end
+		local cached = moveTracks[id]
+		if cached and cached.hum == h then return cached.track end
 		local animator = h:FindFirstChildOfClass("Animator")
 		if not animator then return nil end
 		local anim = Instance.new("Animation")
-		anim.AnimationId = "rbxassetid://135438934392621"
+		anim.AnimationId = id
 		local ok, track = pcall(function() return animator:LoadAnimation(anim) end)
 		if not ok or not track then return nil end
 		track.Priority = Enum.AnimationPriority.Movement
 		track.Looped = true
-		moveTrack, moveTrackHum = track, h
+		moveTracks[id] = { track = track, hum = h }
 		return track
 	end
 	bind(RunService.Stepped, function(_, dt)
@@ -19135,16 +19569,23 @@ do
 		if not r then return end
 		local now = tick()
 		local moving = Bot.cmd and now - Bot.cmdT < 0.35 and Bot.cmd.Magnitude > 0.05
+		-- Humanoid:Move produced zero effect on animation too (confirmed: the real guard/defensive animation only shows up because it's tied directly to the HoldingG attribute by the game's own systems, not because of anything we send through Humanoid.MoveDirection - same "this game doesn't react to MoveDirection" finding as the movement side). CFrame drives position; load and play the confirmed real walk animation ourselves on top of it.
 		if moving then
 			r.CFrame = r.CFrame + Bot.cmd * Speed.gameWS * Bot.mul * dt
 			Mover.sync(r)
-			local ok, tr = pcall(walkTrack)
-			if ok and tr then
-				tr.Speed = math.clamp(Bot.mul or 1, 0.6, 1.8)
-				if not tr.IsPlaying then tr:Play(0.15) end
+			-- GuardAnimId never actually won out over the game's own real defensive animation in any recorder log, stationary or moving - so stop competing with it and just always play the real walk animation whenever actually moving, guarding or not
+			local id = S.WalkAnimId
+			if id ~= activeId then
+				if activeTrack then pcall(function() activeTrack:Stop(0.1) end) end
+				activeTrack = trackFor(id)
+				activeId = id
 			end
-		elseif moveTrack and moveTrack.IsPlaying then
-			moveTrack:Stop(0.15)
+			if activeTrack then
+				activeTrack.Speed = math.clamp(Bot.mul or 1, 0.6, 1.8)
+				if not activeTrack.IsPlaying then activeTrack:Play(0.15) end
+			end
+		elseif activeTrack and activeTrack.IsPlaying then
+			activeTrack:Stop(0.15)
 		end
 		if Bot.face and now - Bot.faceT < 0.35 then
 			local p = r.Position
@@ -19156,53 +19597,45 @@ do
 	-- AUTO GUARD AND AUTO BLOCK
 	---------------------------------------------------------------------
 	function Bot.pickTarget(others, me, forced)
-		local best, bd
 		local mode = forced or S.AGTarget
+		local function scoreOf(o)
+			local d = flat(o.pos - me).Magnitude
+			if mode == "Ball handler" then return o.ball and (d - 1000) or d end
+			if mode == "Closest to hoop" then
+				local h = Bot.nearestHoop(o.pos)
+				return h and flat(o.pos - h).Magnitude or d
+			end
+			return d
+		end
+		local best, bd
 		for _, o in ipairs(others) do
 			if not o.mate then
-				local d = flat(o.pos - me).Magnitude
-				local score = d
-				if mode == "Ball handler" then
-					score = o.ball and (d - 1000) or d
-				elseif mode == "Closest to hoop" then
-					local h = Bot.nearestHoop(o.pos)
-					score = h and flat(o.pos - h).Magnitude or d
-				end
+				local score = scoreOf(o)
 				if not bd or score < bd then best, bd = o, score end
 			end
 		end
-		return best
-	end
-	function Bot.guardStep(me, others, forced)
-		local t = Bot.pickTarget(others, me, forced)
-		if not t then return false end
-		local dist = flat(t.pos - me).Magnitude
-		if dist > S.AGRange and not S.AGLock then return false end
+		-- stick to whoever is already locked unless they're gone/dead, or a clearly better target has stayed clearly better for a bit - stops the target flickering between two near-equal candidates every tick, which is what caused jittery, indecisive movement
 		local now = tick()
-		local react = S.AGLock and 0 or S.AGReact
-		if not Bot.spot or Bot.spotTarget ~= t or now - Bot.spotT >= react then
-			local ppos = t.pos + t.vel * S.AGPredict
-			local hoop = Bot.nearestHoop(ppos)
-			local dirf = hoop and flat(hoop - ppos) or flat(t.vel)
-			if dirf.Magnitude < 0.1 then dirf = flat(me - ppos) end
-			if dirf.Magnitude < 0.1 then dirf = Vector3.new(0, 0, 1) end
-			Bot.spot, Bot.spotTarget, Bot.spotT = ppos + dirf.Unit * S.AGDist, t, now
+		if Bot.lockedChar then
+			local still
+			for _, o in ipairs(others) do
+				if o.c == Bot.lockedChar and not o.mate then still = o break end
+			end
+			if still then
+				if best and best.c ~= still.c and bd < scoreOf(still) - 2 then
+					if Bot.lockBetterChar ~= best.c then Bot.lockBetterChar, Bot.lockBetterSince = best.c, now end
+					if now - Bot.lockBetterSince >= 0.5 then
+						Bot.lockedChar, Bot.lockBetterChar, Bot.lockBetterSince = best.c, nil, nil
+						return best
+					end
+				else
+					Bot.lockBetterChar, Bot.lockBetterSince = nil, nil
+				end
+				return still
+			end
 		end
-		local to = flat(Bot.spot - me)
-		local d = to.Magnitude
-		local strength = S.AGStrength / 100
-		local mul = S.AGSpeed * (0.7 + strength * 1.3)
-		if S.AGLock then mul = mul * 2 end
-		if d < 0.5 then
-			Bot.stopMove()
-		else
-			local gain = S.AGLock and 1 or math.min(1, d / 3)
-			Bot.move(to.Unit * gain, mul)
-		end
-		if S.AGFace then Bot.faceAt(t.pos) end
-		Bot.setSprint(S.AGSprint and d > 7)
-		Bot.status = "Guarding " .. t.pl.Name
-		return true
+		Bot.lockedChar, Bot.lockBetterChar, Bot.lockBetterSince = best and best.c or nil, nil, nil
+		return best
 	end
 	function Bot.blockStep(others, me)
 		if not S.AB then return end
@@ -19495,12 +19928,19 @@ do
 			acted = Bot.play(me, others, hasBall)
 		else
 			if S.AR and not hasBall then acted = Bot.reboundStep(me) end
-			if not acted and S.AG and not hasBall then acted = Bot.guardStep(me, others) end
+			local wantGuard = S.AG and not hasBall
+			if wantGuard and S.AGHoldToUse then
+				local c3 = char()
+				wantGuard = c3 and c3:GetAttribute("HoldingG") == true
+			end
+			if not acted and wantGuard then acted = Bot.guardStep(me, others) end
 		end
 		if not acted then
 			Bot.stopMove()
 			Bot.setSprint(false)
-			if not S.AP then Bot.status = "Waiting" end
+			if not S.AP then
+				Bot.status = (S.AG and S.AGHoldToUse and not hasBall) and "Hold Guard to drive" or "Waiting"
+			end
 		end
 	end
 	task.spawn(function()
@@ -19539,28 +19979,161 @@ do
 	end
 
 	local GP = UI.Page("Auto Guard", "A")
-	local g1 = UI.Card(GP, "Auto guard")
-	UI.Toggle(g1, "Auto guard", "AG")
-	UI.Dropdown(g1, "Who to guard", "AGTarget", { "Ball handler", "Closest to me", "Closest to hoop" })
-	UI.Slider(g1, "Guard distance (studs in front)", "AGDist", 1, 12, 0.5, 1)
-	UI.Slider(g1, "Guard speed", "AGSpeed", 0.5, 3, 0.1, 1, "x")
-	UI.Slider(g1, "Strength (how hard it corrects)", "AGStrength", 0, 100, 5, 0, "%")
-	UI.Slider(g1, "Reaction time", "AGReact", 0, 0.5, 0.01, 2, "s")
-	UI.Slider(g1, "Prediction (looks ahead)", "AGPredict", 0, 0.6, 0.02, 2, "s")
-	UI.Slider(g1, "Guard range", "AGRange", 10, 120, 5, 0, " studs")
-	UI.Toggle(g1, "Stay in front no matter what", "AGLock")
-	UI.Toggle(g1, "Face the player I guard", "AGFace")
-	UI.Toggle(g1, "Sprint to catch up", "AGSprint")
-	UI.Toggle(g1, "Look human (sway, hesitate, player speed)", "AGHuman")
-	UI.Slider(g1, "How human", "AGHumanAmt", 0, 100, 5, 0, "%")
-	UI.Note(g1, "It stands between the player and the hoop, and leads where they are going. Stay in front no matter what ignores range and reaction and chases at double speed.")
-	local g2 = UI.Card(GP, "Auto block")
-	UI.Toggle(g2, "Auto block", "AB")
-	UI.Slider(g2, "Block range", "ABRange", 4, 30, 1, 0, " studs")
-	UI.Slider(g2, "Block timing (delay after the shot starts)", "ABDelay", 0, 0.5, 0.01, 2, "s")
-	UI.Slider(g2, "Block chance", "ABChance", 0, 100, 5, 0, "%")
-	UI.Keybind(g2, "Block / jump key", function() return S.ABKey end, function(v) S.ABKey = (v ~= "" and v) or "Space" end)
-	UI.Note(g2, "Blocks by jumping at the shooter. If your game blocks with another button, set it here.")
+	do
+		local AG_CODE = "6022"
+		local typed = ""
+		local lock = UI.Card(GP, "Auto Guard (locked)")
+		UI.Input(lock, "Code", { get = function() return typed end, set = function(v) typed = tostring(v or "") end }, nil, "enter the code")
+		UI.Note(lock, "Auto Guard is locked. Enter the code to open it.")
+		local contentFrames = {}
+JH.AGContentFrames = contentFrames
+		UI.Button(lock, "Unlock", function()
+			if string.gsub(typed, "%s", "") == AG_CODE then
+				lock.frame.Visible = false
+				for _, f in ipairs(contentFrames) do f.Visible = true end
+				notify("Auto Guard", "Unlocked", 3)
+			else
+				notify("Auto Guard", "Wrong code", 3)
+			end
+		end, true)
+		local g1 = UI.Card(GP, "Auto guard")
+		g1.frame.Visible = false
+		contentFrames[#contentFrames + 1] = g1.frame
+		UI.Toggle(g1, "Auto guard", "AG")
+		UI.Dropdown(g1, "Who to guard", "AGTarget", { "Ball handler", "Closest to me", "Closest to hoop" })
+		UI.Toggle(g1, "Only guard the player who has the ball", "AGOnlyBall")
+		UI.Slider(g1, "Guard distance (studs in front)", "AGDist", 1, 12, 0.5, 1)
+		UI.Note(g1, "Holds the real Guard button while guarding, same as a real player, and uses Guard speed from the Players tab for how fast it closes out.")
+		UI.Keybind(g1, "Guard key (keyboard, only if there is no on-screen Guard button)", function() return S.GuardKey end, function(v) S.GuardKey = v end)
+		UI.Slider(g1, "Reaction time", "AGReact", 0, 0.5, 0.01, 2, "s")
+		UI.Slider(g1, "Prediction (looks ahead)", "AGPredict", 0, 0.6, 0.02, 2, "s")
+		UI.Slider(g1, "Guard range", "AGRange", 10, 120, 5, 0, " studs")
+		UI.Toggle(g1, "Stay in front no matter what", "AGLock")
+		UI.Toggle(g1, "Only drive while I hold the real Guard button myself", "AGHoldToUse")
+		UI.Toggle(g1, "Face the player I guard", "AGFace")
+		UI.Toggle(g1, "Sprint to catch up", "AGSprint")
+		UI.Toggle(g1, "Look human (sway, hesitate, player speed)", "AGHuman")
+		UI.Slider(g1, "How human", "AGHumanAmt", 0, 100, 5, 0, "%")
+		UI.Note(g1, "It stands between the player and the hoop, and leads where they are going. Stay in front no matter what ignores range and reaction and chases at double speed.")
+		local g2 = UI.Card(GP, "Auto block")
+		g2.frame.Visible = false
+		contentFrames[#contentFrames + 1] = g2.frame
+		UI.Toggle(g2, "Auto block", "AB")
+		UI.Slider(g2, "Block range", "ABRange", 4, 30, 1, 0, " studs")
+		UI.Slider(g2, "Block timing (delay after the shot starts)", "ABDelay", 0, 0.5, 0.01, 2, "s")
+		UI.Slider(g2, "Block chance", "ABChance", 0, 100, 5, 0, "%")
+		UI.Keybind(g2, "Block / jump key", function() return S.ABKey end, function(v) S.ABKey = (v ~= "" and v) or "Space" end)
+		UI.Note(g2, "Blocks by jumping at the shooter. If your game blocks with another button, set it here.")
+		local rc = UI.Card(GP, "Remote Guard Recorder")
+		rc.frame.Visible = false
+		contentFrames[#contentFrames + 1] = rc.frame
+		UI.Note(rc, "Turn this on, then either guard someone for real (10-15s, walk toward/away/side to side) or have someone guard YOU. It catches every animation on you AND on whoever is nearest to you - priority, speed, looped or not - plus position, HoldingG, Action and state each tick.")
+		JH.rguardAnimLog = JH.rguardAnimLog or {}
+		JH.rguardMoveLog = JH.rguardMoveLog or {}
+		JH.rguardOppAnimLog = JH.rguardOppAnimLog or {}
+		local rconn, roppConn, roppHum
+		local function hookOpp(h)
+			if roppConn then roppConn:Disconnect() roppConn = nil end
+			roppHum = h
+			if h then
+				roppConn = h.AnimationPlayed:Connect(function(track)
+					if not S.RGuardOn then return end
+					table.insert(JH.rguardOppAnimLog, string.format("%s  oppanim  name=%s  id=%s  prio=%s  looped=%s  speed=%.2f",
+						os.date("%H:%M:%S"), track.Name, (track.Animation and track.Animation.AnimationId) or "?", track.Priority.Name, tostring(track.Looped), track.Speed))
+					if #JH.rguardOppAnimLog > 400 then table.remove(JH.rguardOppAnimLog, 1) end
+				end)
+			end
+		end
+		UI.Toggle(rc, "Record everything about guarding", "RGuardOn", function(v)
+			if v then
+				JH.rguardAnimLog, JH.rguardMoveLog, JH.rguardOppAnimLog = {}, {}, {}
+				local h = hum()
+				if h then
+					rconn = h.AnimationPlayed:Connect(function(track)
+						if not S.RGuardOn then return end
+						table.insert(JH.rguardAnimLog, string.format("%s  anim  name=%s  id=%s  prio=%s  looped=%s  speed=%.2f",
+							os.date("%H:%M:%S"), track.Name, (track.Animation and track.Animation.AnimationId) or "?", track.Priority.Name, tostring(track.Looped), track.Speed))
+						if #JH.rguardAnimLog > 400 then table.remove(JH.rguardAnimLog, 1) end
+					end)
+				end
+				notify("Remote Guard Recorder", "Recording. Guard someone, or have someone guard you.", 5)
+			else
+				if rconn then rconn:Disconnect() rconn = nil end
+				if roppConn then roppConn:Disconnect() roppConn = nil end
+				roppHum = nil
+				notify("Remote Guard Recorder", "Stopped. Tap Copy to get the report.", 4)
+			end
+		end)
+		local rLastPos, rLastLog = nil, 0
+		bind(RunService.Heartbeat, function()
+			if not S.RGuardOn then return end
+			local now = tick()
+			if now - rLastLog < 0.2 then return end
+			rLastLog = now
+			local h, r = hum(), Mover.body()
+			if not h or not r then return end
+			local speed = 0
+			if rLastPos then speed = flat(r.Position - rLastPos).Magnitude / 0.2 end
+			rLastPos = r.Position
+			local c2 = char()
+			local tracks = {}
+			for _, tr in ipairs(h:GetPlayingAnimationTracks()) do
+				local tid = tr.Animation and tr.Animation.AnimationId or "?"
+				tracks[#tracks + 1] = string.format("%s(%s,%s,spd=%.1f)", tid, tr.Priority.Name, tostring(tr.Looped), tr.Speed)
+			end
+			-- watch whoever is nearest to us right now, so a bot (or real player) guarding you shows up too, not just your own animations
+			local nearest, nearestDist
+			local ok, others = pcall(Bot.others)
+			if ok and others then
+				for _, o in ipairs(others) do
+					local d = (o.pos - r.Position).Magnitude
+					if not nearestDist or d < nearestDist then nearest, nearestDist = o, d end
+				end
+			end
+			local oppName, oppTracks = "none", {}
+			if nearest and nearestDist and nearestDist < 30 then
+				oppName = (nearest.pl and nearest.pl.Name) or "?"
+				local oh = nearest.c and nearest.c:FindFirstChildOfClass("Humanoid")
+				if oh then
+					if oh ~= roppHum then hookOpp(oh) end
+					for _, tr in ipairs(oh:GetPlayingAnimationTracks()) do
+						local tid = tr.Animation and tr.Animation.AnimationId or "?"
+						oppTracks[#oppTracks + 1] = string.format("%s(%s,%s,spd=%.1f)", tid, tr.Priority.Name, tostring(tr.Looped), tr.Speed)
+					end
+				end
+			elseif roppHum then
+				hookOpp(nil)
+			end
+			local dbg = Bot.dbg or {}
+			local dbgLine = string.format("dbgTarget=%s dbgDist=%s dbgDir=%s dbgSent=%s dbgSentOk=%s dbgSentVia=%s dbgHumState=%s dbgBlockedReason=%s",
+				tostring(dbg.target or "none"),
+				dbg.dist and string.format("%.1f", dbg.dist) or "?",
+				dbg.dir and string.format("(%.2f,%.2f,%.2f)", dbg.dir.X, dbg.dir.Y, dbg.dir.Z) or "?",
+				dbg.sentVec and string.format("(%.2f,%.2f,%.2f)", dbg.sentVec.X, dbg.sentVec.Y, dbg.sentVec.Z) or "?",
+				tostring(dbg.sentOk), tostring(dbg.sentVia), tostring(dbg.humState), tostring(dbg.reason or "none"))
+			table.insert(JH.rguardMoveLog, string.format("%s  move  state=%s  speed=%.1f  holdingG=%s  action=%s  guarding=%s  playing=%s  opp=%s  oppDist=%s  oppPlaying=%s  %s",
+				os.date("%H:%M:%S"), h:GetState().Name, speed, tostring(c2 and c2:GetAttribute("HoldingG")), tostring(c2 and c2:GetAttribute("Action")), tostring(Bot.status or ""),
+				#tracks > 0 and table.concat(tracks, " | ") or "none", oppName, nearestDist and string.format("%.1f", nearestDist) or "?", #oppTracks > 0 and table.concat(oppTracks, " | ") or "none", dbgLine))
+			if #JH.rguardMoveLog > 200 then table.remove(JH.rguardMoveLog, 1) end
+		end)
+		UI.Button(rc, "Copy remote guard log", function()
+			local rlines = { "== REMOTE GUARD RECORDER " .. tostring(VERSION) .. " | " .. os.date("%Y-%m-%d %H:%M:%S") }
+			if #JH.rguardAnimLog == 0 and #JH.rguardMoveLog == 0 and #JH.rguardOppAnimLog == 0 then
+				rlines[#rlines + 1] = "(nothing recorded yet, turn it on and guard someone for real first)"
+			else
+				rlines[#rlines + 1] = "-- your animations (every one played, any priority) --"
+				for _, l in ipairs(JH.rguardAnimLog) do rlines[#rlines + 1] = l end
+				rlines[#rlines + 1] = "-- opponent animations (nearest player/bot to you, every one played) --"
+				for _, l in ipairs(JH.rguardOppAnimLog) do rlines[#rlines + 1] = l end
+				rlines[#rlines + 1] = "-- movement/state snapshots --"
+				for _, l in ipairs(JH.rguardMoveLog) do rlines[#rlines + 1] = l end
+			end
+			local text = table.concat(rlines, "\n")
+			pcall(function() if type(writefile) == "function" then writefile("JHub_remote_guard_log.txt", text) end end)
+			if type(setclipboard) == "function" then pcall(setclipboard, text) end
+			notify("Remote Guard Recorder", string.format("%.0f KB, saved as JHub_remote_guard_log.txt and copied", #text / 1024), 6)
+		end)
+	end
 
 	local RP = UI.Page("Rebound", "R")
 	local r1 = UI.Card(RP, "Auto rebound")
@@ -19626,13 +20199,12 @@ do
 		end
 	end)
 
-	-- Auto Guard and Auto Grind are removed for now: tabs hidden, features forced off
-	S.AG, S.AB, S.AP = false, false, false
-	for _, p in ipairs(UI.pages) do
-		if p.name == "Auto Guard" or p.name == "Auto Grind" then p.lbl.Parent.Visible = false end
-	end
-	
-	-- UI customizations goes to the bottom of the tab list
+	-- Auto Grind is unfinished and stays hidden; Auto Guard no longer force-hidden or force-disabled
+for _, p in ipairs(UI.pages) do
+if p.name == "Auto Grind" then p.lbl.Parent.Visible = false end
+end
+
+-- UI customizations goes to the bottom of the tab list
 	for _, p in ipairs(UI.pages) do
 		if p.name == "UI" then p.lbl.Parent.LayoutOrder = 999 end
 	end
@@ -19808,7 +20380,7 @@ do
 		UI.Toggle(c, "Auto adapt: learn every shot from the first one", "AutoAdaptAll")
 		UI.Toggle(c, "Instant green (works at low FPS and high ping)", "InstantGreen")
 		UI.Toggle(c, "Smart steps (faster learning, no bouncing)", "SmartSteps")
-		UI.Toggle(c, "Show shot contest above my head", "ContestShow")
+		UI.Toggle(c, "Show live open/contested feedback while dribbling", "ContestShow")
 		UI.Toggle(c, "Keep glides away from my shot", "GlideShotSafe")
 		UI.Buttons(c, { { "Copy my locked timings", function() local t = Shot.exportTimings() if setclipboard then setclipboard(t) end notify("Timings", t == "" and "Nothing locked yet" or "Copied to clipboard", 3) end } })
 		UI.Input(c, "Import timings", "ImportTimes", nil, "paste copied timings, then rejoin")
@@ -19990,12 +20562,29 @@ do
 		end
 	end
 
+	-- real guarding, rebuilt plain and simple: move the character to the spot with CFrame (same as every other bot movement in this script), hold the real Guard button so HoldingG is genuinely true, and play your own real walk/guard animation on top. No simulated keys, no simulated touches - those were freezing the camera.
+	local guardHeld = false
+	function Bot.setGuardHold(on)
+		if S.AGHoldToUse then return end
+		if on == guardHeld then return end
+		Input.action("Guard", on)
+		guardHeld = on
+	end
+	bind(RunService.Heartbeat, function()
+		if not S.AG and guardHeld then Bot.setGuardHold(false) end
+	end)
 	-- the guard looks like a player: it sways, reacts a little differently each time, sometimes hesitates and never runs faster than a player can
 	function Bot.guardStep(me, others, forced)
 		local t = Bot.pickTarget(others, me, forced)
-		if not t then return false end
+		if not t then
+			Bot.dbg = { reason = "no target found" }
+			return false
+		end
 		local dist = flat(t.pos - me).Magnitude
-		if dist > S.AGRange and not S.AGLock then return false end
+		if dist > S.AGRange and not S.AGLock then
+			Bot.dbg = { target = t.pl.Name, targetPos = t.pos, dist = dist, reason = string.format("out of AGRange (%.0f > %.0f) and AGLock is off", dist, S.AGRange) }
+			return false
+		end
 		local now = tick()
 		local amt = S.AGHuman and (S.AGHumanAmt or 50) / 100 or 0
 		local w = Bot.wob
@@ -20016,27 +20605,36 @@ do
 			if w and amt > 0 then spot = spot + Vector3.new(w.ox, 0, w.oz) end
 			Bot.spot, Bot.spotTarget, Bot.spotT = spot, t, now
 		end
+		Bot.setGuardHold(true)
+		local mul = 1 + (S.GuardSpeed or 0) / 100
+		if amt > 0 then mul = math.min(mul * w.sp, (S.AGLock and (1 + 0.8 * amt) or (1 + 0.35 * amt))) end
 		if w and amt > 0 and w.pause > now then
 			Bot.stopMove()
+			Bot.dbg = { target = t.pl.Name, targetPos = t.pos, spot = Bot.spot, dir = Vector3.new(), reason = "human-wobble pause" }
 			if S.AGFace then Bot.faceAt(t.pos) end
 			Bot.status = "Guarding " .. t.pl.Name
 			return true
 		end
 		local to = flat(Bot.spot - me)
 		local d = to.Magnitude
-		local mul = 1 + (S.GuardSpeed or 0) / 100
-		if amt > 0 then mul = math.min(mul * w.sp, (S.AGLock and (1 + 0.8 * amt) or (1 + 0.35 * amt))) end
+		local dir
 		if d < 0.5 then
 			Bot.stopMove()
+			dir = Vector3.new()
 		else
 			local gain = S.AGLock and 1 or math.min(1, d / 3)
-			Bot.move(to.Unit * gain, mul)
+			dir = to.Unit * gain
+			Bot.move(dir, mul)
 		end
+		-- merge, don't replace - Bot.move/Bot.stopMove already wrote sentVia/sentVec/sentOk/humState into Bot.dbg just above, overwriting the whole table here was wiping that out of the log
+		Bot.dbg = Bot.dbg or {}
+		Bot.dbg.target, Bot.dbg.targetPos, Bot.dbg.spot, Bot.dbg.dist, Bot.dbg.dir = t.pl.Name, t.pos, Bot.spot, d, dir
+		Bot.dbg.reason = d < 0.5 and "within 0.5 studs of ideal spot, stopped" or nil
 		if S.AGFace then Bot.faceAt(t.pos) end
-		Bot.setSprint(S.AGSprint and d > 7)
 		Bot.status = "Guarding " .. t.pl.Name
 		return true
 	end
+
 
 	-- your own logo pictures: paste the image number from a Roblox image link
 	function V.customId(key)
@@ -21585,46 +22183,32 @@ do
 		return baseNS()
 	end
 
-	-- shot contest above your head, colored from open (green) to heavily contested (red)
-	local bb, label, cached, lastScan = nil, nil, nil, 0
-	local STOPS = { { 0, Color3.fromRGB(70, 235, 110) }, { 10, Color3.fromRGB(40, 175, 80) }, { 25, Color3.fromRGB(255, 225, 60) }, { 40, Color3.fromRGB(255, 150, 40) }, { 60, Color3.fromRGB(255, 60, 60) } }
-	local function colorFor(n)
-		if n <= STOPS[1][1] then return STOPS[1][2] end
-		for i = 2, #STOPS do
-			if n <= STOPS[i][1] then
-				local a, b = STOPS[i - 1], STOPS[i]
-				return a[2]:Lerp(b[2], (n - a[1]) / (b[1] - a[1]))
-			end
-		end
-		return STOPS[#STOPS][2]
-	end
+	-- live open/contested feedback while you have the ball, from the real distance to the nearest real defender - updates continuously as you move, instead of only scraping the game's own post-shot "Contested" label once you've already released
+	local bb, label, hl
 	task.spawn(function()
 		while JH.Running do
 			task.wait(0.1)
 			local show = S.ContestShow
 			local c = char()
-			local head = c and (c:FindFirstChild("Head") or c:FindFirstChild("HumanoidRootPart"))
-			if show and head then
-				if not cached or not cached.Parent then
-					cached = nil
-					if tick() - lastScan > 1 then
-						lastScan = tick()
-						for _, root in ipairs({ c, LP:FindFirstChild("PlayerGui") }) do
-							if root then
-								for _, d in ipairs(root:GetDescendants()) do
-									if d:IsA("TextLabel") and string.find(d.Text, "Contested", 1, true) and not d:IsDescendantOf(gui) then cached = d break end
-								end
-							end
-							if cached then break end
+			local r = c and (c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart)
+			local okHB, hb = pcall(Feat.hasBall)
+			local hasBall = show and r and okHB and hb
+			if show and r and hasBall then
+				local nearest
+				local okO, others = pcall(Bot.others)
+				if okO and others then
+					for _, o in ipairs(others) do
+						if not o.mate then
+							local d = flat(o.pos - r.Position).Magnitude
+							if not nearest or d < nearest then nearest = d end
 						end
 					end
 				end
-				local n = cached and tonumber(string.match(cached.Text, "(%d+)%s*%%"))
-				if n then
+				if nearest then
 					if not bb then
 						bb = Instance.new("BillboardGui")
 						bb.Name = "JHContest"
-						bb.Size = UDim2.fromOffset(150, 30)
+						bb.Size = UDim2.fromOffset(170, 30)
 						bb.StudsOffset = Vector3.new(0, 4.2, 0)
 						bb.AlwaysOnTop = true
 						label = Instance.new("TextLabel")
@@ -21636,15 +22220,35 @@ do
 						label.Parent = bb
 						pcall(function() bb.Parent = (gethui and gethui()) or game:GetService("CoreGui") end)
 					end
-					bb.Adornee = head
+					if not hl or not hl.Parent then
+						hl = Instance.new("Highlight")
+						hl.Name = "JHOpenness"
+						hl.FillTransparency = 0.65
+						hl.OutlineTransparency = 0
+						pcall(function() hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop end)
+					end
+					bb.Adornee = c:FindFirstChild("Head") or r
 					bb.Enabled = true
-					label.Text = n .. "% contested"
-					label.TextColor3 = colorFor(n)
-				elseif bb then
-					bb.Enabled = false
+					hl.Parent = c
+					local word, col
+					if nearest >= 6 then
+						word, col = "OPEN", Color3.fromRGB(70, 235, 110)
+					elseif nearest >= 3.5 then
+						word, col = "SLIGHTLY OPEN", Color3.fromRGB(255, 225, 60)
+					else
+						word, col = "CONTESTED", Color3.fromRGB(255, 60, 60)
+					end
+					local pct = math.clamp(math.floor(100 - nearest * 12), 0, 100)
+					label.Text = string.format("%s (%d%%)", word, pct)
+					label.TextColor3 = col
+					hl.FillColor, hl.OutlineColor = col, col
+				else
+					if bb then bb.Enabled = false end
+					if hl then hl.Parent = nil end
 				end
-			elseif bb then
-				bb.Enabled = false
+			else
+				if bb then bb.Enabled = false end
+				if hl then hl.Parent = nil end
 			end
 		end
 	end)
@@ -21769,7 +22373,7 @@ do
 		if p.name == "Auto Guard" then gp = p end
 		if p.name == "Auto Grind" then ap = p end
 	end
-	if gp and UI.lockedTools then
+	if gp then
 		local c1 = UI.Card(gp, "Guard mistakes")
 		UI.Toggle(c1, "Make mistakes sometimes", "AGMistakes")
 		UI.Slider(c1, "How often", "AGMistakeAmt", 0, 60, 1, 0, "%")
@@ -21782,14 +22386,20 @@ do
 		UI.Slider(c3, "Steal chance", "ASChance", 10, 100, 5, 0, "%")
 		UI.Slider(c3, "Steal reaction time", "ASReact", 0, 0.5, 0.01, 2, "s")
 		UI.Keybind(c3, "Steal key (empty uses the on-screen button)", function() return S.ASKey end, function(v) S.ASKey = v end)
-		for _, page in ipairs({ gp, ap }) do
-			if page then
-				for _, f in ipairs(page.frame:GetChildren()) do
-					if f:IsA("Frame") then
-						f.Visible = false
-						table.insert(UI.lockedTools, f)
-					end
-				end
+		if JH.AGContentFrames then
+			c1.frame.Visible = false
+			c2.frame.Visible = false
+			c3.frame.Visible = false
+			table.insert(JH.AGContentFrames, c1.frame)
+			table.insert(JH.AGContentFrames, c2.frame)
+			table.insert(JH.AGContentFrames, c3.frame)
+		end
+	end
+	if ap and UI.lockedTools then
+		for _, f in ipairs(ap.frame:GetChildren()) do
+			if f:IsA("Frame") then
+				f.Visible = false
+				table.insert(UI.lockedTools, f)
 			end
 		end
 	end
@@ -21839,6 +22449,8 @@ do
 		S.BindLib = table.concat(parts)
 		saveSoon()
 	end
+	-- let the network layer (loaded later) read/write this move library and share it
+	JH.bindLib, JH.bindSer, JH.bindDeser, JH.bindSaveLib = lib, ser, deser, saveLib
 	local function remote()
 		local d = game:GetService("ReplicatedStorage"):FindFirstChild("Dribble", true)
 		return (d and d:IsA("RemoteEvent")) and d or Mover.lastDribbleRemote
@@ -21877,6 +22489,7 @@ do
 			if type(name) == "string" and name ~= "" and ser(lib[name] or { n = 0 }) ~= ser(copy) then
 			lib[name] = copy
 			saveLib()
+			if JH.onBindLearned then task.spawn(JH.onBindLearned, name, copy) end
 			end
 		end)
 		return prevOD(args)
@@ -21917,6 +22530,12 @@ do
 		c.frame.Size = UDim2.new(0.5, -4, 0, 0)
 		UI.Dropdown(c, "Move", "BindMove" .. slot, MOVES)
 		UI.Keybind(c, "Key", function() return S["BindKey" .. slot] end, function(v) S["BindKey" .. slot] = v end)
+		UI.Button(c, "X - clear this bind", function()
+			S["BindMove" .. slot], S["BindKey" .. slot], S["BindArgs" .. slot] = "None", "", ""
+			saveSoon()
+			UI.refreshAll()
+			notify("Binds", "Bind " .. slot .. " cleared.", 2)
+		end)
 	end
 end
 -- LESS OBVIOUS GUARD, AUTO PLAY CARD, AUTO BLOCK BUTTON WORDS
@@ -21941,8 +22560,12 @@ do
 	end
 	local prevGuard = Bot.guardStep
 	function Bot.guardStep(me, others, forced)
-		Bot.guardingNow = tick()
-		return prevGuard(me, others, forced)
+		local ok = prevGuard(me, others, forced)
+		-- only count as "actively guarding" (for animation purposes) once close to the real guard spot - this used to set guardingNow on every single call, which is every tick Auto Guard runs at all including while still chasing from far away, so the guard/defensive animation got picked almost 100% of the time and the walk animation never got a chance to show during approach
+		if ok and Bot.dbg and Bot.dbg.dist and Bot.dbg.dist < 3 then
+			Bot.guardingNow = tick()
+		end
+		return ok
 	end
 	-- the guard gives some room by default instead of hugging him
 	if (S.AGDist or 0) < 4 then S.AGDist = 4.5 end
@@ -21994,26 +22617,15 @@ do
 			for _, o in ipairs(others) do
 				if o.ball and not o.mate then handler = o end
 			end
-			if not handler then return false end
+			if not handler then Bot.setGuardHold(false) return false end
 			forced = "Ball handler"
 		end
 		return prevG(me, others, forced)
 	end
-	local gp
-	for _, p in ipairs(UI.pages) do
-		if p.name == "Auto Guard" then gp = p end
-	end
-	if gp and UI.lockedTools then
-		local c = UI.Card(gp, "Who to guard")
-		UI.Toggle(c, "Only guard the player who has the ball", "AGOnlyBall")
-		UI.Note(c, "When nobody on the other team has the ball, auto guard stops and does nothing.")
-		table.insert(UI.lockedTools, 3, c.frame)
-		c.frame.Visible = false
-	end
 end
 -- UPDATE BUTTON: checks GitHub for the newest version and loads it
 do
-	local OWNER, REPO, BRANCH = "jaydendagoat2", "jayhubv1", "claude/claudechud-8cord-executor-wclom3"
+	local OWNER, REPO, BRANCH = "jaydendagoat2", "jayhubv1", "claude/claudechud-8cord-executor-x86h7a"
 	local function http(url) return game:HttpGet(url) end
 	local function latestSha()
 		local branch = string.gsub(BRANCH, "/", "%%2F")
@@ -22335,6 +22947,82 @@ UI.Note(card, "---- Dex and remote spy ----", "Text")
 			end)
 			end },
 			})
+	end
+end
+-- GUARD RECORDER INSIDE THE ULTRA GAME RECORDER: records your own real guarding (state, animation, distance) and reports the learned walk animation id
+do
+	local ultra = UI.lockedTools and UI.lockedTools[1]
+	if ultra then
+		local order = 0
+		for _, ch in ipairs(ultra:GetChildren()) do
+			if ch:IsA("GuiObject") then order = math.max(order, ch.LayoutOrder) end
+		end
+		local card = { frame = ultra, order = order }
+		local function emit(file, text, what)
+			pcall(function() if type(writefile) == "function" then writefile(file, text) end end)
+			local clip = text
+			if #clip > 900000 then clip = string.sub(clip, 1, 900000) .. "\n-- (cut here, the rest is in the file " .. file .. ")" end
+			if type(setclipboard) == "function" then pcall(setclipboard, clip) end
+			notify("Dex", string.format("%s: %.0f KB, saved as %s%s", what, #text / 1024, file, type(setclipboard) == "function" and " and copied" or ""), 6)
+		end
+		JH.guardLog = JH.guardLog or {}
+		local function nearestOther()
+			local r = Mover.body()
+			if not r then return nil end
+			local best, bd
+			for _, pl in ipairs(Players:GetPlayers()) do
+				if pl ~= LP and pl.Character then
+					local hrp = pl.Character:FindFirstChild("HumanoidRootPart")
+					if hrp then
+						local d = flat(hrp.Position - r.Position).Magnitude
+						if not bd or d < bd then best, bd = pl, d end
+					end
+				end
+			end
+			return best, bd
+		end
+		local lastLog = 0
+		bind(RunService.Heartbeat, function()
+			if not S.GuardSpyOn then return end
+			local now = tick()
+			if now - lastLog < 0.5 then return end
+			lastLog = now
+			local h = hum()
+			if not h then return end
+			local _, dist = nearestOther()
+			local tracks = {}
+			for _, tr in ipairs(h:GetPlayingAnimationTracks()) do
+				local id = tr.Animation and tr.Animation.AnimationId or "?"
+				tracks[#tracks + 1] = string.format("%s(%s,%s)", id, tr.Priority.Name, tostring(tr.Looped))
+			end
+			table.insert(JH.guardLog, string.format("%s  state=%s  holdingG=%s  moveDir=%.2f  dist=%.1f  guarding=%s  tracks=%s",
+				os.date("%H:%M:%S"), h:GetState().Name, tostring(char() and char():GetAttribute("HoldingG")), h.MoveDirection.Magnitude, dist or -1, tostring(Bot.status or ""), #tracks > 0 and table.concat(tracks, " | ") or "none"))
+			if #JH.guardLog > 300 then table.remove(JH.guardLog, 1) end
+		end)
+		UI.Toggle(card, "Record guarding", "GuardSpyOn", function(v)
+			if v then
+				JH.guardLog = {}
+				notify("Guard recorder", "Recording. Play normally, guard someone for a bit, then tap Copy guard log.", 5)
+			else
+				notify("Guard recorder", "Stopped. Tap Copy guard log to get the report.", 4)
+			end
+		end)
+		UI.Buttons(card, {
+		{ "Copy guard log", function()
+			local log = JH.guardLog or {}
+			local lines = { "== GUARD RECORDER " .. tostring(VERSION) .. " | " .. os.date("%Y-%m-%d %H:%M:%S"),
+				"Learned walk animation id: " .. tostring(S.WalkAnimId ~= "" and S.WalkAnimId or "(not learned yet, walk for real once)"),
+				"Learned guard/slide animation id: " .. tostring(S.GuardAnimId ~= "" and S.GuardAnimId or "(not learned yet, guard someone for real once)"),
+				string.format("Guard settings: dist=%s react=%s predict=%s range=%s guardSpeed=%s", tostring(S.AGDist), tostring(S.AGReact), tostring(S.AGPredict), tostring(S.AGRange), tostring(S.GuardSpeed)),
+				"" }
+			if #log == 0 then
+				lines[#lines + 1] = "(nothing recorded yet, turn Record guarding on and guard someone for a bit)"
+			else
+				for _, l in ipairs(log) do lines[#lines + 1] = l end
+			end
+			emit("JHub_guard_log.txt", table.concat(lines, "\n"), "Guard log")
+		end },
+		})
 	end
 end
 -- JUMPSHOT MASTERY INSIDE THE ULTRA GAME RECORDER: which jumpshots in the game have been covered, what was learned for each, and every shot setting the game stores
@@ -22748,6 +23436,47 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.80 - GuardAnimId never once beat the game\'s own real defensive animation in testing, so stopped fighting it - Auto Guard now always plays the real walk animation whenever actually moving, guarding or not",
+"v1.79 - found why Auto Rebound had a walk animation but Auto Guard did not: a wobble wrapper was marking Auto Guard as actively guarding on every single tick it ran, even mid-chase, so the walk animation never got picked - fixed",
+"v1.78 - Humanoid:Move did nothing for the walk animation either (same reason it did nothing for movement) - now manually plays the confirmed real walk/guard animation on top of CFrame movement",
+"v1.77 - added an option to only drive Auto Guard while you hold the real Guard button yourself, instead of it pressing the button for you",
+"v1.76 - confirmed Mover.send also produced zero real movement (sent ok, speed stayed 0); back to CFrame for actual position, with Humanoid:Move running alongside it at the same time purely so the real walk animation plays",
+"v1.75 - diagnostics found AGRange was blocking Auto Guard from even trying to move whenever the opponent was past it (check your Guard range slider); fixed a logging bug that hid confirmed Mover.send calls; open/contested is now live while dribbling with a character highlight, not just a post-shot label",
+"v1.74 - added live diagnostics to the Remote Guard Recorder log: target, distance, calculated direction, what actually got sent, whether it was blocked, and humanoid state, no logic changed",
+"v1.73 - found the real reason Auto Guard never followed: this game is server-authoritative and ignores Humanoid:Move entirely - movement now fires the same MoveDirection remote the game itself uses",
+"v1.72 - Auto Guard target lock now sticks to the same opponent (with hysteresis) instead of re-picking best every tick, and velocity is read from the real AssemblyLinearVelocity (now including AI) instead of estimated",
+"v1.71 - back on Humanoid:Move for good: re-read the last log correctly - speed=0 was the guard distance dead-zone working as intended, not a stall; movement is smooth, animations are the game\'s own, target lock/tracking unchanged",
+"v1.70 - Humanoid:Move produced zero actual movement in this game (confirmed: speed stuck at 0 the whole time), reverted to CFrame for position while keeping the confirmed real walk/defensive animation ids playing on top",
+"v1.69 - Auto Guard no longer moves by CFrame at all - it now uses Humanoid:Move like a real player does, so the game\'s own Animate script picks the correct walk/defensive-slide animation automatically",
+"v1.68 - found the real reason the walk animation never showed: moving the root by CFrame alone left the humanoid stuck in Freefall/FallingDown state forever, which hid the walk animation even though it was technically playing - fixed",
+"v1.67 - removed the Discord join gate entirely, replaced with a Discord button in the top right of the menu that copies the invite link",
+"v1.66 - fixed the Discord join gate freezing the whole script for anyone whose click or isfile/writefile did not register - it no longer blocks the real menu from loading",
+"v1.65 - found it: the real walk animation id was being auto-deleted by a leftover bad-id filter, so Auto Guard could never have one; fixed and bootstrapped the confirmed real ids",
+"v1.64 - Remote Guard Recorder now also watches whoever is nearest to you, not just yourself, and logs their walk/guard animation ids too",
+"v1.63 - Auto Guard now detects AI opponents (no Player object) and uses the real HomeTeam attribute instead of Player.Team",
+"v1.62 - recorder now polls currently-playing animations directly instead of waiting on a play event",
+"v1.61 - fixed the recorder: move spam was evicting every animation entry from the log",
+"v1.60 - found the real cause of the blank Auto Guard tab: a leftover block re-hid every card on it",
+"v1.59 - fixed the in-script update checker pointing at the wrong, stale branch",
+"v1.58 - removed the lock code from the visible update log",
+"v1.57 - found it: a leftover line was hiding the Auto Guard tab and force-disabling it every load",
+"v1.56 - rebuilt Auto Guard tab self-contained with its own code lock",
+"v1.55 - Auto Guard now locked behind the Locked tab code, same as the other tools",
+"v1.54 - Auto Guard rebuilt plain again (CFrame + real animation, no simulated input); recorder moved onto its own tab",
+"v1.53 - added Remote Guard Recorder: catches every animation and movement state while guarding",
+"v1.52 - fixed sideways drift and stuck movement when auto guard stops being called",
+"v1.51 - Auto Guard rebuilt: holds real Guard button, follows with real keys/joystick",
+"v1.50 - Auto Guard holds the real Guard button instead of crafting remote calls",
+"v1.49 - fixed HoldG toggling itself back off every frame before the server caught up",
+"v1.48 - Auto Guard now presses the real Guard button and lets the server drive movement",
+"v1.47 - learns your real defensive slide animation separately from your walk",
+"v1.46 - fixed the walk animation learner relearning its own old fake id",
+"v1.45 - fixed walk animation never being learned (this game does not use MoveDirection)",
+"v1.44 - guard recorder: records your real guarding and reports the learned walk animation id",
+"v1.43 - fixed a frozen black/blue screen on first run for some users (Discord gate crash)",
+"v1.42 - walk animation is learned from your own real walk instead of a guessed id",
+"v1.41 - auto guard uses your real walk animation and Players-tab guard speed only",
+"v1.40 - X button on every bind, learned binds shared across the network",
 "v1.29 - JHub network: chat, live feed, shared jumpshot timing",
 "v1.28 - 10 always-on live helps for Auto Green",
 "v1.27 - Sweep locked off at all times",
@@ -22852,6 +23581,31 @@ return a.hold
 end
 return prevSeedHL(key)
 end
+-- SHARED BINDS: a dribble move learned on anyone's copy is pushed to the network and picked up by everyone else who hasn't learned it yet
+function JH.onBindLearned(name, args)
+if JH.bindSer then
+task.spawn(netPut, "bindlib/" .. sanitize(name), { text = JH.bindSer(args), name = name, by = myName, t = os.time() })
+end
+end
+task.spawn(function()
+local res = netGet("bindlib")
+if type(res) == "table" and JH.bindLib and JH.bindDeser then
+local changed = false
+for key, rowv in pairs(res) do
+if type(rowv) == "table" and type(rowv.text) == "string" then
+local realName = type(rowv.name) == "string" and rowv.name or key
+if not JH.bindLib[realName] then
+local args = JH.bindDeser(rowv.text)
+if args then
+JH.bindLib[realName] = args
+changed = true
+end
+end
+end
+end
+if changed and JH.bindSaveLib then JH.bindSaveLib() end
+end
+end)
 end
 -- LIVE ADAPT, SHARPER: steps shrink the more a jumpshot has actually been seen (so it locks in fast early, then stops wobbling), and one freak result against a steady trend gets a lighter step, not a full swing
 do
