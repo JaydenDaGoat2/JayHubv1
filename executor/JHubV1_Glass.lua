@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.40"
+local VERSION = "v1.41"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -7394,14 +7394,27 @@ local d = Mover.gameDir
 return d ~= nil and tick() - (Mover.gameDirT or 0) < 0.4 and flat(d).Magnitude > 0.35
 end
 local moveTrack, moveTrackHum
+-- pull the game's own real walk animation off the character's own Animate script instead of guessing an asset id, so it's guaranteed to match this rig
+local function findWalkId(c)
+	local animate = c and c:FindFirstChild("Animate")
+	if not animate then return nil end
+	for _, name in ipairs({ "walk", "run" }) do
+		local obj = animate:FindFirstChild(name)
+		local a = obj and (obj:FindFirstChild("WalkAnim") or obj:FindFirstChildOfClass("Animation"))
+		if a and a:IsA("Animation") and a.AnimationId ~= "" then return a.AnimationId end
+	end
+	return nil
+end
 local function walkTrack()
 	local h = hum()
 	if not h then return nil end
 	if moveTrack and moveTrackHum == h then return moveTrack end
 	local animator = h:FindFirstChildOfClass("Animator")
 	if not animator then return nil end
+	local id = findWalkId(char())
+	if not id then return nil end
 	local anim = Instance.new("Animation")
-	anim.AnimationId = "rbxassetid://135438934392621"
+	anim.AnimationId = id
 	local ok, track = pcall(function() return animator:LoadAnimation(anim) end)
 	if not ok or not track then return nil end
 	track.Priority = Enum.AnimationPriority.Movement
@@ -7452,37 +7465,6 @@ if not bd or score < bd then best, bd = o, score end
 end
 end
 return best
-end
-function Bot.guardStep(me, others, forced)
-local t = Bot.pickTarget(others, me, forced)
-if not t then return false end
-local dist = flat(t.pos - me).Magnitude
-if dist > S.AGRange and not S.AGLock then return false end
-local now = tick()
-local react = S.AGLock and 0 or S.AGReact
-if not Bot.spot or Bot.spotTarget ~= t or now - Bot.spotT >= react then
-local ppos = t.pos + t.vel * S.AGPredict
-local hoop = Bot.nearestHoop(ppos)
-local dirf = hoop and flat(hoop - ppos) or flat(t.vel)
-if dirf.Magnitude < 0.1 then dirf = flat(me - ppos) end
-if dirf.Magnitude < 0.1 then dirf = Vector3.new(0, 0, 1) end
-Bot.spot, Bot.spotTarget, Bot.spotT = ppos + dirf.Unit * S.AGDist, t, now
-end
-local to = flat(Bot.spot - me)
-local d = to.Magnitude
-local strength = S.AGStrength / 100
-local mul = S.AGSpeed * (0.7 + strength * 1.3)
-if S.AGLock then mul = mul * 2 end
-if d < 0.5 then
-Bot.stopMove()
-else
-local gain = S.AGLock and 1 or math.min(1, d / 3)
-Bot.move(to.Unit * gain, mul)
-end
-if S.AGFace then Bot.faceAt(t.pos) end
-Bot.setSprint(S.AGSprint and d > 7)
-Bot.status = "Guarding " .. t.pl.Name
-return true
 end
 function Bot.blockStep(others, me)
 if not S.AB then return end
@@ -7823,8 +7805,7 @@ local g1 = UI.Card(GP, "Auto guard")
 UI.Toggle(g1, "Auto guard", "AG")
 UI.Dropdown(g1, "Who to guard", "AGTarget", { "Ball handler", "Closest to me", "Closest to hoop" })
 UI.Slider(g1, "Guard distance (studs in front)", "AGDist", 1, 12, 0.5, 1)
-UI.Slider(g1, "Guard speed", "AGSpeed", 0.5, 3, 0.1, 1, "x")
-UI.Slider(g1, "Strength (how hard it corrects)", "AGStrength", 0, 100, 5, 0, "%")
+UI.Note(g1, "Speed comes from Guard speed in the Players tab.")
 UI.Slider(g1, "Reaction time", "AGReact", 0, 0.5, 0.01, 2, "s")
 UI.Slider(g1, "Prediction (looks ahead)", "AGPredict", 0, 0.6, 0.02, 2, "s")
 UI.Slider(g1, "Guard range", "AGRange", 10, 120, 5, 0, " studs")
@@ -11037,6 +11018,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.41 - auto guard uses your real walk animation and Players-tab guard speed only",
 "v1.40 - X button on every bind, learned binds shared across the network",
 "v1.29 - JHub network: chat, live feed, shared jumpshot timing",
 "v1.28 - 10 always-on live helps for Auto Green",
@@ -11446,7 +11428,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.40"
+local VERSION = "v1.41"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -19149,14 +19131,27 @@ do
 		return d ~= nil and tick() - (Mover.gameDirT or 0) < 0.4 and flat(d).Magnitude > 0.35
 	end
 	local moveTrack, moveTrackHum
+	-- pull the game's own real walk animation off the character's own Animate script instead of guessing an asset id, so it's guaranteed to match this rig
+	local function findWalkId(c)
+		local animate = c and c:FindFirstChild("Animate")
+		if not animate then return nil end
+		for _, name in ipairs({ "walk", "run" }) do
+			local obj = animate:FindFirstChild(name)
+			local a = obj and (obj:FindFirstChild("WalkAnim") or obj:FindFirstChildOfClass("Animation"))
+			if a and a:IsA("Animation") and a.AnimationId ~= "" then return a.AnimationId end
+		end
+		return nil
+	end
 	local function walkTrack()
 		local h = hum()
 		if not h then return nil end
 		if moveTrack and moveTrackHum == h then return moveTrack end
 		local animator = h:FindFirstChildOfClass("Animator")
 		if not animator then return nil end
+		local id = findWalkId(char())
+		if not id then return nil end
 		local anim = Instance.new("Animation")
-		anim.AnimationId = "rbxassetid://135438934392621"
+		anim.AnimationId = id
 		local ok, track = pcall(function() return animator:LoadAnimation(anim) end)
 		if not ok or not track then return nil end
 		track.Priority = Enum.AnimationPriority.Movement
@@ -19207,37 +19202,6 @@ do
 			end
 		end
 		return best
-	end
-	function Bot.guardStep(me, others, forced)
-		local t = Bot.pickTarget(others, me, forced)
-		if not t then return false end
-		local dist = flat(t.pos - me).Magnitude
-		if dist > S.AGRange and not S.AGLock then return false end
-		local now = tick()
-		local react = S.AGLock and 0 or S.AGReact
-		if not Bot.spot or Bot.spotTarget ~= t or now - Bot.spotT >= react then
-			local ppos = t.pos + t.vel * S.AGPredict
-			local hoop = Bot.nearestHoop(ppos)
-			local dirf = hoop and flat(hoop - ppos) or flat(t.vel)
-			if dirf.Magnitude < 0.1 then dirf = flat(me - ppos) end
-			if dirf.Magnitude < 0.1 then dirf = Vector3.new(0, 0, 1) end
-			Bot.spot, Bot.spotTarget, Bot.spotT = ppos + dirf.Unit * S.AGDist, t, now
-		end
-		local to = flat(Bot.spot - me)
-		local d = to.Magnitude
-		local strength = S.AGStrength / 100
-		local mul = S.AGSpeed * (0.7 + strength * 1.3)
-		if S.AGLock then mul = mul * 2 end
-		if d < 0.5 then
-			Bot.stopMove()
-		else
-			local gain = S.AGLock and 1 or math.min(1, d / 3)
-			Bot.move(to.Unit * gain, mul)
-		end
-		if S.AGFace then Bot.faceAt(t.pos) end
-		Bot.setSprint(S.AGSprint and d > 7)
-		Bot.status = "Guarding " .. t.pl.Name
-		return true
 	end
 	function Bot.blockStep(others, me)
 		if not S.AB then return end
@@ -19578,8 +19542,7 @@ do
 	UI.Toggle(g1, "Auto guard", "AG")
 	UI.Dropdown(g1, "Who to guard", "AGTarget", { "Ball handler", "Closest to me", "Closest to hoop" })
 	UI.Slider(g1, "Guard distance (studs in front)", "AGDist", 1, 12, 0.5, 1)
-	UI.Slider(g1, "Guard speed", "AGSpeed", 0.5, 3, 0.1, 1, "x")
-	UI.Slider(g1, "Strength (how hard it corrects)", "AGStrength", 0, 100, 5, 0, "%")
+	UI.Note(g1, "Speed comes from Guard speed in the Players tab.")
 	UI.Slider(g1, "Reaction time", "AGReact", 0, 0.5, 0.01, 2, "s")
 	UI.Slider(g1, "Prediction (looks ahead)", "AGPredict", 0, 0.6, 0.02, 2, "s")
 	UI.Slider(g1, "Guard range", "AGRange", 10, 120, 5, 0, " studs")
@@ -22792,6 +22755,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.41 - auto guard uses your real walk animation and Players-tab guard speed only",
 "v1.40 - X button on every bind, learned binds shared across the network",
 "v1.29 - JHub network: chat, live feed, shared jumpshot timing",
 "v1.28 - 10 always-on live helps for Auto Green",
