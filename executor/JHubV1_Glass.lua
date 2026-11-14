@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.53"
+local VERSION = "v1.54"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -8290,95 +8290,15 @@ Shot.finalSave()
 end
 end
 
--- hold the real Guard button (the same way Sprint is already held) so the game's own input handling flips HoldingG itself - no remote to craft or get wrong
+-- real guarding, rebuilt plain and simple: move the character to the spot with CFrame (same as every other bot movement in this script), hold the real Guard button so HoldingG is genuinely true, and play your own real walk/guard animation on top. No simulated keys, no simulated touches - those were freezing the camera.
 local guardHeld = false
 function Bot.setGuardHold(on)
 if on == guardHeld then return end
 Input.action("Guard", on)
 guardHeld = on
 end
--- follow the player through the SAME input channel a real person uses - real WASD keys on keyboard, a real drag of the on-screen joystick on mobile - so the game's own movement and walk animation run completely untouched, nothing of ours to fake. Controller has no analog stick an executor can simulate, so that one case alone still moves the character directly.
-local heldKeys = {}
-local function holdKeys(set)
-for k in pairs(heldKeys) do
-if not set[k] then Input.sendKey(k, false) heldKeys[k] = nil end
-end
-for k in pairs(set) do
-if not heldKeys[k] then Input.sendKey(k, true) heldKeys[k] = true end
-end
-end
-local function releaseKeys()
-for k in pairs(heldKeys) do Input.sendKey(k, false) end
-heldKeys = {}
-end
-local stickObj, stickDown
-local function findStick()
-if stickObj and stickObj.Parent then return stickObj end
-local pg = LP:FindFirstChild("PlayerGui")
-if not pg then return nil end
-for _, d in ipairs(pg:GetDescendants()) do
-if d:IsA("GuiObject") and string.find(string.lower(d.Name), "stick") and visibleChain(d) then
-stickObj = d
-break
-end
-end
-return stickObj
-end
-local function stickTo(dir)
-if not VIM then return false end
-local obj = findStick()
-if not obj then return false end
-local center = obj.AbsolutePosition + obj.AbsoluteSize / 2
-local radius = math.max(obj.AbsoluteSize.X, obj.AbsoluteSize.Y)
-local x, y = center.X, center.Y
-if dir.Magnitude > 0.05 then
-local cam = workspace.CurrentCamera
-local look = (cam and flat(cam.CFrame.LookVector).Magnitude > 0.01) and flat(cam.CFrame.LookVector).Unit or Vector3.new(0, 0, -1)
-local right = (cam and flat(cam.CFrame.RightVector).Magnitude > 0.01) and flat(cam.CFrame.RightVector).Unit or Vector3.new(1, 0, 0)
-x = center.X + dir:Dot(right) * radius
-y = center.Y - dir:Dot(look) * radius
-end
-pcall(function() VIM:SendTouchEvent(87, stickDown and 1 or 0, x, y) end)
-stickDown = true
-return true
-end
-local function stickRelease()
-if stickDown and VIM then
-local obj = findStick()
-local c = obj and (obj.AbsolutePosition + obj.AbsoluteSize / 2)
-pcall(function() VIM:SendTouchEvent(87, 2, c and c.X or 0, c and c.Y or 0) end)
-end
-stickDown = false
-end
-function Bot.followReal(dir)
-if IS_MOBILE and stickTo(dir) then return end
-if UIS.KeyboardEnabled then
-local cam = workspace.CurrentCamera
-local look = (cam and flat(cam.CFrame.LookVector).Magnitude > 0.01) and flat(cam.CFrame.LookVector).Unit or Vector3.new(0, 0, -1)
-local right = (cam and flat(cam.CFrame.RightVector).Magnitude > 0.01) and flat(cam.CFrame.RightVector).Unit or Vector3.new(1, 0, 0)
-local fwd, strafe = dir:Dot(look), dir:Dot(right)
-local keys = {}
-if dir.Magnitude > 0.1 then
-if fwd > 0.3 then keys.W = true elseif fwd < -0.3 then keys.S = true end
-if strafe > 0.3 then keys.D = true elseif strafe < -0.3 then keys.A = true end
-end
-holdKeys(keys)
-return
-end
--- controller: no analog stick to simulate, so this one case still moves the character directly
-if dir.Magnitude > 0.05 then Bot.move(dir, 1 + (S.GuardSpeed or 0) / 100) else Bot.stopMove() end
-end
-function Bot.followRealStop()
-releaseKeys()
-stickRelease()
-Bot.stopMove()
-end
--- if guardStep stops being called at all - you picked up the ball, auto guard turned off, nobody to guard - nothing else would ever release the held key or joystick push, so it keeps walking in whatever direction it was last given forever
 bind(RunService.Heartbeat, function()
-if guardHeld and (not S.AG or tick() - (Bot.lastGuardTick or 0) > 0.3) then
-Bot.setGuardHold(false)
-Bot.followRealStop()
-end
+if not S.AG and guardHeld then Bot.setGuardHold(false) end
 end)
 -- the guard looks like a player: it sways, reacts a little differently each time, sometimes hesitates and never runs faster than a player can
 function Bot.guardStep(me, others, forced)
@@ -8406,10 +8326,11 @@ local spot = ppos + dirf.Unit * S.AGDist
 if w and amt > 0 then spot = spot + Vector3.new(w.ox, 0, w.oz) end
 Bot.spot, Bot.spotTarget, Bot.spotT = spot, t, now
 end
-Bot.lastGuardTick = tick()
 Bot.setGuardHold(true)
+local mul = 1 + (S.GuardSpeed or 0) / 100
+if amt > 0 then mul = math.min(mul * w.sp, (S.AGLock and (1 + 0.8 * amt) or (1 + 0.35 * amt))) end
 if w and amt > 0 and w.pause > now then
-Bot.followRealStop()
+Bot.stopMove()
 if S.AGFace then Bot.faceAt(t.pos) end
 Bot.status = "Guarding " .. t.pl.Name
 return true
@@ -8417,15 +8338,16 @@ end
 local to = flat(Bot.spot - me)
 local d = to.Magnitude
 if d < 0.5 then
-Bot.followRealStop()
+Bot.stopMove()
 else
 local gain = S.AGLock and 1 or math.min(1, d / 3)
-Bot.followReal(to.Unit * gain)
+Bot.move(to.Unit * gain, mul)
 end
 if S.AGFace then Bot.faceAt(t.pos) end
 Bot.status = "Guarding " .. t.pl.Name
 return true
 end
+
 
 -- your own logo pictures: paste the image number from a Roblox image link
 function V.customId(key)
@@ -10466,8 +10388,6 @@ pcall(function() if type(writefile) == "function" then writefile("JHub_remote_gu
 if type(setclipboard) == "function" then pcall(setclipboard, text) end
 notify("Remote Guard Recorder", string.format("%.0f KB, saved as JHub_remote_guard_log.txt and copied", #text / 1024), 6)
 end)
-table.insert(UI.lockedTools, 4, rc.frame)
-rc.frame.Visible = false
 end
 end
 -- UPDATE BUTTON: checks GitHub for the newest version and loads it
@@ -11283,6 +11203,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.54 - Auto Guard rebuilt plain again (CFrame + real animation, no simulated input); recorder moved onto its own tab",
 "v1.53 - added Remote Guard Recorder: catches every animation and movement state while guarding",
 "v1.52 - fixed sideways drift and stuck movement when auto guard stops being called",
 "v1.51 - Auto Guard rebuilt: holds real Guard button, follows with real keys/joystick",
@@ -11576,7 +11497,7 @@ end
 ]==]
 
 -- DISCORD GATE: the first time the script runs, a window asks for a Discord join before anything else loads
-local GATE_VERSION = "v1.53"
+local GATE_VERSION = "v1.54"
 local okGate, errGate = pcall(function()
 	local FILE = "JHub_discord_ok.txt"
 	local INVITE = "https://discord.gg/fk5TsZMrRM"
@@ -11711,7 +11632,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.53"
+local VERSION = "v1.54"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -20309,91 +20230,15 @@ do
 		end
 	end
 
-	-- hold the real Guard button (the same way Sprint is already held) so the game's own input handling flips HoldingG itself - no remote to craft or get wrong
+	-- real guarding, rebuilt plain and simple: move the character to the spot with CFrame (same as every other bot movement in this script), hold the real Guard button so HoldingG is genuinely true, and play your own real walk/guard animation on top. No simulated keys, no simulated touches - those were freezing the camera.
 	local guardHeld = false
 	function Bot.setGuardHold(on)
 		if on == guardHeld then return end
 		Input.action("Guard", on)
 		guardHeld = on
 	end
-	-- follow the player through the SAME input channel a real person uses - real WASD keys on keyboard, a real drag of the on-screen joystick on mobile - so the game's own movement and walk animation run completely untouched, nothing of ours to fake. Controller has no analog stick an executor can simulate, so that one case alone still moves the character directly.
-	local heldKeys = {}
-	local function holdKeys(set)
-		for k in pairs(heldKeys) do
-			if not set[k] then Input.sendKey(k, false) heldKeys[k] = nil end
-		end
-		for k in pairs(set) do
-			if not heldKeys[k] then Input.sendKey(k, true) heldKeys[k] = true end
-		end
-	end
-	local function releaseKeys()
-		for k in pairs(heldKeys) do Input.sendKey(k, false) end
-		heldKeys = {}
-	end
-	local stickObj, stickDown
-	local function findStick()
-		if stickObj and stickObj.Parent then return stickObj end
-		local pg = LP:FindFirstChild("PlayerGui")
-		if not pg then return nil end
-		for _, d in ipairs(pg:GetDescendants()) do
-			if d:IsA("GuiObject") and string.find(string.lower(d.Name), "stick") and visibleChain(d) then
-				stickObj = d
-				break
-			end
-		end
-		return stickObj
-	end
-	local function stickTo(dir)
-		if not VIM then return false end
-		local obj = findStick()
-		if not obj then return false end
-		local center = obj.AbsolutePosition + obj.AbsoluteSize / 2
-		local radius = math.max(obj.AbsoluteSize.X, obj.AbsoluteSize.Y)
-		local x, y = center.X, center.Y
-		if dir.Magnitude > 0.05 then
-			local cam = workspace.CurrentCamera
-			local look = (cam and flat(cam.CFrame.LookVector).Magnitude > 0.01) and flat(cam.CFrame.LookVector).Unit or Vector3.new(0, 0, -1)
-			local right = (cam and flat(cam.CFrame.RightVector).Magnitude > 0.01) and flat(cam.CFrame.RightVector).Unit or Vector3.new(1, 0, 0)
-			x = center.X + dir:Dot(right) * radius
-			y = center.Y - dir:Dot(look) * radius
-		end
-		pcall(function() VIM:SendTouchEvent(87, stickDown and 1 or 0, x, y) end)
-		stickDown = true
-		return true
-	end
-	local function stickRelease()
-		if stickDown and VIM then
-			local obj = findStick()
-			local c = obj and (obj.AbsolutePosition + obj.AbsoluteSize / 2)
-			pcall(function() VIM:SendTouchEvent(87, 2, c and c.X or 0, c and c.Y or 0) end)
-		end
-		stickDown = false
-	end
-	function Bot.followReal(dir)
-		if IS_MOBILE and stickTo(dir) then return end
-		if UIS.KeyboardEnabled then
-			local cam = workspace.CurrentCamera
-			local look = (cam and flat(cam.CFrame.LookVector).Magnitude > 0.01) and flat(cam.CFrame.LookVector).Unit or Vector3.new(0, 0, -1)
-			local right = (cam and flat(cam.CFrame.RightVector).Magnitude > 0.01) and flat(cam.CFrame.RightVector).Unit or Vector3.new(1, 0, 0)
-			local fwd, strafe = dir:Dot(look), dir:Dot(right)
-			local keys = {}
-			if dir.Magnitude > 0.1 then
-				if fwd > 0.3 then keys.W = true elseif fwd < -0.3 then keys.S = true end
-				if strafe > 0.3 then keys.D = true elseif strafe < -0.3 then keys.A = true end
-			end
-			holdKeys(keys)
-			return
-		end
-		-- controller: no analog stick to simulate, so this one case still moves the character directly
-		if dir.Magnitude > 0.05 then Bot.move(dir, 1 + (S.GuardSpeed or 0) / 100) else Bot.stopMove() end
-	end
-	function Bot.followRealStop()
-		releaseKeys()
-		stickRelease()
-		Bot.stopMove()
-	end
 	bind(RunService.Heartbeat, function()
-		if not S.AG and guardHeld then Bot.setGuardHold(false) Bot.followRealStop() end
+		if not S.AG and guardHeld then Bot.setGuardHold(false) end
 	end)
 	-- the guard looks like a player: it sways, reacts a little differently each time, sometimes hesitates and never runs faster than a player can
 	function Bot.guardStep(me, others, forced)
@@ -20421,10 +20266,11 @@ do
 			if w and amt > 0 then spot = spot + Vector3.new(w.ox, 0, w.oz) end
 			Bot.spot, Bot.spotTarget, Bot.spotT = spot, t, now
 		end
-		Bot.lastGuardTick = tick()
-Bot.setGuardHold(true)
+		Bot.setGuardHold(true)
+		local mul = 1 + (S.GuardSpeed or 0) / 100
+		if amt > 0 then mul = math.min(mul * w.sp, (S.AGLock and (1 + 0.8 * amt) or (1 + 0.35 * amt))) end
 		if w and amt > 0 and w.pause > now then
-			Bot.followRealStop()
+			Bot.stopMove()
 			if S.AGFace then Bot.faceAt(t.pos) end
 			Bot.status = "Guarding " .. t.pl.Name
 			return true
@@ -20432,15 +20278,16 @@ Bot.setGuardHold(true)
 		local to = flat(Bot.spot - me)
 		local d = to.Magnitude
 		if d < 0.5 then
-			Bot.followRealStop()
+			Bot.stopMove()
 		else
 			local gain = S.AGLock and 1 or math.min(1, d / 3)
-			Bot.followReal(to.Unit * gain)
+			Bot.move(to.Unit * gain, mul)
 		end
 		if S.AGFace then Bot.faceAt(t.pos) end
 		Bot.status = "Guarding " .. t.pl.Name
 		return true
 	end
+
 
 	-- your own logo pictures: paste the image number from a Roblox image link
 	function V.customId(key)
@@ -22481,8 +22328,6 @@ do
 			if type(setclipboard) == "function" then pcall(setclipboard, text) end
 			notify("Remote Guard Recorder", string.format("%.0f KB, saved as JHub_remote_guard_log.txt and copied", #text / 1024), 6)
 		end)
-		table.insert(UI.lockedTools, 4, rc.frame)
-		rc.frame.Visible = false
 	end
 end
 -- UPDATE BUTTON: checks GitHub for the newest version and loads it
@@ -23298,6 +23143,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.54 - Auto Guard rebuilt plain again (CFrame + real animation, no simulated input); recorder moved onto its own tab",
 "v1.53 - added Remote Guard Recorder: catches every animation and movement state while guarding",
 "v1.52 - fixed sideways drift and stuck movement when auto guard stops being called",
 "v1.51 - Auto Guard rebuilt: holds real Guard button, follows with real keys/joystick",
