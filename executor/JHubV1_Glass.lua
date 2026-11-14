@@ -6336,7 +6336,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.29  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.30  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -8809,7 +8809,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.29"
+d.Text = "JHub V1.30"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -10818,11 +10818,27 @@ Size = UDim2.fromOffset(58, 26), Text = "", AutoButtonColor = false, BackgroundC
 UI.corner(chatSendBtn, 0.8)
 UI.grad(chatSendBtn)
 UI.label({ Text = "Send", TextSize = 13, Size = UDim2.fromScale(1, 1), TextColor3 = WHITE, Parent = chatSendBtn }, true, false)
+UI.Note(chat, "Type !ai followed by a question to ask the chat's AI.")
+local function askAI(q, cb)
+task.spawn(function()
+local ok, res = pcall(function()
+return request({ Url = "https://text.pollinations.ai/" .. HttpService:UrlEncode(q) .. "?model=openai", Method = "GET" })
+end)
+local answer = (ok and res and res.Body and res.Body ~= "") and res.Body or "(the AI did not answer, try again)"
+cb(string.sub(answer, 1, 400))
+end)
+end
 local function sendChat()
 local msg = chatBox.Text
 if msg and msg ~= "" then
 chatBox.Text = ""
 task.spawn(netPost, "chat", { name = myName, text = string.sub(msg, 1, 200), t = os.time() })
+local q = string.match(msg, "^!ai%s+(.+)$")
+if q then
+askAI(q, function(answer)
+netPost("chat", { name = "JHub AI", text = answer, t = os.time() })
+end)
+end
 end
 end
 chatBox.FocusLost:Connect(function(enter) if enter then sendChat() end end)
@@ -11098,7 +11114,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.29", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.30", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -17816,7 +17832,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.29  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.30  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -20297,7 +20313,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.29"
+				d.Text = "JHub V1.30"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -22306,11 +22322,27 @@ Size = UDim2.fromOffset(58, 26), Text = "", AutoButtonColor = false, BackgroundC
 UI.corner(chatSendBtn, 0.8)
 UI.grad(chatSendBtn)
 UI.label({ Text = "Send", TextSize = 13, Size = UDim2.fromScale(1, 1), TextColor3 = WHITE, Parent = chatSendBtn }, true, false)
+UI.Note(chat, "Type !ai followed by a question to ask the chat's AI.")
+local function askAI(q, cb)
+task.spawn(function()
+local ok, res = pcall(function()
+return request({ Url = "https://text.pollinations.ai/" .. HttpService:UrlEncode(q) .. "?model=openai", Method = "GET" })
+end)
+local answer = (ok and res and res.Body and res.Body ~= "") and res.Body or "(the AI did not answer, try again)"
+cb(string.sub(answer, 1, 400))
+end)
+end
 local function sendChat()
 local msg = chatBox.Text
 if msg and msg ~= "" then
 chatBox.Text = ""
 task.spawn(netPost, "chat", { name = myName, text = string.sub(msg, 1, 200), t = os.time() })
+local q = string.match(msg, "^!ai%s+(.+)$")
+if q then
+askAI(q, function(answer)
+netPost("chat", { name = "JHub AI", text = answer, t = os.time() })
+end)
+end
 end
 end
 chatBox.FocusLost:Connect(function(enter) if enter then sendChat() end end)
