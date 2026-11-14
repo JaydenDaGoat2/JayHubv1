@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.60"
+local VERSION = "v1.61"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -7887,18 +7887,19 @@ local rc = UI.Card(GP, "Remote Guard Recorder")
 rc.frame.Visible = false
 contentFrames[#contentFrames + 1] = rc.frame
 UI.Note(rc, "Turn this on, then guard someone for real for 10-15 seconds (walk toward them, away, side to side). It catches every animation that plays on you - priority, speed, looped or not - plus your real position, HoldingG, Action and state each tick.")
-JH.rguardLog = JH.rguardLog or {}
+JH.rguardAnimLog = JH.rguardAnimLog or {}
+JH.rguardMoveLog = JH.rguardMoveLog or {}
 local rconn
 UI.Toggle(rc, "Record everything about guarding", "RGuardOn", function(v)
 if v then
-JH.rguardLog = {}
+JH.rguardAnimLog, JH.rguardMoveLog = {}, {}
 local h = hum()
 if h then
 rconn = h.AnimationPlayed:Connect(function(track)
 if not S.RGuardOn then return end
-table.insert(JH.rguardLog, string.format("%s  anim  name=%s  id=%s  prio=%s  looped=%s  speed=%.2f",
+table.insert(JH.rguardAnimLog, string.format("%s  anim  name=%s  id=%s  prio=%s  looped=%s  speed=%.2f",
 os.date("%H:%M:%S"), track.Name, (track.Animation and track.Animation.AnimationId) or "?", track.Priority.Name, tostring(track.Looped), track.Speed))
-if #JH.rguardLog > 500 then table.remove(JH.rguardLog, 1) end
+if #JH.rguardAnimLog > 400 then table.remove(JH.rguardAnimLog, 1) end
 end)
 end
 notify("Remote Guard Recorder", "Recording. Guard someone for real now.", 5)
@@ -7919,16 +7920,19 @@ local speed = 0
 if rLastPos then speed = flat(r.Position - rLastPos).Magnitude / 0.2 end
 rLastPos = r.Position
 local c2 = char()
-table.insert(JH.rguardLog, string.format("%s  move  state=%s  speed=%.1f  holdingG=%s  action=%s  guarding=%s",
+table.insert(JH.rguardMoveLog, string.format("%s  move  state=%s  speed=%.1f  holdingG=%s  action=%s  guarding=%s",
 os.date("%H:%M:%S"), h:GetState().Name, speed, tostring(c2 and c2:GetAttribute("HoldingG")), tostring(c2 and c2:GetAttribute("Action")), tostring(Bot.status or "")))
-if #JH.rguardLog > 500 then table.remove(JH.rguardLog, 1) end
+if #JH.rguardMoveLog > 200 then table.remove(JH.rguardMoveLog, 1) end
 end)
 UI.Button(rc, "Copy remote guard log", function()
 local rlines = { "== REMOTE GUARD RECORDER " .. tostring(VERSION) .. " | " .. os.date("%Y-%m-%d %H:%M:%S") }
-if #JH.rguardLog == 0 then
+if #JH.rguardAnimLog == 0 and #JH.rguardMoveLog == 0 then
 rlines[#rlines + 1] = "(nothing recorded yet, turn it on and guard someone for real first)"
 else
-for _, l in ipairs(JH.rguardLog) do rlines[#rlines + 1] = l end
+rlines[#rlines + 1] = "-- animations (every one played, any priority) --"
+for _, l in ipairs(JH.rguardAnimLog) do rlines[#rlines + 1] = l end
+rlines[#rlines + 1] = "-- movement/state snapshots --"
+for _, l in ipairs(JH.rguardMoveLog) do rlines[#rlines + 1] = l end
 end
 local text = table.concat(rlines, "\n")
 pcall(function() if type(writefile) == "function" then writefile("JHub_remote_guard_log.txt", text) end end)
@@ -11213,6 +11217,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.61 - fixed the recorder: move spam was evicting every animation entry from the log",
 "v1.60 - found the real cause of the blank Auto Guard tab: a leftover block re-hid every card on it",
 "v1.59 - fixed the in-script update checker pointing at the wrong, stale branch",
 "v1.58 - removed the lock code from the visible update log",
@@ -11513,7 +11518,7 @@ end
 ]==]
 
 -- DISCORD GATE: the first time the script runs, a window asks for a Discord join before anything else loads
-local GATE_VERSION = "v1.60"
+local GATE_VERSION = "v1.61"
 local okGate, errGate = pcall(function()
 	local FILE = "JHub_discord_ok.txt"
 	local INVITE = "https://discord.gg/fk5TsZMrRM"
@@ -11648,7 +11653,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.60"
+local VERSION = "v1.61"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -19843,18 +19848,19 @@ JH.AGContentFrames = contentFrames
 		rc.frame.Visible = false
 		contentFrames[#contentFrames + 1] = rc.frame
 		UI.Note(rc, "Turn this on, then guard someone for real for 10-15 seconds (walk toward them, away, side to side). It catches every animation that plays on you - priority, speed, looped or not - plus your real position, HoldingG, Action and state each tick.")
-		JH.rguardLog = JH.rguardLog or {}
+		JH.rguardAnimLog = JH.rguardAnimLog or {}
+		JH.rguardMoveLog = JH.rguardMoveLog or {}
 		local rconn
 		UI.Toggle(rc, "Record everything about guarding", "RGuardOn", function(v)
 			if v then
-				JH.rguardLog = {}
+				JH.rguardAnimLog, JH.rguardMoveLog = {}, {}
 				local h = hum()
 				if h then
 					rconn = h.AnimationPlayed:Connect(function(track)
 						if not S.RGuardOn then return end
-						table.insert(JH.rguardLog, string.format("%s  anim  name=%s  id=%s  prio=%s  looped=%s  speed=%.2f",
+						table.insert(JH.rguardAnimLog, string.format("%s  anim  name=%s  id=%s  prio=%s  looped=%s  speed=%.2f",
 							os.date("%H:%M:%S"), track.Name, (track.Animation and track.Animation.AnimationId) or "?", track.Priority.Name, tostring(track.Looped), track.Speed))
-						if #JH.rguardLog > 500 then table.remove(JH.rguardLog, 1) end
+						if #JH.rguardAnimLog > 400 then table.remove(JH.rguardAnimLog, 1) end
 					end)
 				end
 				notify("Remote Guard Recorder", "Recording. Guard someone for real now.", 5)
@@ -19875,16 +19881,19 @@ JH.AGContentFrames = contentFrames
 			if rLastPos then speed = flat(r.Position - rLastPos).Magnitude / 0.2 end
 			rLastPos = r.Position
 			local c2 = char()
-			table.insert(JH.rguardLog, string.format("%s  move  state=%s  speed=%.1f  holdingG=%s  action=%s  guarding=%s",
+			table.insert(JH.rguardMoveLog, string.format("%s  move  state=%s  speed=%.1f  holdingG=%s  action=%s  guarding=%s",
 				os.date("%H:%M:%S"), h:GetState().Name, speed, tostring(c2 and c2:GetAttribute("HoldingG")), tostring(c2 and c2:GetAttribute("Action")), tostring(Bot.status or "")))
-			if #JH.rguardLog > 500 then table.remove(JH.rguardLog, 1) end
+			if #JH.rguardMoveLog > 200 then table.remove(JH.rguardMoveLog, 1) end
 		end)
 		UI.Button(rc, "Copy remote guard log", function()
 			local rlines = { "== REMOTE GUARD RECORDER " .. tostring(VERSION) .. " | " .. os.date("%Y-%m-%d %H:%M:%S") }
-			if #JH.rguardLog == 0 then
+			if #JH.rguardAnimLog == 0 and #JH.rguardMoveLog == 0 then
 				rlines[#rlines + 1] = "(nothing recorded yet, turn it on and guard someone for real first)"
 			else
-				for _, l in ipairs(JH.rguardLog) do rlines[#rlines + 1] = l end
+				rlines[#rlines + 1] = "-- animations (every one played, any priority) --"
+				for _, l in ipairs(JH.rguardAnimLog) do rlines[#rlines + 1] = l end
+				rlines[#rlines + 1] = "-- movement/state snapshots --"
+				for _, l in ipairs(JH.rguardMoveLog) do rlines[#rlines + 1] = l end
 			end
 			local text = table.concat(rlines, "\n")
 			pcall(function() if type(writefile) == "function" then writefile("JHub_remote_guard_log.txt", text) end end)
@@ -23169,6 +23178,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.61 - fixed the recorder: move spam was evicting every animation entry from the log",
 "v1.60 - found the real cause of the blank Auto Guard tab: a leftover block re-hid every card on it",
 "v1.59 - fixed the in-script update checker pointing at the wrong, stale branch",
 "v1.58 - removed the lock code from the visible update log",
