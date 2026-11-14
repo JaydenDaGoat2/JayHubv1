@@ -6336,7 +6336,7 @@ local timeStr = string.format("%d:%02d:%02d %s", hr, now.min, now.sec, now.hour 
 local ping = 0
 pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 local fps = math.floor(JH.FPS + 0.5)
-InfoText.Text = string.format("JHub V1.33  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+InfoText.Text = string.format("JHub V1.34  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 .. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 if not Window.Visible then return end
 if UI.current and UI.current.name == "Main" then
@@ -8822,7 +8822,7 @@ if d:IsA("UIListLayout") then d.Padding = UDim.new(0, 4) end
 end
 for _, d in ipairs(Header:GetChildren()) do
 if d:IsA("TextLabel") then
-d.Text = "JHub V1.33"
+d.Text = "JHub V1.34"
 d.TextSize = 20
 d.Position = UDim2.new(0, 14, 0.5, -11)
 d.Size = UDim2.new(0, 200, 0, 22)
@@ -10534,6 +10534,53 @@ bind(UIS.InputChanged, function(i, gp)
 	table.insert(JH.ctrlLog, string.format("%s  AXIS  %s  (%s)  x=%.2f y=%.2f z=%.2f", os.date("%H:%M:%S"), name, i.UserInputType.Name, pos.X, pos.Y, pos.Z))
 	if #JH.ctrlLog > 300 then table.remove(JH.ctrlLog, 1) end
 end)
+UI.Buttons(card, {
+{ "Copy control map (keyboard + controller + mobile)", function()
+local CAS = game:GetService("ContextActionService")
+local okc, infoAll = pcall(function() return CAS:GetAllBoundActionInfo() end)
+local out = { "== CONTROL MAP " .. tostring(VERSION) .. " | place " .. tostring(game.PlaceId) .. " | " .. os.date("%Y-%m-%d %H:%M:%S") }
+if okc and infoAll then
+local names = {}
+for name in pairs(infoAll) do names[#names + 1] = name end
+table.sort(names)
+local pg = LP:FindFirstChild("PlayerGui")
+for _, name in ipairs(names) do
+local d = infoAll[name]
+local keys, pads, touch = {}, {}, false
+for _, t in ipairs(d.inputTypes or {}) do
+local ok2, et = pcall(function() return t.EnumType end)
+if ok2 and et == Enum.KeyCode then
+if string.find(t.Name, "^Button") or string.find(t.Name, "^DPad") or string.find(t.Name, "^Thumbstick") then
+pads[#pads + 1] = t.Name
+else
+keys[#keys + 1] = t.Name
+end
+elseif ok2 and et == Enum.UserInputType and t == Enum.UserInputType.Touch then
+touch = true
+end
+end
+local btn
+if pg then
+for _, d2 in ipairs(pg:GetDescendants()) do
+if d2:IsA("GuiButton") then
+local n = string.lower(d2.Name .. " " .. (d2:IsA("TextButton") and d2.Text or ""))
+if string.find(n, string.lower(name), 1, true) then
+btn = d2:GetFullName()
+break
+end
+end
+end
+end
+out[#out + 1] = string.format("%s | keyboard: %s | controller: %s | touch flag: %s | on-screen button: %s",
+name, #keys > 0 and table.concat(keys, ",") or "none", #pads > 0 and table.concat(pads, ",") or "none",
+tostring(touch), btn or "not found")
+end
+else
+out[#out + 1] = "(could not read the game's bound actions)"
+end
+emit("JHub_control_map.txt", table.concat(out, "\n"), "Control map")
+end },
+})
 end
 end
 -- JUMPSHOT MASTERY INSIDE THE ULTRA GAME RECORDER: which jumpshots in the game have been covered, what was learned for each, and every shot setting the game stores
@@ -11169,7 +11216,7 @@ do
 			l.Parent = box
 			return l
 		end
-		label("JHub V1.33", 22, 14, 28, Color3.fromRGB(255, 255, 255))
+		label("JHub V1.34", 22, 14, 28, Color3.fromRGB(255, 255, 255))
 		local msg = label("Join my Discord to use JHub. Tap Copy invite, join the server, then tap I joined.", 14, 52, 56, Color3.fromRGB(190, 195, 225))
 		msg.Font = Enum.Font.Gotham
 		label(INVITE, 13, 112, 20, Color3.fromRGB(255, 214, 60))
@@ -17887,7 +17934,7 @@ task.spawn(function()
 			local ping = 0
 			pcall(function() ping = math.floor(LP:GetNetworkPing() * 1000) end)
 			local fps = math.floor(JH.FPS + 0.5)
-			InfoText.Text = string.format("JHub V1.33  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
+			InfoText.Text = string.format("JHub V1.34  |  %d FPS  |  %d ms  |  %s", fps, ping, timeStr)
 				.. (Speed.extra > 0 and string.format("  |  BOOST +%.0f", Speed.extra) or "")
 			if not Window.Visible then return end
 			if UI.current and UI.current.name == "Main" then
@@ -20381,7 +20428,7 @@ do
 		end
 		for _, d in ipairs(Header:GetChildren()) do
 			if d:IsA("TextLabel") then
-				d.Text = "JHub V1.33"
+				d.Text = "JHub V1.34"
 				d.TextSize = 20
 				d.Position = UDim2.new(0, 14, 0.5, -11)
 				d.Size = UDim2.new(0, 200, 0, 22)
@@ -22093,6 +22140,53 @@ UI.Note(card, "---- Dex and remote spy ----", "Text")
 				table.insert(JH.ctrlLog, string.format("%s  AXIS  %s  (%s)  x=%.2f y=%.2f z=%.2f", os.date("%H:%M:%S"), name, i.UserInputType.Name, pos.X, pos.Y, pos.Z))
 				if #JH.ctrlLog > 300 then table.remove(JH.ctrlLog, 1) end
 			end)
+			UI.Buttons(card, {
+			{ "Copy control map (keyboard + controller + mobile)", function()
+			local CAS = game:GetService("ContextActionService")
+			local okc, infoAll = pcall(function() return CAS:GetAllBoundActionInfo() end)
+			local out = { "== CONTROL MAP " .. tostring(VERSION) .. " | place " .. tostring(game.PlaceId) .. " | " .. os.date("%Y-%m-%d %H:%M:%S") }
+			if okc and infoAll then
+			local names = {}
+			for name in pairs(infoAll) do names[#names + 1] = name end
+			table.sort(names)
+			local pg = LP:FindFirstChild("PlayerGui")
+			for _, name in ipairs(names) do
+			local d = infoAll[name]
+			local keys, pads, touch = {}, {}, false
+			for _, t in ipairs(d.inputTypes or {}) do
+			local ok2, et = pcall(function() return t.EnumType end)
+			if ok2 and et == Enum.KeyCode then
+			if string.find(t.Name, "^Button") or string.find(t.Name, "^DPad") or string.find(t.Name, "^Thumbstick") then
+			pads[#pads + 1] = t.Name
+			else
+			keys[#keys + 1] = t.Name
+			end
+			elseif ok2 and et == Enum.UserInputType and t == Enum.UserInputType.Touch then
+			touch = true
+			end
+			end
+			local btn
+			if pg then
+			for _, d2 in ipairs(pg:GetDescendants()) do
+			if d2:IsA("GuiButton") then
+			local n = string.lower(d2.Name .. " " .. (d2:IsA("TextButton") and d2.Text or ""))
+			if string.find(n, string.lower(name), 1, true) then
+			btn = d2:GetFullName()
+			break
+			end
+			end
+			end
+			end
+			out[#out + 1] = string.format("%s | keyboard: %s | controller: %s | touch flag: %s | on-screen button: %s",
+			name, #keys > 0 and table.concat(keys, ",") or "none", #pads > 0 and table.concat(pads, ",") or "none",
+			tostring(touch), btn or "not found")
+			end
+			else
+			out[#out + 1] = "(could not read the game's bound actions)"
+			end
+			emit("JHub_control_map.txt", table.concat(out, "\n"), "Control map")
+			end },
+			})
 	end
 end
 -- JUMPSHOT MASTERY INSIDE THE ULTRA GAME RECORDER: which jumpshots in the game have been covered, what was learned for each, and every shot setting the game stores
