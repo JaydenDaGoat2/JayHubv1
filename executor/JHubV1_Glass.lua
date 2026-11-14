@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.67"
+local VERSION = "v1.68"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -7495,6 +7495,16 @@ bind(RunService.Stepped, function(_, dt)
 	local now = tick()
 	local moving = Bot.cmd and now - Bot.cmdT < 0.35 and Bot.cmd.Magnitude > 0.05
 	if moving then
+		-- moving the root by CFrame alone never clears the humanoid's own fall velocity/state, so it sits stuck in Freefall/FallingDown and the walk animation never visually reads as walking even while it's technically playing - force it back to Running and kill vertical velocity every tick we're driving movement
+		local h2 = hum()
+		if h2 then
+			local st = h2:GetState()
+			if st == Enum.HumanoidStateType.Freefall or st == Enum.HumanoidStateType.FallingDown or st == Enum.HumanoidStateType.Ragdoll then
+				h2:ChangeState(Enum.HumanoidStateType.Running)
+			end
+		end
+		local vel = r.AssemblyLinearVelocity
+		if vel and math.abs(vel.Y) > 0.5 then r.AssemblyLinearVelocity = Vector3.new(vel.X, 0, vel.Z) end
 		r.CFrame = r.CFrame + Bot.cmd * Speed.gameWS * Bot.mul * dt
 		Mover.sync(r)
 		-- while guarding (set just before Bot.move is called to guard), prefer the real defensive slide animation over the plain walk
@@ -11297,6 +11307,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.68 - found the real reason the walk animation never showed: moving the root by CFrame alone left the humanoid stuck in Freefall/FallingDown state forever, which hid the walk animation even though it was technically playing - fixed",
 "v1.67 - removed the Discord join gate entirely, replaced with a Discord button in the top right of the menu that copies the invite link",
 "v1.66 - fixed the Discord join gate freezing the whole script for anyone whose click or isfile/writefile did not register - it no longer blocks the real menu from loading",
 "v1.65 - found it: the real walk animation id was being auto-deleted by a leftover bad-id filter, so Auto Guard could never have one; fixed and bootstrapped the confirmed real ids",
@@ -11648,7 +11659,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.67"
+local VERSION = "v1.68"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -19452,6 +19463,16 @@ do
 		local now = tick()
 		local moving = Bot.cmd and now - Bot.cmdT < 0.35 and Bot.cmd.Magnitude > 0.05
 		if moving then
+			-- moving the root by CFrame alone never clears the humanoid's own fall velocity/state, so it sits stuck in Freefall/FallingDown and the walk animation never visually reads as walking even while it's technically playing - force it back to Running and kill vertical velocity every tick we're driving movement
+			local h2 = hum()
+			if h2 then
+				local st = h2:GetState()
+				if st == Enum.HumanoidStateType.Freefall or st == Enum.HumanoidStateType.FallingDown or st == Enum.HumanoidStateType.Ragdoll then
+					h2:ChangeState(Enum.HumanoidStateType.Running)
+				end
+			end
+			local vel = r.AssemblyLinearVelocity
+			if vel and math.abs(vel.Y) > 0.5 then r.AssemblyLinearVelocity = Vector3.new(vel.X, 0, vel.Z) end
 			r.CFrame = r.CFrame + Bot.cmd * Speed.gameWS * Bot.mul * dt
 			Mover.sync(r)
 			local guarding = now - (Bot.guardingNow or 0) < 0.3
@@ -23254,6 +23275,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.68 - found the real reason the walk animation never showed: moving the root by CFrame alone left the humanoid stuck in Freefall/FallingDown state forever, which hid the walk animation even though it was technically playing - fixed",
 "v1.67 - removed the Discord join gate entirely, replaced with a Discord button in the top right of the menu that copies the invite link",
 "v1.66 - fixed the Discord join gate freezing the whole script for anyone whose click or isfile/writefile did not register - it no longer blocks the real menu from loading",
 "v1.65 - found it: the real walk animation id was being auto-deleted by a leftover bad-id filter, so Auto Guard could never have one; fixed and bootstrapped the confirmed real ids",
