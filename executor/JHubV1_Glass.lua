@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.88"
+local VERSION = "v1.89"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -9513,6 +9513,7 @@ local sTimes = UI.Stat(c, "Times seen")
 local sSit = UI.Stat(c, "Situations seen")
 local sRelease = UI.Stat(c, "Release point (of animation)")
 local sRetest = UI.Stat(c, "Needs retest")
+local sNetwork = UI.Stat(c, "Network-wide (everyone)")
 local sKnown = UI.Stat(c, "Known profiles")
 UI.Button(c, "Copy every known shot profile", function()
 local lines = { "== JHub shot intelligence profiles ==" }
@@ -9534,7 +9535,7 @@ end
 end
 copy(table.concat(lines, "\n"), "Shot profiles")
 end)
-UI.Note(c, "Each jumpshot animation gets its own timing profile automatically - switching jumpshots switches profiles, no setup needed. A profile needs enough consistent real shots before it is trusted (locked); until then it is still learning. If a locked profile starts missing consistently, it is automatically unlocked and flagged to retest instead of staying trusted forever. Situations seen also tracks real shot distance (close/mid/three) and catch-and-shoot vs off-the-dribble, from actual position and ball-hold data.")
+UI.Note(c, "Each jumpshot animation gets its own timing profile automatically - switching jumpshots switches profiles, no setup needed. A profile needs enough consistent real shots before it is trusted (locked); until then it is still learning. If a locked profile starts missing consistently, it is automatically unlocked and flagged to retest instead of staying trusted forever. Situations seen also tracks real shot distance (close/mid/three) and catch-and-shoot vs off-the-dribble, from actual position and ball-hold data. Network-wide shows what everyone else running JHub has seen on this same jumpshot, shared the same way the timing pool is - but it never overwrites your own profile, it's just shown alongside it.")
 task.spawn(function()
 while true do
 local cur = Shot.cur
@@ -9571,9 +9572,15 @@ else
 sRelease.Text = "No track data yet"
 end
 if rec and not rec.identified then sStatus.Text = "Unidentified animation" end
+local net = JH.ShotIntel and JH.ShotIntel.Network and JH.ShotIntel.Network[key]
+if net then
+sNetwork.Text = string.format("%d players, %d shots total%s", net.contributors or 0, net.timesSeen or 0, net.needsRetest and " | NEEDS RETEST" or "")
+else
+sNetwork.Text = "No data from other players yet"
+end
 else
 sName.Text, sId.Text, sStatus.Text, sConf.Text, sHold.Text = "-", "-", "Shoot to see it", "-", "-"
-sSeen.Text, sTimes.Text, sSit.Text, sRetest.Text, sRelease.Text = "-", "-", "-", "-", "-"
+sSeen.Text, sTimes.Text, sSit.Text, sRetest.Text, sRelease.Text, sNetwork.Text = "-", "-", "-", "-", "-", "-"
 end
 local known = 0
 for _ in pairs(Shot.FINAL) do known = known + 1 end
@@ -11576,6 +11583,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.89 - Shot Intelligence now shares to the network: each client pushes its own profile stats under its own name (times seen, situations, release-point range, retest flags), and everyone pulls an aggregated view shown as Network-wide on the card - additive only, nobody's push ever overwrites anyone else's own profile data",
 "v1.88 - added real Release-Point Analysis: tracks where in the actual animation (held/track.Length, speed and framerate independent) the release really happens, as a rolling range per profile, shown as Release point on the Shot Intelligence card. Still did not add fake prep/upward/extension/follow-through phase labels since the game exposes no keyframe markers to back those - this one's real, that one still isn't",
 "v1.87 - Shot Intelligence now tags real shot distance (close/mid/three, from actual position vs the hoop) and catch-and-shoot vs off-the-dribble (from how long you'd actually had the ball) per profile - still metadata only, the timing learner itself stays per-animation so this doesn't fragment it. Did not add fake animation-phase detection (prep/release/follow-through) - the game doesn't expose keyframe data to back it, so it's skipped rather than faked",
 "v1.86 - Universal Shot Intelligence: every jumpshot animation now gets a persisted profile (name, length, times seen, situations seen, first/last seen, identified or not), a locked profile that starts missing consistently is automatically unlocked and flagged to retest instead of staying trusted forever, and an animation that cannot be identified is labeled as such instead of silently reusing another profile's data - all shown on the Shot Intelligence card",
@@ -11755,6 +11763,66 @@ local ok, body = pcall(function() return HttpService:JSONEncode(ShotIntel.DB) en
 if ok then S.ShotIntelDB = body saveSoon() end
 end
 task.wait(5)
+end
+end)
+-- NETWORK SHARING: each client pushes its OWN per-profile stats under its own name, never overwriting anyone else's
+-- entry (spec requirement: one client's unverified observations must never overwrite another client's established
+-- profile). ShotIntel.Network holds the aggregated view (sum of times seen/situations across every contributor, widest
+-- release-point range seen, retest flag if ANY contributor raised one) - purely additive, display-only, never written
+-- back into the local ShotIntel.DB used by the learner/confidence system.
+ShotIntel.Network = {}
+local function sanitizeKey(k) return (string.gsub(tostring(k), "[%.%#%$%[%]/]", "_")) end
+local myName2 = Players.LocalPlayer.Name
+local lastPushedShotIntel = {}
+task.spawn(function()
+while true do
+if JH.netPut then
+for key, rec in pairs(ShotIntel.DB) do
+local now = tick()
+if (lastPushedShotIntel[key] or 0) + 15 < now then
+lastPushedShotIntel[key] = now
+task.spawn(JH.netPut, "shotintel/" .. sanitizeKey(key) .. "/" .. sanitizeKey(myName2), {
+name = Shot.nameFor(key), timesSeen = rec.timesSeen or 0, sits = rec.sits or {},
+releaseAvg = rec.releaseAvg, releaseLo = rec.releaseLo, releaseHi = rec.releaseHi,
+needsRetest = rec.needsRetest == true, identified = rec.identified ~= false, t = os.time(),
+})
+end
+end
+end
+task.wait(3)
+end
+end)
+task.spawn(function()
+while true do
+if JH.netGet then
+local ok, data = pcall(JH.netGet, "shotintel")
+if ok and type(data) == "table" then
+local agg = {}
+for key, contributors in pairs(data) do
+if type(contributors) == "table" then
+local merged = { name = nil, timesSeen = 0, sits = {}, releaseLo = 1, releaseHi = 0, releaseSum = 0, releaseN = 0, needsRetest = false, contributors = 0 }
+for _, c in pairs(contributors) do
+if type(c) == "table" then
+merged.contributors = merged.contributors + 1
+merged.name = merged.name or c.name
+merged.timesSeen = merged.timesSeen + (tonumber(c.timesSeen) or 0)
+if type(c.sits) == "table" then
+for sitName, cnt in pairs(c.sits) do merged.sits[sitName] = (merged.sits[sitName] or 0) + (tonumber(cnt) or 0) end
+end
+if c.releaseLo then merged.releaseLo = math.min(merged.releaseLo, c.releaseLo) end
+if c.releaseHi then merged.releaseHi = math.max(merged.releaseHi, c.releaseHi) end
+if c.releaseAvg then merged.releaseSum, merged.releaseN = merged.releaseSum + c.releaseAvg, merged.releaseN + 1 end
+if c.needsRetest then merged.needsRetest = true end
+end
+end
+if merged.releaseN > 0 then merged.releaseAvg = merged.releaseSum / merged.releaseN end
+agg[key] = merged
+end
+end
+ShotIntel.Network = agg
+end
+end
+task.wait(10)
 end
 end)
 -- CONFIDENCE AND VALIDATION SYSTEM: per-key ring buffer of recent verdicts, kept in memory only (not persisted, lightweight)
@@ -12069,7 +12137,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.88"
+local VERSION = "v1.89"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -21892,6 +21960,7 @@ local sTimes = UI.Stat(c, "Times seen")
 local sSit = UI.Stat(c, "Situations seen")
 local sRelease = UI.Stat(c, "Release point (of animation)")
 local sRetest = UI.Stat(c, "Needs retest")
+local sNetwork = UI.Stat(c, "Network-wide (everyone)")
 local sKnown = UI.Stat(c, "Known profiles")
 UI.Button(c, "Copy every known shot profile", function()
 local lines = { "== JHub shot intelligence profiles ==" }
@@ -21913,7 +21982,7 @@ end
 end
 copy(table.concat(lines, "\n"), "Shot profiles")
 end)
-UI.Note(c, "Each jumpshot animation gets its own timing profile automatically - switching jumpshots switches profiles, no setup needed. A profile needs enough consistent real shots before it is trusted (locked); until then it is still learning. If a locked profile starts missing consistently, it is automatically unlocked and flagged to retest instead of staying trusted forever. Situations seen also tracks real shot distance (close/mid/three) and catch-and-shoot vs off-the-dribble, from actual position and ball-hold data.")
+UI.Note(c, "Each jumpshot animation gets its own timing profile automatically - switching jumpshots switches profiles, no setup needed. A profile needs enough consistent real shots before it is trusted (locked); until then it is still learning. If a locked profile starts missing consistently, it is automatically unlocked and flagged to retest instead of staying trusted forever. Situations seen also tracks real shot distance (close/mid/three) and catch-and-shoot vs off-the-dribble, from actual position and ball-hold data. Network-wide shows what everyone else running JHub has seen on this same jumpshot, shared the same way the timing pool is - but it never overwrites your own profile, it's just shown alongside it.")
 task.spawn(function()
 while true do
 local cur = Shot.cur
@@ -21950,9 +22019,15 @@ else
 sRelease.Text = "No track data yet"
 end
 if rec and not rec.identified then sStatus.Text = "Unidentified animation" end
+local net = JH.ShotIntel and JH.ShotIntel.Network and JH.ShotIntel.Network[key]
+if net then
+sNetwork.Text = string.format("%d players, %d shots total%s", net.contributors or 0, net.timesSeen or 0, net.needsRetest and " | NEEDS RETEST" or "")
+else
+sNetwork.Text = "No data from other players yet"
+end
 else
 sName.Text, sId.Text, sStatus.Text, sConf.Text, sHold.Text = "-", "-", "Shoot to see it", "-", "-"
-sSeen.Text, sTimes.Text, sSit.Text, sRetest.Text, sRelease.Text = "-", "-", "-", "-", "-"
+sSeen.Text, sTimes.Text, sSit.Text, sRetest.Text, sRelease.Text, sNetwork.Text = "-", "-", "-", "-", "-", "-"
 end
 local known = 0
 for _ in pairs(Shot.FINAL) do known = known + 1 end
@@ -23955,6 +24030,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.89 - Shot Intelligence now shares to the network: each client pushes its own profile stats under its own name (times seen, situations, release-point range, retest flags), and everyone pulls an aggregated view shown as Network-wide on the card - additive only, nobody's push ever overwrites anyone else's own profile data",
 "v1.88 - added real Release-Point Analysis: tracks where in the actual animation (held/track.Length, speed and framerate independent) the release really happens, as a rolling range per profile, shown as Release point on the Shot Intelligence card. Still did not add fake prep/upward/extension/follow-through phase labels since the game exposes no keyframe markers to back those - this one's real, that one still isn't",
 "v1.87 - Shot Intelligence now tags real shot distance (close/mid/three, from actual position vs the hoop) and catch-and-shoot vs off-the-dribble (from how long you'd actually had the ball) per profile - still metadata only, the timing learner itself stays per-animation so this doesn't fragment it. Did not add fake animation-phase detection (prep/release/follow-through) - the game doesn't expose keyframe data to back it, so it's skipped rather than faked",
 "v1.86 - Universal Shot Intelligence: every jumpshot animation now gets a persisted profile (name, length, times seen, situations seen, first/last seen, identified or not), a locked profile that starts missing consistently is automatically unlocked and flagged to retest instead of staying trusted forever, and an animation that cannot be identified is labeled as such instead of silently reusing another profile's data - all shown on the Shot Intelligence card",
@@ -24134,6 +24210,66 @@ local ok, body = pcall(function() return HttpService:JSONEncode(ShotIntel.DB) en
 if ok then S.ShotIntelDB = body saveSoon() end
 end
 task.wait(5)
+end
+end)
+-- NETWORK SHARING: each client pushes its OWN per-profile stats under its own name, never overwriting anyone else's
+-- entry (spec requirement: one client's unverified observations must never overwrite another client's established
+-- profile). ShotIntel.Network holds the aggregated view (sum of times seen/situations across every contributor, widest
+-- release-point range seen, retest flag if ANY contributor raised one) - purely additive, display-only, never written
+-- back into the local ShotIntel.DB used by the learner/confidence system.
+ShotIntel.Network = {}
+local function sanitizeKey(k) return (string.gsub(tostring(k), "[%.%#%$%[%]/]", "_")) end
+local myName2 = Players.LocalPlayer.Name
+local lastPushedShotIntel = {}
+task.spawn(function()
+while true do
+if JH.netPut then
+for key, rec in pairs(ShotIntel.DB) do
+local now = tick()
+if (lastPushedShotIntel[key] or 0) + 15 < now then
+lastPushedShotIntel[key] = now
+task.spawn(JH.netPut, "shotintel/" .. sanitizeKey(key) .. "/" .. sanitizeKey(myName2), {
+name = Shot.nameFor(key), timesSeen = rec.timesSeen or 0, sits = rec.sits or {},
+releaseAvg = rec.releaseAvg, releaseLo = rec.releaseLo, releaseHi = rec.releaseHi,
+needsRetest = rec.needsRetest == true, identified = rec.identified ~= false, t = os.time(),
+})
+end
+end
+end
+task.wait(3)
+end
+end)
+task.spawn(function()
+while true do
+if JH.netGet then
+local ok, data = pcall(JH.netGet, "shotintel")
+if ok and type(data) == "table" then
+local agg = {}
+for key, contributors in pairs(data) do
+if type(contributors) == "table" then
+local merged = { name = nil, timesSeen = 0, sits = {}, releaseLo = 1, releaseHi = 0, releaseSum = 0, releaseN = 0, needsRetest = false, contributors = 0 }
+for _, c in pairs(contributors) do
+if type(c) == "table" then
+merged.contributors = merged.contributors + 1
+merged.name = merged.name or c.name
+merged.timesSeen = merged.timesSeen + (tonumber(c.timesSeen) or 0)
+if type(c.sits) == "table" then
+for sitName, cnt in pairs(c.sits) do merged.sits[sitName] = (merged.sits[sitName] or 0) + (tonumber(cnt) or 0) end
+end
+if c.releaseLo then merged.releaseLo = math.min(merged.releaseLo, c.releaseLo) end
+if c.releaseHi then merged.releaseHi = math.max(merged.releaseHi, c.releaseHi) end
+if c.releaseAvg then merged.releaseSum, merged.releaseN = merged.releaseSum + c.releaseAvg, merged.releaseN + 1 end
+if c.needsRetest then merged.needsRetest = true end
+end
+end
+if merged.releaseN > 0 then merged.releaseAvg = merged.releaseSum / merged.releaseN end
+agg[key] = merged
+end
+end
+ShotIntel.Network = agg
+end
+end
+task.wait(10)
 end
 end)
 -- CONFIDENCE AND VALIDATION SYSTEM: per-key ring buffer of recent verdicts, kept in memory only (not persisted, lightweight)
