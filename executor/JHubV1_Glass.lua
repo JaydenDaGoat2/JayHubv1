@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.94"
+local VERSION = "v1.95"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -11806,6 +11806,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.95 - fixed hard-locked jumpshots (the ones that hit a real Perfect) still occasionally missing early/late/slightly afterward: a locked shot was only ever given a fixed starting point while still running the same live bar-prediction every shot, so real variance (ping/fps/bar noise) could still move the actual release. Now a locked jumpshot is promoted into the same flat, non-predicted path the built-in confirmed shots use - the exact same release every time, not a new prediction each time starting from the same seed. Applies per exact animation ID, and still shares to anyone using that same jumpshot",
 "v1.94 - added a live catch to Auto Green: the real bar position (meterOffset, the game's own attribute, not a guess) is watched every time it actually moves, and the instant it reaches the learned target it releases right then (ping-compensated), instead of only relying on predicting ahead of time where it will be - closer to \"freeze the moment it touches green\" than a prediction ever could be",
 "v1.93 - fixed tap-to-shoot producing a pump fake: Shot.result already treats a release before the game's own Action attribute reaches \"Shooting\" as a pump fake - releasing our synthetic hold before that actually happened was the real cause, now it waits briefly for it first. Also reverted v1.92 accidentally forcing Shot Style to Hold permanently (a real bug, your Tap setting is preserved now, with a toggle back on Auto Green since the dropdown was removed). Also added a small bounded late-bias to the peak-fit release prediction, proportional to that jumpshot's own measured precision - never aims early on purpose, and if it's going to miss, errs toward landing just past the peak (still green) instead of short of it",
 "v1.92 - big batch: Auto Calibrate renamed Ultra Auto Calibrate with momentum (repeated same-direction misses accelerate the step instead of crawling); Shooting tab trimmed to Auto Green/Ultra Auto Calibrate/Shot Time/adjust sliders only, everything else (shot style, perfect green, auto timing) forced on and hidden instead of being toggles; new Shot Time card (per-category release offset for jump/fade/post fade/layup/dunk, save+share as a named config); new hidden always-on Shot Stabilizer (ping comp auto-scales from real ping/FPS, no manual slider); new Settings tab (copy your whole config, upload/search/load named configs); defense contest highlight on whoever you're actually guarding (4 tiers by real distance); Dev renamed Co-Owner (blue), Mod now red; new Owner/Co-Owner/Mod-only announcement banner at the top of the screen; Discord button icon replaced with a drawn mark instead of a bare 'D'. Did not add predictive pre-shot animation detection (no real signal exists before the animation starts) or touch Glide/dribble code (no diagnostic evidence provided)",
@@ -11932,6 +11933,16 @@ saveSoon()
 end
 end
 JH.hardLocked = readHard()
+-- a hard-locked jumpshot used to only get a fixed SEED value while still running through the same live peak-fit bar
+-- extrapolation every shot - meaning its actual release still varied shot to shot with ping/fps/bar noise, so a real
+-- Perfect did not actually stop later early/late/slightly misses on that same shot like it was supposed to. Promoting
+-- the locked hold straight into Shot.FINAL routes it through the flat, non-extrapolated path the built-in confirmed
+-- shots already use - the same exact release every time, not just the same starting point for a live prediction.
+Shot.autoLoad()
+for k in pairs(JH.hardLocked) do
+local a = Shot.auto[k]
+if a and a.hold and not Shot.FINAL[k] then Shot.FINAL[k] = a.hold end
+end
 local prevLearnHL = Shot.autoLearn
 function Shot.autoLearn(info, res, strength)
 if info and info.key and JH.hardLocked[info.key] then return true end
@@ -11945,8 +11956,9 @@ end
 a.hold, a.locked, a.mode = info.lead, true, "peak"
 JH.hardLocked[info.key] = true
 addHard(info.key)
+Shot.FINAL[info.key] = a.hold
 task.spawn(netPut, "timing/" .. sanitize(info.key), { lead = a.hold, n = 9999, hard = true, by = myName, t = os.time() })
-notify("Timing locked", "Jumpshot " .. tostring(Shot.nameFor and Shot.nameFor(info.key) or info.key) .. " hit a real Perfect, its timing is locked forever and shared.", 5)
+notify("Timing locked", "Jumpshot " .. tostring(Shot.nameFor and Shot.nameFor(info.key) or info.key) .. " hit a real Perfect, its timing is locked forever and shared - it will shoot the exact same way every time now.", 5)
 end
 return r
 end
@@ -11960,6 +11972,7 @@ addHard(key)
 Shot.auto[key] = Shot.auto[key] or {}
 local a = Shot.auto[key]
 a.hold, a.locked, a.mode, a.greens, a.bin = net.lead, true, "peak", a.greens or {}, a.bin or S.PeakBin
+Shot.FINAL[key] = a.hold
 return a.hold
 end
 return prevSeedHL(key)
@@ -12242,7 +12255,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.94"
+local VERSION = "v1.95"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -24337,6 +24350,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.95 - fixed hard-locked jumpshots (the ones that hit a real Perfect) still occasionally missing early/late/slightly afterward: a locked shot was only ever given a fixed starting point while still running the same live bar-prediction every shot, so real variance (ping/fps/bar noise) could still move the actual release. Now a locked jumpshot is promoted into the same flat, non-predicted path the built-in confirmed shots use - the exact same release every time, not a new prediction each time starting from the same seed. Applies per exact animation ID, and still shares to anyone using that same jumpshot",
 "v1.94 - added a live catch to Auto Green: the real bar position (meterOffset, the game's own attribute, not a guess) is watched every time it actually moves, and the instant it reaches the learned target it releases right then (ping-compensated), instead of only relying on predicting ahead of time where it will be - closer to \"freeze the moment it touches green\" than a prediction ever could be",
 "v1.93 - fixed tap-to-shoot producing a pump fake: Shot.result already treats a release before the game's own Action attribute reaches \"Shooting\" as a pump fake - releasing our synthetic hold before that actually happened was the real cause, now it waits briefly for it first. Also reverted v1.92 accidentally forcing Shot Style to Hold permanently (a real bug, your Tap setting is preserved now, with a toggle back on Auto Green since the dropdown was removed). Also added a small bounded late-bias to the peak-fit release prediction, proportional to that jumpshot's own measured precision - never aims early on purpose, and if it's going to miss, errs toward landing just past the peak (still green) instead of short of it",
 "v1.92 - big batch: Auto Calibrate renamed Ultra Auto Calibrate with momentum (repeated same-direction misses accelerate the step instead of crawling); Shooting tab trimmed to Auto Green/Ultra Auto Calibrate/Shot Time/adjust sliders only, everything else (shot style, perfect green, auto timing) forced on and hidden instead of being toggles; new Shot Time card (per-category release offset for jump/fade/post fade/layup/dunk, save+share as a named config); new hidden always-on Shot Stabilizer (ping comp auto-scales from real ping/FPS, no manual slider); new Settings tab (copy your whole config, upload/search/load named configs); defense contest highlight on whoever you're actually guarding (4 tiers by real distance); Dev renamed Co-Owner (blue), Mod now red; new Owner/Co-Owner/Mod-only announcement banner at the top of the screen; Discord button icon replaced with a drawn mark instead of a bare 'D'. Did not add predictive pre-shot animation detection (no real signal exists before the animation starts) or touch Glide/dribble code (no diagnostic evidence provided)",
@@ -24463,6 +24477,16 @@ saveSoon()
 end
 end
 JH.hardLocked = readHard()
+-- a hard-locked jumpshot used to only get a fixed SEED value while still running through the same live peak-fit bar
+-- extrapolation every shot - meaning its actual release still varied shot to shot with ping/fps/bar noise, so a real
+-- Perfect did not actually stop later early/late/slightly misses on that same shot like it was supposed to. Promoting
+-- the locked hold straight into Shot.FINAL routes it through the flat, non-extrapolated path the built-in confirmed
+-- shots already use - the same exact release every time, not just the same starting point for a live prediction.
+Shot.autoLoad()
+for k in pairs(JH.hardLocked) do
+local a = Shot.auto[k]
+if a and a.hold and not Shot.FINAL[k] then Shot.FINAL[k] = a.hold end
+end
 local prevLearnHL = Shot.autoLearn
 function Shot.autoLearn(info, res, strength)
 if info and info.key and JH.hardLocked[info.key] then return true end
@@ -24476,8 +24500,9 @@ end
 a.hold, a.locked, a.mode = info.lead, true, "peak"
 JH.hardLocked[info.key] = true
 addHard(info.key)
+Shot.FINAL[info.key] = a.hold
 task.spawn(netPut, "timing/" .. sanitize(info.key), { lead = a.hold, n = 9999, hard = true, by = myName, t = os.time() })
-notify("Timing locked", "Jumpshot " .. tostring(Shot.nameFor and Shot.nameFor(info.key) or info.key) .. " hit a real Perfect, its timing is locked forever and shared.", 5)
+notify("Timing locked", "Jumpshot " .. tostring(Shot.nameFor and Shot.nameFor(info.key) or info.key) .. " hit a real Perfect, its timing is locked forever and shared - it will shoot the exact same way every time now.", 5)
 end
 return r
 end
@@ -24491,6 +24516,7 @@ addHard(key)
 Shot.auto[key] = Shot.auto[key] or {}
 local a = Shot.auto[key]
 a.hold, a.locked, a.mode, a.greens, a.bin = net.lead, true, "peak", a.greens or {}, a.bin or S.PeakBin
+Shot.FINAL[key] = a.hold
 return a.hold
 end
 return prevSeedHL(key)
