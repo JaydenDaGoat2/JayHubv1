@@ -52,9 +52,64 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.02"
+local VERSION = "v2.03"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
+
+-- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
+-- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
+-- runs before any menu, feature or setting exists, so there is nothing to recover a "full" working copy from.
+do
+	local AUTH_URL = "https://jayhubv1-default-rtdb.firebaseio.com/control.json"
+	local allowed, reason = true, nil
+	pcall(function()
+		local fn = request or http_request or (syn and syn.request) or (http and http.request)
+		local body
+		if type(fn) == "function" then
+			local ok, res = pcall(fn, { Url = AUTH_URL, Method = "GET" })
+			if ok and type(res) == "table" then body = res.Body end
+		end
+		if not body then
+			local ok2, b2 = pcall(function() return game:HttpGet(AUTH_URL) end)
+			if ok2 then body = b2 end
+		end
+		if type(body) ~= "string" or body == "" or body == "null" then return end
+		local ok3, data = pcall(function() return HttpService:JSONDecode(body) end)
+		if not ok3 or type(data) ~= "table" then return end
+		if data.enabled == false then
+			allowed, reason = false, tostring(data.message or "This script has been turned off by its owner.")
+			return
+		end
+		local banned = data.banned
+		if type(banned) == "table" then
+			local uid, name = tostring(LP.UserId), LP.Name
+			if banned[uid] or banned[name] then
+				allowed, reason = false, "You have been blocked from using this script."
+			end
+		end
+	end)
+	if not allowed then
+		pcall(function()
+			local sg = Instance.new("ScreenGui")
+			sg.Name = "JHubBlocked"
+			sg.ResetOnSpawn = false
+			local ok = pcall(function() sg.Parent = (gethui and gethui()) or game:GetService("CoreGui") end)
+			if not ok or not sg.Parent then sg.Parent = LP:WaitForChild("PlayerGui") end
+			local t = Instance.new("TextLabel")
+			t.Size = UDim2.fromOffset(360, 60)
+			t.Position = UDim2.new(0.5, -180, 0, 20)
+			t.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+			t.TextColor3 = Color3.new(1, 1, 1)
+			t.Font = Enum.Font.GothamBold
+			t.TextSize = 14
+			t.TextWrapped = true
+			t.Text = reason or "This script is not available right now."
+			t.Parent = sg
+		end)
+		return
+	end
+end
+
 local function cam() return workspace.CurrentCamera end
 local function bind(signal, fn)
 local c = signal:Connect(fn)
@@ -9941,6 +9996,40 @@ ownerCode = ""
 if ownerCodeBox then ownerCodeBox.Text = "" end
 end, true)
 UI.Note(rolesCard, "Anyone named here gets a badge next to their name in JHub Chat for everyone - Owners get a gold crown and #owner, Co-Owners/Mods get their own tag. Multiple people can hold each role. Adding or changing an Owner needs the Owner code; Co-Owner/Mod only need the tab code. 'Add me as...' fills in your own player name for you.")
+local accCard = UI.Card(OP, "Access control")
+UI.Note(accCard, "Every copy of this script checks in with this list before it loads anything. Turning it off, or blocking a name, breaks it for them immediately - no reinstall needed on their end, and it does not matter whether they have a cracked/deobfuscated copy of the file. Needs the Owner code.")
+UI.Button(accCard, "Turn the script OFF for everyone", function()
+if string.lower(string.gsub(ownerCode, "%s", "")) ~= "jay" then notify("Access control", "Wrong owner code.", 3) return end
+if JH.netPut then task.spawn(JH.netPut, "control/enabled", false) end
+notify("Access control", "Script disabled for everyone. They will see a blocked message next load.", 5)
+ownerCode = ""
+if ownerCodeBox then ownerCodeBox.Text = "" end
+end, true)
+UI.Button(accCard, "Turn the script back ON for everyone", function()
+if string.lower(string.gsub(ownerCode, "%s", "")) ~= "jay" then notify("Access control", "Wrong owner code.", 3) return end
+if JH.netPut then task.spawn(JH.netPut, "control/enabled", true) end
+notify("Access control", "Script re-enabled for everyone.", 4)
+ownerCode = ""
+if ownerCodeBox then ownerCodeBox.Text = "" end
+end)
+UI.Buttons(accCard, {
+{ "Block picked", function()
+if pickedName == "" then notify("Access control", "Click a name from the list in Chat roles first", 3) return end
+if string.lower(string.gsub(ownerCode, "%s", "")) ~= "jay" then notify("Access control", "Wrong owner code.", 3) return end
+if JH.netPut and JH.sanitizeName then task.spawn(JH.netPut, "control/banned/" .. JH.sanitizeName(pickedName), true) end
+notify("Access control", "Blocked " .. pickedName .. ". Their next load will refuse to run.", 5)
+ownerCode = ""
+if ownerCodeBox then ownerCodeBox.Text = "" end
+end },
+{ "Unblock picked", function()
+if pickedName == "" then notify("Access control", "Click a name from the list in Chat roles first", 3) return end
+if string.lower(string.gsub(ownerCode, "%s", "")) ~= "jay" then notify("Access control", "Wrong owner code.", 3) return end
+if JH.netPut and JH.sanitizeName then task.spawn(JH.netPut, "control/banned/" .. JH.sanitizeName(pickedName), false) end
+notify("Access control", "Unblocked " .. pickedName .. ".", 4)
+ownerCode = ""
+if ownerCodeBox then ownerCodeBox.Text = "" end
+end },
+})
 local annCard = UI.Card(OP, "Announcement")
 local annText = ""
 local annBox = UI.Input(annCard, "Message (pops up at the top of everyone's screen)", { get = function() return annText end, set = function(v) annText = tostring(v or "") end }, nil, "type an announcement")
@@ -11835,6 +11924,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.03 - added a server check-in before anything loads: the script now asks the backend if it's allowed to run before building any menu or feature, so a leaked or deobfuscated copy of the file still does nothing without that approval. New Access control card in the Owner tab: a remote kill switch for the whole script, and block/unblock by picked name, both take effect on someone's next load with no update needed on their end",
 "v2.02 - found it: a \"keep glides off the shot\" feature (GlideShotSafe) was gating Glide.fire and Speed.step behind a shoot-button-held check that could get stuck true, which silently killed Shot Glide, Gather Step Glide, and ALL speed boosts (walk/run/ball) together - forced that feature off, and fixed Gather Step Glide being grouped with Dribble Glide in its block list (a gather step isn't a dribble, it shouldn't pause for the shot)",
 "v2.01 - reverted the meter late-bias, the tap-to-shoot Action-wait fix, and the locked-jumpshot-promotion fix - the bar was stopping/missing badly after those went back in. Shot Green Stabilizer stays (that one wasn't the problem). Back to plain prediction-only release timing on top of v2.00",
 "v2.00 - added a Sound ID picker under Alerts and keys: 6 unverified candidate Roblox audio IDs pulled from the web (not labeled, not confirmed to work or sound like anything specific - a real search turned up almost nothing usable), pick one to try as the Green sound ID",
@@ -12239,7 +12329,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.02"
+local VERSION = "v2.03"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -22463,6 +22553,40 @@ ownerCode = ""
 if ownerCodeBox then ownerCodeBox.Text = "" end
 end, true)
 UI.Note(rolesCard, "Anyone named here gets a badge next to their name in JHub Chat for everyone - Owners get a gold crown and #owner, Co-Owners/Mods get their own tag. Multiple people can hold each role. Adding or changing an Owner needs the Owner code; Co-Owner/Mod only need the tab code. 'Add me as...' fills in your own player name for you.")
+local accCard = UI.Card(OP, "Access control")
+UI.Note(accCard, "Every copy of this script checks in with this list before it loads anything. Turning it off, or blocking a name, breaks it for them immediately - no reinstall needed on their end, and it does not matter whether they have a cracked/deobfuscated copy of the file. Needs the Owner code.")
+UI.Button(accCard, "Turn the script OFF for everyone", function()
+if string.lower(string.gsub(ownerCode, "%s", "")) ~= "jay" then notify("Access control", "Wrong owner code.", 3) return end
+if JH.netPut then task.spawn(JH.netPut, "control/enabled", false) end
+notify("Access control", "Script disabled for everyone. They will see a blocked message next load.", 5)
+ownerCode = ""
+if ownerCodeBox then ownerCodeBox.Text = "" end
+end, true)
+UI.Button(accCard, "Turn the script back ON for everyone", function()
+if string.lower(string.gsub(ownerCode, "%s", "")) ~= "jay" then notify("Access control", "Wrong owner code.", 3) return end
+if JH.netPut then task.spawn(JH.netPut, "control/enabled", true) end
+notify("Access control", "Script re-enabled for everyone.", 4)
+ownerCode = ""
+if ownerCodeBox then ownerCodeBox.Text = "" end
+end)
+UI.Buttons(accCard, {
+{ "Block picked", function()
+if pickedName == "" then notify("Access control", "Click a name from the list in Chat roles first", 3) return end
+if string.lower(string.gsub(ownerCode, "%s", "")) ~= "jay" then notify("Access control", "Wrong owner code.", 3) return end
+if JH.netPut and JH.sanitizeName then task.spawn(JH.netPut, "control/banned/" .. JH.sanitizeName(pickedName), true) end
+notify("Access control", "Blocked " .. pickedName .. ". Their next load will refuse to run.", 5)
+ownerCode = ""
+if ownerCodeBox then ownerCodeBox.Text = "" end
+end },
+{ "Unblock picked", function()
+if pickedName == "" then notify("Access control", "Click a name from the list in Chat roles first", 3) return end
+if string.lower(string.gsub(ownerCode, "%s", "")) ~= "jay" then notify("Access control", "Wrong owner code.", 3) return end
+if JH.netPut and JH.sanitizeName then task.spawn(JH.netPut, "control/banned/" .. JH.sanitizeName(pickedName), false) end
+notify("Access control", "Unblocked " .. pickedName .. ".", 4)
+ownerCode = ""
+if ownerCodeBox then ownerCodeBox.Text = "" end
+end },
+})
 local annCard = UI.Card(OP, "Announcement")
 local annText = ""
 local annBox = UI.Input(annCard, "Message (pops up at the top of everyone's screen)", { get = function() return annText end, set = function(v) annText = tostring(v or "") end }, nil, "type an announcement")
@@ -24354,6 +24478,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.03 - added a server check-in before anything loads: the script now asks the backend if it's allowed to run before building any menu or feature, so a leaked or deobfuscated copy of the file still does nothing without that approval. New Access control card in the Owner tab: a remote kill switch for the whole script, and block/unblock by picked name, both take effect on someone's next load with no update needed on their end",
 "v2.02 - found it: a \"keep glides off the shot\" feature (GlideShotSafe) was gating Glide.fire and Speed.step behind a shoot-button-held check that could get stuck true, which silently killed Shot Glide, Gather Step Glide, and ALL speed boosts (walk/run/ball) together - forced that feature off, and fixed Gather Step Glide being grouped with Dribble Glide in its block list (a gather step isn't a dribble, it shouldn't pause for the shot)",
 "v2.01 - reverted the meter late-bias, the tap-to-shoot Action-wait fix, and the locked-jumpshot-promotion fix - the bar was stopping/missing badly after those went back in. Shot Green Stabilizer stays (that one wasn't the problem). Back to plain prediction-only release timing on top of v2.00",
 "v2.00 - added a Sound ID picker under Alerts and keys: 6 unverified candidate Roblox audio IDs pulled from the web (not labeled, not confirmed to work or sound like anything specific - a real search turned up almost nothing usable), pick one to try as the Green sound ID",
