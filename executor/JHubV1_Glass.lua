@@ -76,7 +76,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.13"
+local VERSION = "v2.14"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -6456,7 +6456,7 @@ do
 		for _, k in ipairs({ "AdaptPlus", "SmartSteps", "AutoAdaptAll", "AllJumpers", "LagSync", "PrecFit" }) do UI.set(k, v, false) end
 	end)
 	UI.Slider(cal, "Learn speed (10 = near instant)", "CalSpeed", 0.1, 10, 0.1, 1)
-	UI.Note(cal, "Turning this on also turns on the faster/centered learning, smarter step sizing, and shared learning across every jumper that Auto Green MAX uses - this is the strongest the learner gets.")
+	UI.Note(cal, "Turning this on also turns on the faster/centered learning, smarter step sizing, and shared learning across every jumper that Auto Green MAX uses - this is the strongest the learner gets. It also pulls in timing other people running this script have already found: an exact shot someone has confirmed Perfects on locks in for you immediately, and even a shot nobody has ever taken yet starts from the community's average for that whole style of shot (every jumpshot, every fade, etc) instead of a blind guess - no other script shares that.")
 	UI.Button(cal, "Forget learned animations", function()
 		Shot.autoReset()
 		notify("Auto Green", "Learned animations cleared", 2)
@@ -12431,6 +12431,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.14 - Ultra Auto Calibrate now shares timing per shot FAMILY across the network too (every jumpshot together, every fade together, every step back together, etc), not just exact-shot locks - so a jumpshot literally nobody has ever taken yet still starts from everyone's combined experience with that whole style of shot instead of a blind guess, the moment it's ever played for the first time anywhere. An exact-shot lock, local or shared, always takes over the instant one exists.",
 "v2.13 - Fixed loading several copies of the menu at once on some setups. A second (or third, or seventh) copy starting at almost the same moment as the first used to pass right by the check that is supposed to close the previous copy, because that check ran before a wait that let every copy race ahead together, and only the very last one to finish actually took over the slot - so every other one it ran past stayed open as its own full, live menu. The slot is now claimed the instant the check runs, before anything that can cause that race, so only one copy ever stays open no matter how many start up together.",
 "v2.12 - Found the real reason Auto Guard never showed any animation: it was moving by CFrame-teleporting the character, so the Humanoid itself never registered as walking and no clip we forced on top ever stuck. It no longer moves that way at all - it now drives itself purely through the same MoveDirection remote a real joystick fires, with the real Guard button held, so the server moves it for real and the game's own animation system picks the real walk/defensive-slide clip on its own, same as it does for a real player.",
 "v2.11 - Auto Guard now plays the real left/right/forward/backward defensive slide animation that matches the direction it is actually sliding in, instead of always forcing the forward walk clip while moving sideways or backward - this is what made it look like it was just gliding. It also now holds the real defensive stance when it catches up and stops instead of freezing with no animation.",
@@ -12726,6 +12727,70 @@ a.hold, a.locked, a.mode, a.greens, a.bin = net.lead, true, "peak", a.greens or 
 return a.hold
 end
 return prevSeedHL(key)
+end
+-- NETWORK FAMILY TIMING POOL: Ultra Auto Calibrate also shares the average timing per shot FAMILY (every jumpshot together,
+-- every fade together, every step back together, and so on) across the network, not just per-exact-shot locks above.
+-- This is what lets a jumpshot literally nobody has ever taken yet still start from a good, community-informed guess the
+-- very first time anyone anywhere plays it, instead of the blind default everyone else's scripts fall back to - it only
+-- ever applies when there is nothing better yet (no personal attempts, no exact-shot lock, local or shared), and a real
+-- exact-shot lock immediately takes over the moment one exists.
+local function readFamNet()
+local t = {}
+for fam, v, n in string.gmatch(S.FamLead or "", "(%a+)=([%d%.]+):(%d+)") do t[fam] = { tonumber(v), tonumber(n) } end
+return t
+end
+Net.famLead = {}
+local lastFamPush = {}
+local prevLearnFam = Shot.autoLearn
+function Shot.autoLearn(info, res, strength)
+local r = prevLearnFam(info, res, strength)
+if S.AutoCalibrate and info and info.key then
+local fam = Shot.familyOf(info.key)
+if fam then
+local d = readFamNet()[fam]
+if d and d[2] >= 2 and (lastFamPush[fam] or 0) + 10 < tick() then
+lastFamPush[fam] = tick()
+task.spawn(netPut, "famtiming2/" .. sanitize(fam) .. "/" .. sanitize(myName), { lead = d[1], n = d[2], t = os.time() })
+end
+end
+end
+return r
+end
+task.spawn(function()
+while JH.Running do
+local data = netGet("famtiming2")
+if type(data) == "table" then
+local merged = {}
+for fam, per in pairs(data) do
+if type(per) == "table" then
+local wsum, vsum = 0, 0
+for _, v in pairs(per) do
+if type(v) == "table" and type(v.lead) == "number" and v.lead >= 0 and v.lead <= 0.1 then
+local w = math.min(tonumber(v.n) or 1, 20)
+wsum, vsum = wsum + w, vsum + v.lead * w
+end
+end
+if wsum > 0 then merged[fam] = vsum / wsum end
+end
+end
+Net.famLead = merged
+end
+task.wait(8)
+end
+end)
+local prevSeedFam = Shot.seedLead
+function Shot.seedLead(key)
+if S.AutoCalibrate and not Shot.FINAL[key] then
+local a = Shot.auto and Shot.auto[key]
+local hasOwnData = (a and (a.locked or (a.n or 0) > 0)) or JH.hardLocked[key]
+local netKey = Net.lead[sanitize(key)]
+if not hasOwnData and not (netKey and netKey.lead) then
+local fam = Shot.familyOf(key)
+local fl = fam and Net.famLead[fam]
+if fl then return clamp(fl, 0, 0.1) end
+end
+end
+return prevSeedFam(key)
 end
 -- SHOT STABILIZER: hidden, always on, not a setting anyone can turn off. Scales ping compensation automatically from
 -- real measured ping and real FPS instead of a manual slider, so someone on 50+ ms ping or dropping frames still gets
@@ -13140,7 +13205,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.13"
+local VERSION = "v2.14"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -19520,7 +19585,7 @@ do
 		for _, k in ipairs({ "AdaptPlus", "SmartSteps", "AutoAdaptAll", "AllJumpers", "LagSync", "PrecFit" }) do UI.set(k, v, false) end
 	end)
 	UI.Slider(cal, "Learn speed (10 = near instant)", "CalSpeed", 0.1, 10, 0.1, 1)
-	UI.Note(cal, "Turning this on also turns on the faster/centered learning, smarter step sizing, and shared learning across every jumper that Auto Green MAX uses - this is the strongest the learner gets.")
+	UI.Note(cal, "Turning this on also turns on the faster/centered learning, smarter step sizing, and shared learning across every jumper that Auto Green MAX uses - this is the strongest the learner gets. It also pulls in timing other people running this script have already found: an exact shot someone has confirmed Perfects on locks in for you immediately, and even a shot nobody has ever taken yet starts from the community's average for that whole style of shot (every jumpshot, every fade, etc) instead of a blind guess - no other script shares that.")
 	UI.Button(cal, "Forget learned animations", function()
 		Shot.autoReset()
 		notify("Auto Green", "Learned animations cleared", 2)
@@ -25495,6 +25560,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.14 - Ultra Auto Calibrate now shares timing per shot FAMILY across the network too (every jumpshot together, every fade together, every step back together, etc), not just exact-shot locks - so a jumpshot literally nobody has ever taken yet still starts from everyone's combined experience with that whole style of shot instead of a blind guess, the moment it's ever played for the first time anywhere. An exact-shot lock, local or shared, always takes over the instant one exists.",
 "v2.13 - Fixed loading several copies of the menu at once on some setups. A second (or third, or seventh) copy starting at almost the same moment as the first used to pass right by the check that is supposed to close the previous copy, because that check ran before a wait that let every copy race ahead together, and only the very last one to finish actually took over the slot - so every other one it ran past stayed open as its own full, live menu. The slot is now claimed the instant the check runs, before anything that can cause that race, so only one copy ever stays open no matter how many start up together.",
 "v2.12 - Found the real reason Auto Guard never showed any animation: it was moving by CFrame-teleporting the character, so the Humanoid itself never registered as walking and no clip we forced on top ever stuck. It no longer moves that way at all - it now drives itself purely through the same MoveDirection remote a real joystick fires, with the real Guard button held, so the server moves it for real and the game's own animation system picks the real walk/defensive-slide clip on its own, same as it does for a real player.",
 "v2.11 - Auto Guard now plays the real left/right/forward/backward defensive slide animation that matches the direction it is actually sliding in, instead of always forcing the forward walk clip while moving sideways or backward - this is what made it look like it was just gliding. It also now holds the real defensive stance when it catches up and stops instead of freezing with no animation.",
@@ -25790,6 +25856,70 @@ a.hold, a.locked, a.mode, a.greens, a.bin = net.lead, true, "peak", a.greens or 
 return a.hold
 end
 return prevSeedHL(key)
+end
+-- NETWORK FAMILY TIMING POOL: Ultra Auto Calibrate also shares the average timing per shot FAMILY (every jumpshot together,
+-- every fade together, every step back together, and so on) across the network, not just per-exact-shot locks above.
+-- This is what lets a jumpshot literally nobody has ever taken yet still start from a good, community-informed guess the
+-- very first time anyone anywhere plays it, instead of the blind default everyone else's scripts fall back to - it only
+-- ever applies when there is nothing better yet (no personal attempts, no exact-shot lock, local or shared), and a real
+-- exact-shot lock immediately takes over the moment one exists.
+local function readFamNet()
+local t = {}
+for fam, v, n in string.gmatch(S.FamLead or "", "(%a+)=([%d%.]+):(%d+)") do t[fam] = { tonumber(v), tonumber(n) } end
+return t
+end
+Net.famLead = {}
+local lastFamPush = {}
+local prevLearnFam = Shot.autoLearn
+function Shot.autoLearn(info, res, strength)
+local r = prevLearnFam(info, res, strength)
+if S.AutoCalibrate and info and info.key then
+local fam = Shot.familyOf(info.key)
+if fam then
+local d = readFamNet()[fam]
+if d and d[2] >= 2 and (lastFamPush[fam] or 0) + 10 < tick() then
+lastFamPush[fam] = tick()
+task.spawn(netPut, "famtiming2/" .. sanitize(fam) .. "/" .. sanitize(myName), { lead = d[1], n = d[2], t = os.time() })
+end
+end
+end
+return r
+end
+task.spawn(function()
+while JH.Running do
+local data = netGet("famtiming2")
+if type(data) == "table" then
+local merged = {}
+for fam, per in pairs(data) do
+if type(per) == "table" then
+local wsum, vsum = 0, 0
+for _, v in pairs(per) do
+if type(v) == "table" and type(v.lead) == "number" and v.lead >= 0 and v.lead <= 0.1 then
+local w = math.min(tonumber(v.n) or 1, 20)
+wsum, vsum = wsum + w, vsum + v.lead * w
+end
+end
+if wsum > 0 then merged[fam] = vsum / wsum end
+end
+end
+Net.famLead = merged
+end
+task.wait(8)
+end
+end)
+local prevSeedFam = Shot.seedLead
+function Shot.seedLead(key)
+if S.AutoCalibrate and not Shot.FINAL[key] then
+local a = Shot.auto and Shot.auto[key]
+local hasOwnData = (a and (a.locked or (a.n or 0) > 0)) or JH.hardLocked[key]
+local netKey = Net.lead[sanitize(key)]
+if not hasOwnData and not (netKey and netKey.lead) then
+local fam = Shot.familyOf(key)
+local fl = fam and Net.famLead[fam]
+if fl then return clamp(fl, 0, 0.1) end
+end
+end
+return prevSeedFam(key)
 end
 -- SHOT STABILIZER: hidden, always on, not a setting anyone can turn off. Scales ping compensation automatically from
 -- real measured ping and real FPS instead of a manual slider, so someone on 50+ ms ping or dropping frames still gets
