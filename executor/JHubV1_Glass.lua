@@ -11,7 +11,7 @@
     Tabs: Main, Shooting, Dribbling, Players, UI
     Tap the moving JH logo to open / close the menu.
 
-    JHUB_VERSION: v2.20
+    JHUB_VERSION: v2.21
     (this header is never obfuscated, so the auto-update check below can always read the version
     here even from the published build, where "local VERSION = ..." is hidden by the obfuscator -
     keep this line in sync with VERSION on every bump, or the auto-update check breaks again)
@@ -81,7 +81,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.20"
+local VERSION = "v2.21"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -10577,6 +10577,13 @@ UI.Buttons(accCard, {
 		if ownerCodeBox then ownerCodeBox.Text = "" end
 	end },
 })
+UI.Button(accCard, "Require this version (" .. tostring(VERSION) .. ") from now on", function()
+	if not ownerVerified(ownerCode) then notify("Access control", "Wrong owner code.", 3) return end
+	if JH.netPut then task.spawn(JH.netPut, "control/minVersion", tostring(VERSION)) end
+	notify("Access control", "Minimum version set to " .. tostring(VERSION) .. ". Any copy of " .. tostring(VERSION) .. " or newer that checks in below that will now try to update itself before loading anything.", 6)
+	ownerCode = ""
+	if ownerCodeBox then ownerCodeBox.Text = "" end
+end)
 local annCard = UI.Card(OP, "Announcement")
 local annText = ""
 local annBox = UI.Input(annCard, "Message (pops up at the top of everyone's screen)", { get = function() return annText end, set = function(v) annText = tostring(v or "") end }, nil, "type an announcement")
@@ -12512,6 +12519,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.21 - Added a button for the owner to actually set the minimum-version floor v2.20 added (Owner tab, Access control card: \"Require this version from now on\") - it was only checked before, never actually settable in-game.",
 "v2.20 - Added a minimum-version floor from the owner (control/minVersion): any copy below it now tries to silently replace itself with the newest version the instant it checks in with the backend, before anything else loads, and only shows a blocked message if it genuinely cannot reach GitHub. This only protects copies running this version or newer going forward, since an older copy that is already frozen on disk or queued for a teleport is running code that was written before this check existed and has no way to know to look for it - there is no way to reach back into a copy that old from here.",
 "v2.19 - Stopped an old version ever sitting on disk once a newer one exists. The auto-update check now rewrites the saved autoexec file (and the queued-teleport copy) to the new version immediately the moment it finds one, instead of waiting for the new instance to resave it a couple seconds after reloading - and the old instance's own pending resave now checks it is still actually running first, so a reload triggered mid-wait can no longer have the dying old copy put its old version right back on disk a moment after the new one just saved the correct one.",
 "v2.18 - Found why it was reloading itself non-stop for some people: v2.15's auto-update check tried to read the version number out of the downloaded file by looking for \"local VERSION = ...\" in plain text, but the published file is obfuscated and that text is never actually readable in it - so the check could never tell what version it downloaded, treated every single check as \"found a newer version\" because it genuinely could not read any version at all, and reloaded into the exact same problem every few seconds, forever. Fixed two ways: an unreadable version number is no longer treated as newer (it just does nothing instead), and the version number now also lives in plain text in this file's very top header, which the obfuscator never touches, so the check can actually read it from the real published file going forward.",
@@ -13297,7 +13305,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.20"
+local VERSION = "v2.21"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -23793,6 +23801,13 @@ UI.Buttons(accCard, {
 		if ownerCodeBox then ownerCodeBox.Text = "" end
 	end },
 })
+UI.Button(accCard, "Require this version (" .. tostring(VERSION) .. ") from now on", function()
+	if not ownerVerified(ownerCode) then notify("Access control", "Wrong owner code.", 3) return end
+	if JH.netPut then task.spawn(JH.netPut, "control/minVersion", tostring(VERSION)) end
+	notify("Access control", "Minimum version set to " .. tostring(VERSION) .. ". Any copy of " .. tostring(VERSION) .. " or newer that checks in below that will now try to update itself before loading anything.", 6)
+	ownerCode = ""
+	if ownerCodeBox then ownerCodeBox.Text = "" end
+end)
 local annCard = UI.Card(OP, "Announcement")
 local annText = ""
 local annBox = UI.Input(annCard, "Message (pops up at the top of everyone's screen)", { get = function() return annText end, set = function(v) annText = tostring(v or "") end }, nil, "type an announcement")
@@ -25728,6 +25743,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.21 - Added a button for the owner to actually set the minimum-version floor v2.20 added (Owner tab, Access control card: \"Require this version from now on\") - it was only checked before, never actually settable in-game.",
 "v2.20 - Added a minimum-version floor from the owner (control/minVersion): any copy below it now tries to silently replace itself with the newest version the instant it checks in with the backend, before anything else loads, and only shows a blocked message if it genuinely cannot reach GitHub. This only protects copies running this version or newer going forward, since an older copy that is already frozen on disk or queued for a teleport is running code that was written before this check existed and has no way to know to look for it - there is no way to reach back into a copy that old from here.",
 "v2.19 - Stopped an old version ever sitting on disk once a newer one exists. The auto-update check now rewrites the saved autoexec file (and the queued-teleport copy) to the new version immediately the moment it finds one, instead of waiting for the new instance to resave it a couple seconds after reloading - and the old instance's own pending resave now checks it is still actually running first, so a reload triggered mid-wait can no longer have the dying old copy put its old version right back on disk a moment after the new one just saved the correct one.",
 "v2.18 - Found why it was reloading itself non-stop for some people: v2.15's auto-update check tried to read the version number out of the downloaded file by looking for \"local VERSION = ...\" in plain text, but the published file is obfuscated and that text is never actually readable in it - so the check could never tell what version it downloaded, treated every single check as \"found a newer version\" because it genuinely could not read any version at all, and reloaded into the exact same problem every few seconds, forever. Fixed two ways: an unreadable version number is no longer treated as newer (it just does nothing instead), and the version number now also lives in plain text in this file's very top header, which the obfuscator never touches, so the check can actually read it from the real published file going forward.",
