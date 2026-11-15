@@ -10,6 +10,11 @@
 
     Tabs: Main, Shooting, Dribbling, Players, UI
     Tap the moving JH logo to open / close the menu.
+
+    JHUB_VERSION: v2.18
+    (this header is never obfuscated, so the auto-update check below can always read the version
+    here even from the published build, where "local VERSION = ..." is hidden by the obfuscator -
+    keep this line in sync with VERSION on every bump, or the auto-update check breaks again)
 ]]
 
 local JH_SOURCE = [==[
@@ -76,7 +81,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.17"
+local VERSION = "v2.18"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -11500,7 +11505,11 @@ do
 			or ("https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" .. BRANCH .. "/executor/JHubV1_Glass.lua?v=" .. tostring(os.time()))
 		local ok, src = pcall(http, url)
 		if not ok or type(src) ~= "string" or #src < 10000 then return nil end
-		return src, string.match(src, 'local VERSION = "(v[%d%.]+)')
+		-- the published build is obfuscated, so "local VERSION = ..." is never readable in it - the header comment
+		-- at the very top of the file is never touched by the obfuscator and always carries a plain JHUB_VERSION
+		-- line for exactly this reason; fall back to the plain VERSION line too, for a raw dev-branch fetch
+		local ver = string.match(src, "JHUB_VERSION:%s*(v[%d%.]+)") or string.match(src, 'local VERSION = "(v[%d%.]+)')
+		return src, ver
 	end
 	local mine = string.match(tostring(VERSION), "^(v[%d%.]+)") or tostring(VERSION)
 	local busy = false
@@ -11515,7 +11524,15 @@ do
 			busy = false
 			return
 		end
-		if newestLbl then newestLbl.Text = ver or "?" end
+		if newestLbl then newestLbl.Text = ver or "could not read version" end
+		if not ver then
+			-- could not tell what version this is - never treat an unreadable version as "newer", that is exactly
+			-- what was making this reload itself over and over: every check thought it found a new version because
+			-- it genuinely could not read any version at all, downloaded anyway, and reloaded into the same problem
+			if not silent then notify("Update", "Could not read a version from the download, not updating.", 4) end
+			busy = false
+			return
+		end
 		if ver == mine then
 			if not silent then notify("Update", "You already have the newest version (" .. mine .. ")", 4) end
 			busy = false
@@ -12448,6 +12465,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.18 - Found why it was reloading itself non-stop for some people: v2.15's auto-update check tried to read the version number out of the downloaded file by looking for \"local VERSION = ...\" in plain text, but the published file is obfuscated and that text is never actually readable in it - so the check could never tell what version it downloaded, treated every single check as \"found a newer version\" because it genuinely could not read any version at all, and reloaded into the exact same problem every few seconds, forever. Fixed two ways: an unreadable version number is no longer treated as newer (it just does nothing instead), and the version number now also lives in plain text in this file's very top header, which the obfuscator never touches, so the check can actually read it from the real published file going forward.",
 "v2.17 - Added a second, independent defense against more than one menu window showing at once: on top of the unload-then-claim logic at the top of the script, it now actively hunts for and destroys any OTHER JHubGlass menu window wherever it could have landed, repeatedly for a while after load - so even if several copies manage to start at once for whatever reason on a given setup (more than one autoexec folder/queued copy firing together, or an executor that keeps a script's window alive as its own overlay between runs instead of actually ending it), only one of them survives within a second or two, every time, instead of relying on a single check at the very start.",
 "v2.16 - Fixed glides stuttering/lagging whenever the game takes your movement away mid-glide (no dribbles left, mid-gather, mid-shot): the fix in v2.10 paused the push correctly but kept the glide's own clock running while paused, so the moment movement came back it tried to cover the whole distance it missed in a single frame - that single-frame catch-up was the lag. Also removed GlideShotSafe completely (toggle and setting both gone, not just defaulted off) - this is the exact flag that has silently killed every speed boost and glide outright more than once now, most recently from a shared/imported config quietly turning it back on; there is no switch left that can ever re-enable it.",
 "v2.15 - Found why fixes never seemed to reach some devices: once Auto Execute is turned on, it saves a frozen copy of whatever version was running at that exact moment and replays that same frozen copy forever on every later join - nothing ever checked GitHub again after that, so every fix shipped after someone turned Auto Execute on never reached them, update button or not. Every load now checks GitHub a few seconds after opening (never delaying the menu) and silently updates itself if a newer version exists, auto-executed or not. Turn it off on the Updates card if you don't want that.",
@@ -13225,7 +13243,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.17"
+local VERSION = "v2.18"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -24649,7 +24667,11 @@ do
 			or ("https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" .. BRANCH .. "/executor/JHubV1_Glass.lua?v=" .. tostring(os.time()))
 		local ok, src = pcall(http, url)
 		if not ok or type(src) ~= "string" or #src < 10000 then return nil end
-		return src, string.match(src, 'local VERSION = "(v[%d%.]+)')
+		-- the published build is obfuscated, so "local VERSION = ..." is never readable in it - the header comment
+		-- at the very top of the file is never touched by the obfuscator and always carries a plain JHUB_VERSION
+		-- line for exactly this reason; fall back to the plain VERSION line too, for a raw dev-branch fetch
+		local ver = string.match(src, "JHUB_VERSION:%s*(v[%d%.]+)") or string.match(src, 'local VERSION = "(v[%d%.]+)')
+		return src, ver
 	end
 	local mine = string.match(tostring(VERSION), "^(v[%d%.]+)") or tostring(VERSION)
 	local busy = false
@@ -24664,7 +24686,15 @@ do
 			busy = false
 			return
 		end
-		if newestLbl then newestLbl.Text = ver or "?" end
+		if newestLbl then newestLbl.Text = ver or "could not read version" end
+		if not ver then
+			-- could not tell what version this is - never treat an unreadable version as "newer", that is exactly
+			-- what was making this reload itself over and over: every check thought it found a new version because
+			-- it genuinely could not read any version at all, downloaded anyway, and reloaded into the same problem
+			if not silent then notify("Update", "Could not read a version from the download, not updating.", 4) end
+			busy = false
+			return
+		end
 		if ver == mine then
 			if not silent then notify("Update", "You already have the newest version (" .. mine .. ")", 4) end
 			busy = false
@@ -25597,6 +25627,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.18 - Found why it was reloading itself non-stop for some people: v2.15's auto-update check tried to read the version number out of the downloaded file by looking for \"local VERSION = ...\" in plain text, but the published file is obfuscated and that text is never actually readable in it - so the check could never tell what version it downloaded, treated every single check as \"found a newer version\" because it genuinely could not read any version at all, and reloaded into the exact same problem every few seconds, forever. Fixed two ways: an unreadable version number is no longer treated as newer (it just does nothing instead), and the version number now also lives in plain text in this file's very top header, which the obfuscator never touches, so the check can actually read it from the real published file going forward.",
 "v2.17 - Added a second, independent defense against more than one menu window showing at once: on top of the unload-then-claim logic at the top of the script, it now actively hunts for and destroys any OTHER JHubGlass menu window wherever it could have landed, repeatedly for a while after load - so even if several copies manage to start at once for whatever reason on a given setup (more than one autoexec folder/queued copy firing together, or an executor that keeps a script's window alive as its own overlay between runs instead of actually ending it), only one of them survives within a second or two, every time, instead of relying on a single check at the very start.",
 "v2.16 - Fixed glides stuttering/lagging whenever the game takes your movement away mid-glide (no dribbles left, mid-gather, mid-shot): the fix in v2.10 paused the push correctly but kept the glide's own clock running while paused, so the moment movement came back it tried to cover the whole distance it missed in a single frame - that single-frame catch-up was the lag. Also removed GlideShotSafe completely (toggle and setting both gone, not just defaulted off) - this is the exact flag that has silently killed every speed boost and glide outright more than once now, most recently from a shared/imported config quietly turning it back on; there is no switch left that can ever re-enable it.",
 "v2.15 - Found why fixes never seemed to reach some devices: once Auto Execute is turned on, it saves a frozen copy of whatever version was running at that exact moment and replays that same frozen copy forever on every later join - nothing ever checked GitHub again after that, so every fix shipped after someone turned Auto Execute on never reached them, update button or not. Every load now checks GitHub a few seconds after opening (never delaying the menu) and silently updates itself if a newer version exists, auto-executed or not. Turn it off on the Updates card if you don't want that.",
