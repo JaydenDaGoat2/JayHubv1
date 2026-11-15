@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.00"
+local VERSION = "v2.01"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -2245,7 +2245,7 @@ if tp and (not S.LagSync or tp - m0 > 0.22) then
 -- a small bounded late-bias, proportional to this jumpshot's own measured precision (PeakBin) rather than a made-up
 -- constant: never aim early on purpose, and if the prediction is going to miss by a hair, let it run a touch long
 -- instead - late still has a chance to land in the green window, early does not
-hold = math.max(Shot.FLOOR, tp - (Shot.effPing() + peakLead) - m0 - Shot.fpsComp()) + (S.PeakBin or 0.014) * 0.5
+hold = math.max(Shot.FLOOR, tp - (Shot.effPing() + peakLead) - m0 - Shot.fpsComp())
 peakAimed = true
 end
 if now - m0 >= hold - look and (peakAimed or now - m0 >= Shot.AUTO_START - look) then break end
@@ -2280,20 +2280,7 @@ end
 while not manual and not ctx.ended and tick() - m0 < hold do RunService.Heartbeat:Wait() end
 local held = tick() - m0
 Shot.markShot()
-if not manual then
--- TAP-TO-SHOOT PUMP FAKE FIX: Shot.result already treats a release before the game's own Action attribute reaches
--- "Shooting" as "early (pump fake)" - releasing our synthetic hold before that actually happens IS what was
--- producing the pump fake, regardless of how correct our calculated hold duration was. Give it a brief, bounded
--- window to actually reach "Shooting" first.
-if S.ShotStyle == "Tap" then
-local waitUntil = tick() + 0.25
-local c2 = char()
-while c2 and c2.Parent and c2:GetAttribute("Action") ~= "Shooting" and tick() < waitUntil do
-RunService.Heartbeat:Wait()
-end
-end
-Shot.release("remote", ctx)
-end
+if not manual then Shot.release("remote", ctx) end
 ctx.released = true
 Shot.stats.shots = Shot.stats.shots + 1
 Shot.lastType = key
@@ -11847,6 +11834,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.01 - reverted the meter late-bias, the tap-to-shoot Action-wait fix, and the locked-jumpshot-promotion fix - the bar was stopping/missing badly after those went back in. Shot Green Stabilizer stays (that one wasn't the problem). Back to plain prediction-only release timing on top of v2.00",
 "v2.00 - added a Sound ID picker under Alerts and keys: 6 unverified candidate Roblox audio IDs pulled from the web (not labeled, not confirmed to work or sound like anything specific - a real search turned up almost nothing usable), pick one to try as the Green sound ID",
 "v1.99 - big batch: autoexec now self-refreshes to the current version every load instead of freezing at whatever was on disk when it was first turned on; re-added the locked-jumpshot-promotion fix (a real Perfect shoots the exact same way every time, shared per animation ID); Shot Green Stabilizer is now visible on the Shooting tab with a live status line and genuinely does nothing under 50ms ping; added a live ping/FPS list for everyone running the script plus click-a-name-to-add in the Owner tab; announcement banner text is pure white with a thinner role-colored outline; fixed Code/Announcement text boxes not clearing after submit (the {get,set} Input pattern never refreshed the box); chat now auto-scrolls to the bottom on new messages unless you scrolled up on purpose; Auto Block's range slider now doubles as an aggressiveness dial (maxed = always attempts a jump even from far away, minimized = near-instant jump up close); added outline transparency and a custom RGB color option (Rainbow already existed). Declined: a curated Roblox sound-ID list (can't verify real IDs without fabricating them), using a real person's photo as the logo/background, and further blind changes to tap-to-shoot/Auto Guard's walk animation/Glide without new evidence",
 "v1.98 - re-added, on request, specific pieces from the reverted batch: Shot Stabilizer (hidden, auto ping/FPS comp), Settings tab (copy/upload/search configs), defense contest highlight, Owner tab Co-Owner (blue)/Mod (red) colors with the top-of-screen announcement system, the tap-to-shoot Action-wait pump-fake fix, and the meter late-bias. Still not re-added: Shot Time, the Discord icon swap, the locked-jumpshot-promotion fix, and the live-catch feature",
@@ -11974,16 +11962,6 @@ saveSoon()
 end
 end
 JH.hardLocked = readHard()
--- a hard-locked jumpshot used to only get a fixed SEED value while still running through the same live peak-fit bar
--- extrapolation every shot - meaning its actual release still varied shot to shot with ping/fps/bar noise, so a real
--- Perfect did not actually stop later early/late/slightly misses on that same shot like it was supposed to. Promoting
--- the locked hold straight into Shot.FINAL routes it through the flat, non-extrapolated path the built-in confirmed
--- shots already use - the same exact release every time, not just the same starting point for a live prediction.
-Shot.autoLoad()
-for k in pairs(JH.hardLocked) do
-local a = Shot.auto[k]
-if a and a.hold and not Shot.FINAL[k] then Shot.FINAL[k] = a.hold end
-end
 local prevLearnHL = Shot.autoLearn
 function Shot.autoLearn(info, res, strength)
 if info and info.key and JH.hardLocked[info.key] then return true end
@@ -11997,9 +11975,8 @@ end
 a.hold, a.locked, a.mode = info.lead, true, "peak"
 JH.hardLocked[info.key] = true
 addHard(info.key)
-Shot.FINAL[info.key] = a.hold
 task.spawn(netPut, "timing/" .. sanitize(info.key), { lead = a.hold, n = 9999, hard = true, by = myName, t = os.time() })
-notify("Timing locked", "Jumpshot " .. tostring(Shot.nameFor and Shot.nameFor(info.key) or info.key) .. " hit a real Perfect, its timing is locked forever and shared - it will shoot the exact same way every time now.", 5)
+notify("Timing locked", "Jumpshot " .. tostring(Shot.nameFor and Shot.nameFor(info.key) or info.key) .. " hit a real Perfect, its timing is locked forever and shared.", 5)
 end
 return r
 end
@@ -12013,7 +11990,6 @@ addHard(key)
 Shot.auto[key] = Shot.auto[key] or {}
 local a = Shot.auto[key]
 a.hold, a.locked, a.mode, a.greens, a.bin = net.lead, true, "peak", a.greens or {}, a.bin or S.PeakBin
-Shot.FINAL[key] = a.hold
 return a.hold
 end
 return prevSeedHL(key)
@@ -12261,7 +12237,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.00"
+local VERSION = "v2.01"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -14579,7 +14555,7 @@ function Shot.remoteCore(ctx)
 			-- by the meter: let go one ping plus the lead before the meter reaches its peak
 			local tp = Shot.peakFitSmart(samples, key)
 			if tp and (not S.LagSync or tp - m0 > 0.22) then
-				hold = math.max(Shot.FLOOR, tp - (Shot.effPing() + peakLead) - m0 - Shot.fpsComp()) + (S.PeakBin or 0.014) * 0.5
+				hold = math.max(Shot.FLOOR, tp - (Shot.effPing() + peakLead) - m0 - Shot.fpsComp())
 				peakAimed = true
 			end
 			if now - m0 >= hold - look and (peakAimed or now - m0 >= Shot.AUTO_START - look) then break end
@@ -14616,20 +14592,7 @@ function Shot.remoteCore(ctx)
 	while not manual and not ctx.ended and tick() - m0 < hold do RunService.Heartbeat:Wait() end
 	local held = tick() - m0
 	Shot.markShot()
-	if not manual then
--- TAP-TO-SHOOT PUMP FAKE FIX: Shot.result already treats a release before the game's own Action attribute reaches
--- "Shooting" as "early (pump fake)" - releasing our synthetic hold before that actually happens IS what was
--- producing the pump fake, regardless of how correct our calculated hold duration was. Give it a brief, bounded
--- window to actually reach "Shooting" first.
-if S.ShotStyle == "Tap" then
-local waitUntil = tick() + 0.25
-local c2 = char()
-while c2 and c2.Parent and c2:GetAttribute("Action") ~= "Shooting" and tick() < waitUntil do
-RunService.Heartbeat:Wait()
-end
-end
-Shot.release("remote", ctx)
-end
+	if not manual then Shot.release("remote", ctx) end
 	ctx.released = true
 	Shot.stats.shots = Shot.stats.shots + 1
 	Shot.lastType = key
@@ -24388,6 +24351,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.01 - reverted the meter late-bias, the tap-to-shoot Action-wait fix, and the locked-jumpshot-promotion fix - the bar was stopping/missing badly after those went back in. Shot Green Stabilizer stays (that one wasn't the problem). Back to plain prediction-only release timing on top of v2.00",
 "v2.00 - added a Sound ID picker under Alerts and keys: 6 unverified candidate Roblox audio IDs pulled from the web (not labeled, not confirmed to work or sound like anything specific - a real search turned up almost nothing usable), pick one to try as the Green sound ID",
 "v1.99 - big batch: autoexec now self-refreshes to the current version every load instead of freezing at whatever was on disk when it was first turned on; re-added the locked-jumpshot-promotion fix (a real Perfect shoots the exact same way every time, shared per animation ID); Shot Green Stabilizer is now visible on the Shooting tab with a live status line and genuinely does nothing under 50ms ping; added a live ping/FPS list for everyone running the script plus click-a-name-to-add in the Owner tab; announcement banner text is pure white with a thinner role-colored outline; fixed Code/Announcement text boxes not clearing after submit (the {get,set} Input pattern never refreshed the box); chat now auto-scrolls to the bottom on new messages unless you scrolled up on purpose; Auto Block's range slider now doubles as an aggressiveness dial (maxed = always attempts a jump even from far away, minimized = near-instant jump up close); added outline transparency and a custom RGB color option (Rainbow already existed). Declined: a curated Roblox sound-ID list (can't verify real IDs without fabricating them), using a real person's photo as the logo/background, and further blind changes to tap-to-shoot/Auto Guard's walk animation/Glide without new evidence",
 "v1.98 - re-added, on request, specific pieces from the reverted batch: Shot Stabilizer (hidden, auto ping/FPS comp), Settings tab (copy/upload/search configs), defense contest highlight, Owner tab Co-Owner (blue)/Mod (red) colors with the top-of-screen announcement system, the tap-to-shoot Action-wait pump-fake fix, and the meter late-bias. Still not re-added: Shot Time, the Discord icon swap, the locked-jumpshot-promotion fix, and the live-catch feature",
@@ -24515,16 +24479,6 @@ saveSoon()
 end
 end
 JH.hardLocked = readHard()
--- a hard-locked jumpshot used to only get a fixed SEED value while still running through the same live peak-fit bar
--- extrapolation every shot - meaning its actual release still varied shot to shot with ping/fps/bar noise, so a real
--- Perfect did not actually stop later early/late/slightly misses on that same shot like it was supposed to. Promoting
--- the locked hold straight into Shot.FINAL routes it through the flat, non-extrapolated path the built-in confirmed
--- shots already use - the same exact release every time, not just the same starting point for a live prediction.
-Shot.autoLoad()
-for k in pairs(JH.hardLocked) do
-local a = Shot.auto[k]
-if a and a.hold and not Shot.FINAL[k] then Shot.FINAL[k] = a.hold end
-end
 local prevLearnHL = Shot.autoLearn
 function Shot.autoLearn(info, res, strength)
 if info and info.key and JH.hardLocked[info.key] then return true end
@@ -24538,9 +24492,8 @@ end
 a.hold, a.locked, a.mode = info.lead, true, "peak"
 JH.hardLocked[info.key] = true
 addHard(info.key)
-Shot.FINAL[info.key] = a.hold
 task.spawn(netPut, "timing/" .. sanitize(info.key), { lead = a.hold, n = 9999, hard = true, by = myName, t = os.time() })
-notify("Timing locked", "Jumpshot " .. tostring(Shot.nameFor and Shot.nameFor(info.key) or info.key) .. " hit a real Perfect, its timing is locked forever and shared - it will shoot the exact same way every time now.", 5)
+notify("Timing locked", "Jumpshot " .. tostring(Shot.nameFor and Shot.nameFor(info.key) or info.key) .. " hit a real Perfect, its timing is locked forever and shared.", 5)
 end
 return r
 end
@@ -24554,7 +24507,6 @@ addHard(key)
 Shot.auto[key] = Shot.auto[key] or {}
 local a = Shot.auto[key]
 a.hold, a.locked, a.mode, a.greens, a.bin = net.lead, true, "peak", a.greens or {}, a.bin or S.PeakBin
-Shot.FINAL[key] = a.hold
 return a.hold
 end
 return prevSeedHL(key)
