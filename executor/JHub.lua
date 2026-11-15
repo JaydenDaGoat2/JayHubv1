@@ -11,7 +11,7 @@
     Tabs: Main, Shooting, Dribbling, Players, UI
     Tap the moving JH logo to open / close the menu.
 
-    JHUB_VERSION: v2.23
+    JHUB_VERSION: v2.24
     (this header is never obfuscated, so the auto-update check below can always read the version
     here even from the published build, where "local VERSION = ..." is hidden by the obfuscator -
     keep this line in sync with VERSION on every bump, or the auto-update check breaks again)
@@ -97,7 +97,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.23"
+local VERSION = "v2.24"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -306,7 +306,7 @@ FadeNudge = 0, MagnetDelay = 120, AutoAdaptAll = false, InstantGreen = false, La
 	AGOnlyBall = true,
 	BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
 	BindKey1 = "", BindArgs1 = "", BindKey2 = "", BindArgs2 = "", BindKey3 = "", BindArgs3 = "", BindKey4 = "", BindArgs4 = "", BindKey5 = "", BindArgs5 = "", BindKey6 = "", BindArgs6 = "",
-LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3, PerfN = "", LiveHelps = false, CustomSounds = "", CustomPick = "",
+LowFix = false, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3, PerfN = "", LiveHelps = false, CustomSounds = "", CustomPick = "",
 	AG = false, AGTarget = "Ball handler", AGDist = 4, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true, AGHoldToUse = false, WalkAnimId = "", GuardAnimId = "",
 	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
 	AR = false, ARSpeed = 1, ARReact = 0.18, ARRange = 45, ARJump = true, ARMagnet = true, ARMagRange = 4, ARMarker = false,
@@ -419,7 +419,7 @@ end
 S.Learn = S.AutoCal
 if S.PerfectGreen == nil then S.PerfectGreen = false end
 if S.PeakLead == nil then S.PeakLead = 0.027 end
-if S.LowFix == nil then S.LowFix = true end
+if S.LowFix == nil then S.LowFix = false end
 if S.LowBoostPct == nil then S.LowBoostPct = 25 end
 if S.LowGlidePct == nil then S.LowGlidePct = 60 end
 if S.LowLevel == nil then S.LowLevel = 3 end
@@ -466,8 +466,12 @@ S.LagSync, S.PrecFit, S.AdaptPlus, S.GreenMax, S.AllJumpers, S.AutoAdaptAll, S.I
 S.FadeNudge, S.GLead, S.GLeadN, S.PFLead, S.PFLeadN = 0, 0, 0, 0, 0
 S.FinalAdj, S.FamLead = "", ""
 end
-S.SettingsVer = 37
-DEFAULTS.SettingsVer = 37
+-- glides were getting scaled down on low graphics settings / low FPS to "compensate", but that is exactly what
+-- was making every glide feel like it just does not work on a low-end device or low settings - full strength,
+-- same as every other setting, is what actually matches how this behaved before that scaling existed
+if S.SettingsVer < 38 then S.LowFix = false end
+S.SettingsVer = 38
+DEFAULTS.SettingsVer = 38
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 S.ShotTimes = S.ShotTimes
 S.RecOn = false
@@ -12551,6 +12555,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.24 - Glides no longer get scaled down on low graphics settings or low FPS by default - that \"low settings fix\" was exactly what was making every glide feel like it does not work at all on a low-end device or on Low graphics, instead of actually helping. Full strength now, same as everything else, matching how glides behaved before that scaling was ever added. The Low settings fix toggle (Shooting tab) still exists for anyone who wants it back, it is just off by default now. Speed boost (walk/run/ball) was not touched at all - nothing about how it works changed here.",
 "v2.23 - Renamed the script file itself, from JHubV1_Glass.lua to JHub.lua - same logo, same background, same tabs, same everything, just a clean filename/identity going forward instead of continuing to build on the one that kept getting stuck. It also now deletes any old JHubV1_Glass.lua it finds sitting in your autoexec folders or saved on disk the first time it runs, on top of the usual old-genv-key cleanup, so an old stuck copy under the old name gets cleared out instead of sitting there alongside this one.",
 "v2.22 - A copy that finds itself below the minimum-version floor now deletes its own saved autoexec copy (every folder name this script knows about, plus the plain saved file) on its way out, whether or not it manages to reach GitHub to update itself - not just block itself and leave the old file sitting there to fire again next join. Only affects a copy running this version or newer; see v2.20's note.",
 "v2.21 - Added a button for the owner to actually set the minimum-version floor v2.20 added (Owner tab, Access control card: \"Require this version from now on\") - it was only checked before, never actually settable in-game.",
@@ -13355,7 +13360,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.23"
+local VERSION = "v2.24"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -13564,7 +13569,7 @@ FadeNudge = 0, MagnetDelay = 120, AutoAdaptAll = false, InstantGreen = false, La
 	AGOnlyBall = true,
 	BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
 	BindKey1 = "", BindArgs1 = "", BindKey2 = "", BindArgs2 = "", BindKey3 = "", BindArgs3 = "", BindKey4 = "", BindArgs4 = "", BindKey5 = "", BindArgs5 = "", BindKey6 = "", BindArgs6 = "",
-LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3, PerfN = "", LiveHelps = false, CustomSounds = "", CustomPick = "",
+LowFix = false, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3, PerfN = "", LiveHelps = false, CustomSounds = "", CustomPick = "",
 	AG = false, AGTarget = "Ball handler", AGDist = 4, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true, AGHoldToUse = false, WalkAnimId = "", GuardAnimId = "",
 	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
 	AR = false, ARSpeed = 1, ARReact = 0.18, ARRange = 45, ARJump = true, ARMagnet = true, ARMagRange = 4, ARMarker = false,
@@ -13677,7 +13682,7 @@ end
 S.Learn = S.AutoCal
 if S.PerfectGreen == nil then S.PerfectGreen = false end
 if S.PeakLead == nil then S.PeakLead = 0.027 end
-if S.LowFix == nil then S.LowFix = true end
+if S.LowFix == nil then S.LowFix = false end
 if S.LowBoostPct == nil then S.LowBoostPct = 25 end
 if S.LowGlidePct == nil then S.LowGlidePct = 60 end
 if S.LowLevel == nil then S.LowLevel = 3 end
@@ -13724,8 +13729,12 @@ S.LagSync, S.PrecFit, S.AdaptPlus, S.GreenMax, S.AllJumpers, S.AutoAdaptAll, S.I
 S.FadeNudge, S.GLead, S.GLeadN, S.PFLead, S.PFLeadN = 0, 0, 0, 0, 0
 S.FinalAdj, S.FamLead = "", ""
 end
-S.SettingsVer = 37
-DEFAULTS.SettingsVer = 37
+-- glides were getting scaled down on low graphics settings / low FPS to "compensate", but that is exactly what
+-- was making every glide feel like it just does not work on a low-end device or low settings - full strength,
+-- same as every other setting, is what actually matches how this behaved before that scaling existed
+if S.SettingsVer < 38 then S.LowFix = false end
+S.SettingsVer = 38
+DEFAULTS.SettingsVer = 38
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 S.ShotTimes = S.ShotTimes
 S.RecOn = false
@@ -25809,6 +25818,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.24 - Glides no longer get scaled down on low graphics settings or low FPS by default - that \"low settings fix\" was exactly what was making every glide feel like it does not work at all on a low-end device or on Low graphics, instead of actually helping. Full strength now, same as everything else, matching how glides behaved before that scaling was ever added. The Low settings fix toggle (Shooting tab) still exists for anyone who wants it back, it is just off by default now. Speed boost (walk/run/ball) was not touched at all - nothing about how it works changed here.",
 "v2.23 - Renamed the script file itself, from JHubV1_Glass.lua to JHub.lua - same logo, same background, same tabs, same everything, just a clean filename/identity going forward instead of continuing to build on the one that kept getting stuck. It also now deletes any old JHubV1_Glass.lua it finds sitting in your autoexec folders or saved on disk the first time it runs, on top of the usual old-genv-key cleanup, so an old stuck copy under the old name gets cleared out instead of sitting there alongside this one.",
 "v2.22 - A copy that finds itself below the minimum-version floor now deletes its own saved autoexec copy (every folder name this script knows about, plus the plain saved file) on its way out, whether or not it manages to reach GitHub to update itself - not just block itself and leave the old file sitting there to fire again next join. Only affects a copy running this version or newer; see v2.20's note.",
 "v2.21 - Added a button for the owner to actually set the minimum-version floor v2.20 added (Owner tab, Access control card: \"Require this version from now on\") - it was only checked before, never actually settable in-game.",
