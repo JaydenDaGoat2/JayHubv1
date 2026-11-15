@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.95"
+local VERSION = "v1.96"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -2240,25 +2240,9 @@ break
 end
 local now = tick()
 local n = #samples
--- LIVE CATCH: the real bar position (meterOffset, a real attribute the game itself updates - not a guess) is read
--- every time it changes. The moment it actually reaches the learned target, for THIS shot, in real time, release
--- right then instead of only trusting the earlier prediction - this is a direct "freeze the instant it touches
--- green" reaction, compensated for real ping so the release lands when it actually gets there server-side, not
--- when we see it client-side.
-if n >= 1 then
-local last = samples[n]
-local qLead = 0
-if n >= 2 then
-local prev = samples[n - 1]
-local dt2 = last.t - prev.t
-if dt2 > 0.001 then qLead = (last.q - prev.q) / dt2 * Shot.effPing() end
-end
-if last.q >= (S.MeterTarget - qLead) and now - last.t < 0.1 then
-usedMeter = true
-qpred = last.q
-break
-end
-end
+-- v1.94's "live catch" was removed here: it fired an early release because the ping-based lead compensation
+-- blew up off a noisy 2-sample rate estimate (confirmed by a user's recording showing "Early Release" with the
+-- bar barely past the start). Reverted rather than patched blind, same as the Shot Intelligence revert.
 if peakLead then
 local tp = Shot.peakFitSmart(samples, key)
 if tp and (not S.LagSync or tp - m0 > 0.22) then
@@ -11806,6 +11790,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.96 - reverted v1.94's \"live catch\": a user sent a recording showing it firing an Early Release with the bar barely past the start - the ping-based lead compensation in it was almost certainly blowing up off a noisy 2-sample rate estimate taken right as the bar started moving. Pulled it out rather than patch it blind, same call as the Shot Intelligence revert. Auto Green is back to the prediction-only release it used before v1.94",
 "v1.95 - fixed hard-locked jumpshots (the ones that hit a real Perfect) still occasionally missing early/late/slightly afterward: a locked shot was only ever given a fixed starting point while still running the same live bar-prediction every shot, so real variance (ping/fps/bar noise) could still move the actual release. Now a locked jumpshot is promoted into the same flat, non-predicted path the built-in confirmed shots use - the exact same release every time, not a new prediction each time starting from the same seed. Applies per exact animation ID, and still shares to anyone using that same jumpshot",
 "v1.94 - added a live catch to Auto Green: the real bar position (meterOffset, the game's own attribute, not a guess) is watched every time it actually moves, and the instant it reaches the learned target it releases right then (ping-compensated), instead of only relying on predicting ahead of time where it will be - closer to \"freeze the moment it touches green\" than a prediction ever could be",
 "v1.93 - fixed tap-to-shoot producing a pump fake: Shot.result already treats a release before the game's own Action attribute reaches \"Shooting\" as a pump fake - releasing our synthetic hold before that actually happened was the real cause, now it waits briefly for it first. Also reverted v1.92 accidentally forcing Shot Style to Hold permanently (a real bug, your Tap setting is preserved now, with a toggle back on Auto Green since the dropdown was removed). Also added a small bounded late-bias to the peak-fit release prediction, proportional to that jumpshot's own measured precision - never aims early on purpose, and if it's going to miss, errs toward landing just past the peak (still green) instead of short of it",
@@ -12255,7 +12240,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.95"
+local VERSION = "v1.96"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -14568,20 +14553,9 @@ function Shot.remoteCore(ctx)
 		end
 		local now = tick()
 		local n = #samples
-		if n >= 1 then
-			local last = samples[n]
-			local qLead = 0
-			if n >= 2 then
-				local prev = samples[n - 1]
-				local dt2 = last.t - prev.t
-				if dt2 > 0.001 then qLead = (last.q - prev.q) / dt2 * Shot.effPing() end
-			end
-			if last.q >= (S.MeterTarget - qLead) and now - last.t < 0.1 then
-				usedMeter = true
-				qpred = last.q
-				break
-			end
-		end
+		-- v1.94's "live catch" was removed here: it fired an early release because the ping-based lead compensation
+		-- blew up off a noisy 2-sample rate estimate (confirmed by a user's recording showing "Early Release" with
+		-- the bar barely past the start). Reverted rather than patched blind, same as the Shot Intelligence revert.
 		-- the meter moves by itself: JHub releases when it is about to reach the aim point (by the meter, not by a clock)
 		if peakLead then
 			-- by the meter: let go one ping plus the lead before the meter reaches its peak
@@ -24350,6 +24324,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.96 - reverted v1.94's \"live catch\": a user sent a recording showing it firing an Early Release with the bar barely past the start - the ping-based lead compensation in it was almost certainly blowing up off a noisy 2-sample rate estimate taken right as the bar started moving. Pulled it out rather than patch it blind, same call as the Shot Intelligence revert. Auto Green is back to the prediction-only release it used before v1.94",
 "v1.95 - fixed hard-locked jumpshots (the ones that hit a real Perfect) still occasionally missing early/late/slightly afterward: a locked shot was only ever given a fixed starting point while still running the same live bar-prediction every shot, so real variance (ping/fps/bar noise) could still move the actual release. Now a locked jumpshot is promoted into the same flat, non-predicted path the built-in confirmed shots use - the exact same release every time, not a new prediction each time starting from the same seed. Applies per exact animation ID, and still shares to anyone using that same jumpshot",
 "v1.94 - added a live catch to Auto Green: the real bar position (meterOffset, the game's own attribute, not a guess) is watched every time it actually moves, and the instant it reaches the learned target it releases right then (ping-compensated), instead of only relying on predicting ahead of time where it will be - closer to \"freeze the moment it touches green\" than a prediction ever could be",
 "v1.93 - fixed tap-to-shoot producing a pump fake: Shot.result already treats a release before the game's own Action attribute reaches \"Shooting\" as a pump fake - releasing our synthetic hold before that actually happened was the real cause, now it waits briefly for it first. Also reverted v1.92 accidentally forcing Shot Style to Hold permanently (a real bug, your Tap setting is preserved now, with a toggle back on Auto Green since the dropdown was removed). Also added a small bounded late-bias to the peak-fit release prediction, proportional to that jumpshot's own measured precision - never aims early on purpose, and if it's going to miss, errs toward landing just past the peak (still green) instead of short of it",
