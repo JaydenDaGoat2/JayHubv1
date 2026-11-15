@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.92"
+local VERSION = "v1.93"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -145,7 +145,7 @@ ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, St
 LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false, ShotTimeJump = 0, ShotTimeFade = 0, ShotTimePostFade = 0, ShotTimeLayup = 0, ShotTimeDunk = 0,
+FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false, ShotTimeJump = 0, ShotTimeFade = 0, ShotTimePostFade = 0, ShotTimeLayup = 0, ShotTimeDunk = 0, ShotTapMode = false,
 AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 AGOnlyBall = true,
 BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
@@ -2243,7 +2243,10 @@ local n = #samples
 if peakLead then
 local tp = Shot.peakFitSmart(samples, key)
 if tp and (not S.LagSync or tp - m0 > 0.22) then
-hold = math.max(Shot.FLOOR, tp - (Shot.effPing() + peakLead) - m0 - Shot.fpsComp())
+-- a small bounded late-bias, proportional to this jumpshot's own measured precision (PeakBin) rather than a made-up
+-- constant: never aim early on purpose, and if the prediction is going to miss by a hair, let it run a touch long
+-- instead - late still has a chance to land in the green window, early does not
+hold = math.max(Shot.FLOOR, tp - (Shot.effPing() + peakLead) - m0 - Shot.fpsComp()) + (S.PeakBin or 0.014) * 0.5
 peakAimed = true
 end
 if now - m0 >= hold - look and (peakAimed or now - m0 >= Shot.AUTO_START - look) then break end
@@ -2278,7 +2281,20 @@ end
 while not manual and not ctx.ended and tick() - m0 < hold do RunService.Heartbeat:Wait() end
 local held = tick() - m0
 Shot.markShot()
-if not manual then Shot.release("remote", ctx) end
+if not manual then
+-- TAP-TO-SHOOT PUMP FAKE FIX: Shot.result already treats a release before the game's own Action attribute reaches
+-- "Shooting" as "early (pump fake)" - releasing our synthetic hold before that actually happens IS what was
+-- producing the pump fake, regardless of how correct our calculated hold duration was. Give it a brief, bounded
+-- window to actually reach "Shooting" first.
+if S.ShotStyle == "Tap" then
+local waitUntil = tick() + 0.25
+local c2 = char()
+while c2 and c2.Parent and c2:GetAttribute("Action") ~= "Shooting" and tick() < waitUntil do
+RunService.Heartbeat:Wait()
+end
+end
+Shot.release("remote", ctx)
+end
 ctx.released = true
 Shot.stats.shots = Shot.stats.shots + 1
 Shot.lastType = key
@@ -6035,9 +6051,11 @@ end
 P = UI.Page("Shooting", "S")
 do
 -- Everything that isn't Auto Green itself, Ultra Auto Calibrate, or the actual adjust sliders is now forced on at
--- its best setting and hidden, instead of being a toggle someone could accidentally turn off. ShotStyle/PerfectGreen
--- used to be user-facing toggles; they are now just always-correct behavior under the hood.
-S.ShotStyle = "Hold"
+-- its best setting and hidden, instead of being a toggle someone could accidentally turn off. ShotStyle used to have
+-- its own dropdown - keep whatever value was already saved (Hold or Tap) instead of clobbering it, just hide the
+-- control; PerfectGreen used to be a toggle, that one really is just always-correct on.
+S.ShotStyle = S.ShotStyle == "Tap" and "Tap" or "Hold"
+S.ShotTapMode = S.ShotStyle == "Tap"
 S.PerfectGreen = true
 if not S.PerfectGreenPct or S.PerfectGreenPct < 60 then S.PerfectGreenPct = 100 end
 S.AutoTiming = true
@@ -6048,6 +6066,7 @@ local on = S.AutoGreen ~= false
 S.AutoCal, S.Learn = on, on
 end
 UI.Toggle(g, "Auto Green", "AutoGreen", function() UI.syncAuto() end)
+UI.Toggle(g, "Tap to shoot (instead of hold)", "ShotTapMode", function(v) S.ShotStyle = v and "Tap" or "Hold" end)
 UI.Slider(g, "Starting hold time", "HoldTime", 0.08, 1.6, 0.005, 3, "s")
 UI.Slider(g, "Release earlier / later", "Nudge", -150, 150, 5, 0, "ms")
 if showLocked then
@@ -11768,6 +11787,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.93 - fixed tap-to-shoot producing a pump fake: Shot.result already treats a release before the game's own Action attribute reaches \"Shooting\" as a pump fake - releasing our synthetic hold before that actually happened was the real cause, now it waits briefly for it first. Also reverted v1.92 accidentally forcing Shot Style to Hold permanently (a real bug, your Tap setting is preserved now, with a toggle back on Auto Green since the dropdown was removed). Also added a small bounded late-bias to the peak-fit release prediction, proportional to that jumpshot's own measured precision - never aims early on purpose, and if it's going to miss, errs toward landing just past the peak (still green) instead of short of it",
 "v1.92 - big batch: Auto Calibrate renamed Ultra Auto Calibrate with momentum (repeated same-direction misses accelerate the step instead of crawling); Shooting tab trimmed to Auto Green/Ultra Auto Calibrate/Shot Time/adjust sliders only, everything else (shot style, perfect green, auto timing) forced on and hidden instead of being toggles; new Shot Time card (per-category release offset for jump/fade/post fade/layup/dunk, save+share as a named config); new hidden always-on Shot Stabilizer (ping comp auto-scales from real ping/FPS, no manual slider); new Settings tab (copy your whole config, upload/search/load named configs); defense contest highlight on whoever you're actually guarding (4 tiers by real distance); Dev renamed Co-Owner (blue), Mod now red; new Owner/Co-Owner/Mod-only announcement banner at the top of the screen; Discord button icon replaced with a drawn mark instead of a bare 'D'. Did not add predictive pre-shot animation detection (no real signal exists before the animation starts) or touch Glide/dribble code (no diagnostic evidence provided)",
 "v1.91 - Owner/Dev/Mod are now lists, not single names, so multiple people can hold each role; added 'Add me as...' buttons that fill in your own name instead of typing it; added a live 'Players online' count on the Main tab from real heartbeats, not just an ever-growing push counter",
 "v1.90 - reverted the whole Universal Shot Intelligence addition (v1.85-v1.89): the confidence/retest piece was actually unlocking previously-good locked timing profiles when it judged recent shots inconsistent, which made real shooting worse, not just diagnostics - back to the plain v1.84 shot-timing behavior",
@@ -12202,7 +12222,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.92"
+local VERSION = "v1.93"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -12308,7 +12328,7 @@ local S = {
 	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false, ShotTimeJump = 0, ShotTimeFade = 0, ShotTimePostFade = 0, ShotTimeLayup = 0, ShotTimeDunk = 0,
+	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false, ShotTimeJump = 0, ShotTimeFade = 0, ShotTimePostFade = 0, ShotTimeLayup = 0, ShotTimeDunk = 0, ShotTapMode = false,
 	AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 	AGOnlyBall = true,
 	BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
@@ -14520,7 +14540,7 @@ function Shot.remoteCore(ctx)
 			-- by the meter: let go one ping plus the lead before the meter reaches its peak
 			local tp = Shot.peakFitSmart(samples, key)
 			if tp and (not S.LagSync or tp - m0 > 0.22) then
-				hold = math.max(Shot.FLOOR, tp - (Shot.effPing() + peakLead) - m0 - Shot.fpsComp())
+				hold = math.max(Shot.FLOOR, tp - (Shot.effPing() + peakLead) - m0 - Shot.fpsComp()) + (S.PeakBin or 0.014) * 0.5
 				peakAimed = true
 			end
 			if now - m0 >= hold - look and (peakAimed or now - m0 >= Shot.AUTO_START - look) then break end
@@ -14557,7 +14577,20 @@ function Shot.remoteCore(ctx)
 	while not manual and not ctx.ended and tick() - m0 < hold do RunService.Heartbeat:Wait() end
 	local held = tick() - m0
 	Shot.markShot()
-	if not manual then Shot.release("remote", ctx) end
+	if not manual then
+-- TAP-TO-SHOOT PUMP FAKE FIX: Shot.result already treats a release before the game's own Action attribute reaches
+-- "Shooting" as "early (pump fake)" - releasing our synthetic hold before that actually happens IS what was
+-- producing the pump fake, regardless of how correct our calculated hold duration was. Give it a brief, bounded
+-- window to actually reach "Shooting" first.
+if S.ShotStyle == "Tap" then
+local waitUntil = tick() + 0.25
+local c2 = char()
+while c2 and c2.Parent and c2:GetAttribute("Action") ~= "Shooting" and tick() < waitUntil do
+RunService.Heartbeat:Wait()
+end
+end
+Shot.release("remote", ctx)
+end
 	ctx.released = true
 	Shot.stats.shots = Shot.stats.shots + 1
 	Shot.lastType = key
@@ -18483,7 +18516,8 @@ function UI.restore(keys, after)
 end
 P = UI.Page("Shooting", "S")
 do
-	S.ShotStyle = "Hold"
+	S.ShotStyle = S.ShotStyle == "Tap" and "Tap" or "Hold"
+	S.ShotTapMode = S.ShotStyle == "Tap"
 	S.PerfectGreen = true
 	if not S.PerfectGreenPct or S.PerfectGreenPct < 60 then S.PerfectGreenPct = 100 end
 	S.AutoTiming = true
@@ -18494,6 +18528,7 @@ do
 		S.AutoCal, S.Learn = on, on
 	end
 	UI.Toggle(g, "Auto Green", "AutoGreen", function() UI.syncAuto() end)
+	UI.Toggle(g, "Tap to shoot (instead of hold)", "ShotTapMode", function(v) S.ShotStyle = v and "Tap" or "Hold" end)
 	UI.Slider(g, "Starting hold time", "HoldTime", 0.08, 1.6, 0.005, 3, "s")
 	UI.Slider(g, "Release earlier / later", "Nudge", -150, 150, 5, 0, "ms")
 
@@ -24268,6 +24303,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.93 - fixed tap-to-shoot producing a pump fake: Shot.result already treats a release before the game's own Action attribute reaches \"Shooting\" as a pump fake - releasing our synthetic hold before that actually happened was the real cause, now it waits briefly for it first. Also reverted v1.92 accidentally forcing Shot Style to Hold permanently (a real bug, your Tap setting is preserved now, with a toggle back on Auto Green since the dropdown was removed). Also added a small bounded late-bias to the peak-fit release prediction, proportional to that jumpshot's own measured precision - never aims early on purpose, and if it's going to miss, errs toward landing just past the peak (still green) instead of short of it",
 "v1.92 - big batch: Auto Calibrate renamed Ultra Auto Calibrate with momentum (repeated same-direction misses accelerate the step instead of crawling); Shooting tab trimmed to Auto Green/Ultra Auto Calibrate/Shot Time/adjust sliders only, everything else (shot style, perfect green, auto timing) forced on and hidden instead of being toggles; new Shot Time card (per-category release offset for jump/fade/post fade/layup/dunk, save+share as a named config); new hidden always-on Shot Stabilizer (ping comp auto-scales from real ping/FPS, no manual slider); new Settings tab (copy your whole config, upload/search/load named configs); defense contest highlight on whoever you're actually guarding (4 tiers by real distance); Dev renamed Co-Owner (blue), Mod now red; new Owner/Co-Owner/Mod-only announcement banner at the top of the screen; Discord button icon replaced with a drawn mark instead of a bare 'D'. Did not add predictive pre-shot animation detection (no real signal exists before the animation starts) or touch Glide/dribble code (no diagnostic evidence provided)",
 "v1.91 - Owner/Dev/Mod are now lists, not single names, so multiple people can hold each role; added 'Add me as...' buttons that fill in your own name instead of typing it; added a live 'Players online' count on the Main tab from real heartbeats, not just an ever-growing push counter",
 "v1.90 - reverted the whole Universal Shot Intelligence addition (v1.85-v1.89): the confidence/retest piece was actually unlocking previously-good locked timing profiles when it judged recent shots inconsistent, which made real shooting worse, not just diagnostics - back to the plain v1.84 shot-timing behavior",
