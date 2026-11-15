@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.93"
+local VERSION = "v1.94"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -2240,6 +2240,25 @@ break
 end
 local now = tick()
 local n = #samples
+-- LIVE CATCH: the real bar position (meterOffset, a real attribute the game itself updates - not a guess) is read
+-- every time it changes. The moment it actually reaches the learned target, for THIS shot, in real time, release
+-- right then instead of only trusting the earlier prediction - this is a direct "freeze the instant it touches
+-- green" reaction, compensated for real ping so the release lands when it actually gets there server-side, not
+-- when we see it client-side.
+if n >= 1 then
+local last = samples[n]
+local qLead = 0
+if n >= 2 then
+local prev = samples[n - 1]
+local dt2 = last.t - prev.t
+if dt2 > 0.001 then qLead = (last.q - prev.q) / dt2 * Shot.effPing() end
+end
+if last.q >= (S.MeterTarget - qLead) and now - last.t < 0.1 then
+usedMeter = true
+qpred = last.q
+break
+end
+end
 if peakLead then
 local tp = Shot.peakFitSmart(samples, key)
 if tp and (not S.LagSync or tp - m0 > 0.22) then
@@ -11787,6 +11806,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.94 - added a live catch to Auto Green: the real bar position (meterOffset, the game's own attribute, not a guess) is watched every time it actually moves, and the instant it reaches the learned target it releases right then (ping-compensated), instead of only relying on predicting ahead of time where it will be - closer to \"freeze the moment it touches green\" than a prediction ever could be",
 "v1.93 - fixed tap-to-shoot producing a pump fake: Shot.result already treats a release before the game's own Action attribute reaches \"Shooting\" as a pump fake - releasing our synthetic hold before that actually happened was the real cause, now it waits briefly for it first. Also reverted v1.92 accidentally forcing Shot Style to Hold permanently (a real bug, your Tap setting is preserved now, with a toggle back on Auto Green since the dropdown was removed). Also added a small bounded late-bias to the peak-fit release prediction, proportional to that jumpshot's own measured precision - never aims early on purpose, and if it's going to miss, errs toward landing just past the peak (still green) instead of short of it",
 "v1.92 - big batch: Auto Calibrate renamed Ultra Auto Calibrate with momentum (repeated same-direction misses accelerate the step instead of crawling); Shooting tab trimmed to Auto Green/Ultra Auto Calibrate/Shot Time/adjust sliders only, everything else (shot style, perfect green, auto timing) forced on and hidden instead of being toggles; new Shot Time card (per-category release offset for jump/fade/post fade/layup/dunk, save+share as a named config); new hidden always-on Shot Stabilizer (ping comp auto-scales from real ping/FPS, no manual slider); new Settings tab (copy your whole config, upload/search/load named configs); defense contest highlight on whoever you're actually guarding (4 tiers by real distance); Dev renamed Co-Owner (blue), Mod now red; new Owner/Co-Owner/Mod-only announcement banner at the top of the screen; Discord button icon replaced with a drawn mark instead of a bare 'D'. Did not add predictive pre-shot animation detection (no real signal exists before the animation starts) or touch Glide/dribble code (no diagnostic evidence provided)",
 "v1.91 - Owner/Dev/Mod are now lists, not single names, so multiple people can hold each role; added 'Add me as...' buttons that fill in your own name instead of typing it; added a live 'Players online' count on the Main tab from real heartbeats, not just an ever-growing push counter",
@@ -12222,7 +12242,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.93"
+local VERSION = "v1.94"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -14535,6 +14555,20 @@ function Shot.remoteCore(ctx)
 		end
 		local now = tick()
 		local n = #samples
+		if n >= 1 then
+			local last = samples[n]
+			local qLead = 0
+			if n >= 2 then
+				local prev = samples[n - 1]
+				local dt2 = last.t - prev.t
+				if dt2 > 0.001 then qLead = (last.q - prev.q) / dt2 * Shot.effPing() end
+			end
+			if last.q >= (S.MeterTarget - qLead) and now - last.t < 0.1 then
+				usedMeter = true
+				qpred = last.q
+				break
+			end
+		end
 		-- the meter moves by itself: JHub releases when it is about to reach the aim point (by the meter, not by a clock)
 		if peakLead then
 			-- by the meter: let go one ping plus the lead before the meter reaches its peak
@@ -24303,6 +24337,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.94 - added a live catch to Auto Green: the real bar position (meterOffset, the game's own attribute, not a guess) is watched every time it actually moves, and the instant it reaches the learned target it releases right then (ping-compensated), instead of only relying on predicting ahead of time where it will be - closer to \"freeze the moment it touches green\" than a prediction ever could be",
 "v1.93 - fixed tap-to-shoot producing a pump fake: Shot.result already treats a release before the game's own Action attribute reaches \"Shooting\" as a pump fake - releasing our synthetic hold before that actually happened was the real cause, now it waits briefly for it first. Also reverted v1.92 accidentally forcing Shot Style to Hold permanently (a real bug, your Tap setting is preserved now, with a toggle back on Auto Green since the dropdown was removed). Also added a small bounded late-bias to the peak-fit release prediction, proportional to that jumpshot's own measured precision - never aims early on purpose, and if it's going to miss, errs toward landing just past the peak (still green) instead of short of it",
 "v1.92 - big batch: Auto Calibrate renamed Ultra Auto Calibrate with momentum (repeated same-direction misses accelerate the step instead of crawling); Shooting tab trimmed to Auto Green/Ultra Auto Calibrate/Shot Time/adjust sliders only, everything else (shot style, perfect green, auto timing) forced on and hidden instead of being toggles; new Shot Time card (per-category release offset for jump/fade/post fade/layup/dunk, save+share as a named config); new hidden always-on Shot Stabilizer (ping comp auto-scales from real ping/FPS, no manual slider); new Settings tab (copy your whole config, upload/search/load named configs); defense contest highlight on whoever you're actually guarding (4 tiers by real distance); Dev renamed Co-Owner (blue), Mod now red; new Owner/Co-Owner/Mod-only announcement banner at the top of the screen; Discord button icon replaced with a drawn mark instead of a bare 'D'. Did not add predictive pre-shot animation detection (no real signal exists before the animation starts) or touch Glide/dribble code (no diagnostic evidence provided)",
 "v1.91 - Owner/Dev/Mod are now lists, not single names, so multiple people can hold each role; added 'Add me as...' buttons that fill in your own name instead of typing it; added a live 'Players online' count on the Main tab from real heartbeats, not just an ever-growing push counter",
