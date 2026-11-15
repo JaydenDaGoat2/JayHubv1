@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.01"
+local VERSION = "v2.02"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -281,6 +281,7 @@ if S.SettingsVer < 29 then S.Codes = DEFAULTS.Codes end
 if S.SettingsVer < 31 then S.LagSync, S.PrecFit, S.AdaptPlus = false, false, false end
 if S.SettingsVer < 32 then S.LagSync, S.PrecFit, S.AdaptPlus, S.GreenMax, S.Sweep = true, true, true, true, false end
 S.Sweep = false -- sweep stays off at all times; it deliberately misses to map timing, never wanted in real play
+S.GlideShotSafe = false -- was blocking shot/gather glide and all speed boosts outright; forced off until fixed
 if S.SettingsVer < 33 then S.FirstShot = false end
 if S.SettingsVer < 34 then S.CardTrans = 0.4 end
 if S.SettingsVer < 35 then
@@ -9397,7 +9398,7 @@ if S.GlideShotSafe then
 local now = tick()
 local c = char()
 local act = c and c:GetAttribute("Action")
-if kind ~= "shot" and (holding() or now - (Mover.shotUpT or 0) < 0.35 or act == "Shooting") then return end
+if kind ~= "shot" and kind ~= "gather" and (holding() or now - (Mover.shotUpT or 0) < 0.35 or act == "Shooting") then return end
 if kind == "shot" and now - (Mover.shotUpT or 0) < 0.12 then
 task.delay(0.12, function() if JH.Running then pcall(baseFire, kind, why, dir) end end)
 return
@@ -11834,6 +11835,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.02 - found it: a \"keep glides off the shot\" feature (GlideShotSafe) was gating Glide.fire and Speed.step behind a shoot-button-held check that could get stuck true, which silently killed Shot Glide, Gather Step Glide, and ALL speed boosts (walk/run/ball) together - forced that feature off, and fixed Gather Step Glide being grouped with Dribble Glide in its block list (a gather step isn't a dribble, it shouldn't pause for the shot)",
 "v2.01 - reverted the meter late-bias, the tap-to-shoot Action-wait fix, and the locked-jumpshot-promotion fix - the bar was stopping/missing badly after those went back in. Shot Green Stabilizer stays (that one wasn't the problem). Back to plain prediction-only release timing on top of v2.00",
 "v2.00 - added a Sound ID picker under Alerts and keys: 6 unverified candidate Roblox audio IDs pulled from the web (not labeled, not confirmed to work or sound like anything specific - a real search turned up almost nothing usable), pick one to try as the Green sound ID",
 "v1.99 - big batch: autoexec now self-refreshes to the current version every load instead of freezing at whatever was on disk when it was first turned on; re-added the locked-jumpshot-promotion fix (a real Perfect shoots the exact same way every time, shared per animation ID); Shot Green Stabilizer is now visible on the Shooting tab with a live status line and genuinely does nothing under 50ms ping; added a live ping/FPS list for everyone running the script plus click-a-name-to-add in the Owner tab; announcement banner text is pure white with a thinner role-colored outline; fixed Code/Announcement text boxes not clearing after submit (the {get,set} Input pattern never refreshed the box); chat now auto-scrolls to the bottom on new messages unless you scrolled up on purpose; Auto Block's range slider now doubles as an aggressiveness dial (maxed = always attempts a jump even from far away, minimized = near-instant jump up close); added outline transparency and a custom RGB color option (Rainbow already existed). Declined: a curated Roblox sound-ID list (can't verify real IDs without fabricating them), using a real person's photo as the logo/background, and further blind changes to tap-to-shoot/Auto Guard's walk animation/Glide without new evidence",
@@ -12237,7 +12239,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.01"
+local VERSION = "v2.02"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -12485,6 +12487,7 @@ if S.SettingsVer < 29 then S.Codes = DEFAULTS.Codes end
 if S.SettingsVer < 31 then S.LagSync, S.PrecFit, S.AdaptPlus = false, false, false end
 if S.SettingsVer < 32 then S.LagSync, S.PrecFit, S.AdaptPlus, S.GreenMax, S.Sweep = true, true, true, true, false end
 S.Sweep = false -- sweep stays off at all times; it deliberately misses to map timing, never wanted in real play
+S.GlideShotSafe = false -- was blocking shot/gather glide and all speed boosts outright; forced off until fixed
 if S.SettingsVer < 33 then S.FirstShot = false end
 if S.SettingsVer < 34 then S.CardTrans = 0.4 end
 if S.SettingsVer < 35 then
@@ -21917,7 +21920,7 @@ do
 			local now = tick()
 			local c = char()
 			local act = c and c:GetAttribute("Action")
-			if kind ~= "shot" and (holding() or now - (Mover.shotUpT or 0) < 0.35 or act == "Shooting") then return end
+			if kind ~= "shot" and kind ~= "gather" and (holding() or now - (Mover.shotUpT or 0) < 0.35 or act == "Shooting") then return end
 			if kind == "shot" and now - (Mover.shotUpT or 0) < 0.12 then
 				task.delay(0.12, function() if JH.Running then pcall(baseFire, kind, why, dir) end end)
 				return
@@ -24351,6 +24354,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.02 - found it: a \"keep glides off the shot\" feature (GlideShotSafe) was gating Glide.fire and Speed.step behind a shoot-button-held check that could get stuck true, which silently killed Shot Glide, Gather Step Glide, and ALL speed boosts (walk/run/ball) together - forced that feature off, and fixed Gather Step Glide being grouped with Dribble Glide in its block list (a gather step isn't a dribble, it shouldn't pause for the shot)",
 "v2.01 - reverted the meter late-bias, the tap-to-shoot Action-wait fix, and the locked-jumpshot-promotion fix - the bar was stopping/missing badly after those went back in. Shot Green Stabilizer stays (that one wasn't the problem). Back to plain prediction-only release timing on top of v2.00",
 "v2.00 - added a Sound ID picker under Alerts and keys: 6 unverified candidate Roblox audio IDs pulled from the web (not labeled, not confirmed to work or sound like anything specific - a real search turned up almost nothing usable), pick one to try as the Green sound ID",
 "v1.99 - big batch: autoexec now self-refreshes to the current version every load instead of freezing at whatever was on disk when it was first turned on; re-added the locked-jumpshot-promotion fix (a real Perfect shoots the exact same way every time, shared per animation ID); Shot Green Stabilizer is now visible on the Shooting tab with a live status line and genuinely does nothing under 50ms ping; added a live ping/FPS list for everyone running the script plus click-a-name-to-add in the Owner tab; announcement banner text is pure white with a thinner role-colored outline; fixed Code/Announcement text boxes not clearing after submit (the {get,set} Input pattern never refreshed the box); chat now auto-scrolls to the bottom on new messages unless you scrolled up on purpose; Auto Block's range slider now doubles as an aggressiveness dial (maxed = always attempts a jump even from far away, minimized = near-instant jump up close); added outline transparency and a custom RGB color option (Rainbow already existed). Declined: a curated Roblox sound-ID list (can't verify real IDs without fabricating them), using a real person's photo as the logo/background, and further blind changes to tap-to-shoot/Auto Guard's walk animation/Glide without new evidence",
