@@ -11,7 +11,7 @@
     Tabs: Main, Shooting, Dribbling, Players, UI
     Tap the moving JH logo to open / close the menu.
 
-    JHUB_VERSION: v2.27
+    JHUB_VERSION: v2.28
     (this header is never obfuscated, so the auto-update check below can always read the version
     here even from the published build, where "local VERSION = ..." is hidden by the obfuscator -
     keep this line in sync with VERSION on every bump, or the auto-update check breaks again)
@@ -97,7 +97,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.27"
+local VERSION = "v2.28"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -297,7 +297,7 @@ local S = {
 	DribbleGlideSpeed = 1, ShotGlideSpeed = 1, GatherGlideSpeed = 1,
 	GfxLow = false, GfxEffects = false, GfxTextures = false, GfxShadows = false, GfxPost = false, GfxHideOthers = false, GfxCull = false,
 	GfxCullDist = 250, GfxBoost = false, GfxFpsCap = 0, PingStab = false, PingWindow = 3, FinalAdj = "",
-	ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
+	ShotGlideMethod = "GameVel", ShotGlideWhen = "During shot", NoStun = false, StunIds = "", HoopMarks = "",
 LagSync = false, LagK = 2, PrecFit = false, PeakBin = 0.014, AdaptPlus = false, GreenMax = false,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = false, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
@@ -475,8 +475,12 @@ if S.SettingsVer < 38 then S.LowFix = false end
 -- be the same learner it has always been, with a little added on top, not the more experimental version these
 -- six add up to - resetting them one more time now that the thing that kept re-enabling them is actually gone.
 if S.SettingsVer < 39 then S.AdaptPlus, S.SmartSteps, S.AutoAdaptAll, S.AllJumpers, S.LagSync, S.PrecFit = false, false, false, false, false, false end
-S.SettingsVer = 39
-DEFAULTS.SettingsVer = 39
+-- shot glide used to wait for the shot to fully release before gliding at all, which is why it felt like it
+-- glided after you were already done shooting instead of while you were shooting - flipping anyone still on
+-- that old default over to "During shot" too, not just new installs
+if S.SettingsVer < 40 then S.ShotGlideWhen = "During shot" end
+S.SettingsVer = 40
+DEFAULTS.SettingsVer = 40
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 S.ShotTimes = S.ShotTimes
 S.RecOn = false
@@ -7166,6 +7170,17 @@ function Glide.start(kind, power, duration, dirOverride)
 			return nil
 		end
 		if Glide.input then Glide.input.paused = false end
+		-- dribble and gather glides should follow wherever you are actually dribbling toward right now, not keep
+		-- pushing in whatever direction you happened to be facing the instant the glide started - re-read your
+		-- live stick/input direction every frame for those two kinds so you lead the glide instead of the glide
+		-- dragging you off in a stale direction. Shot glide stays locked to its direction at release on purpose.
+		if kind == "dribble" or kind == "gather" then
+			local okI, liveIntent = pcall(Mover.intent, h, r)
+			if okI and liveIntent then
+				local liveDir = flat(liveIntent)
+				if liveDir.Magnitude > 0.1 then dir = liveDir.Unit end
+			end
+		end
 		local p = clamp((tick() - now) / duration, 0, 1)
 		if method == "CFrame" then
 			local want = power * duration * 0.8 * (2 * p - p * p)
@@ -7746,6 +7761,12 @@ do
 		local pk0 = c0 and c0:GetAttribute("LastDribblePackage")
 		local dir = Mover.moveWhere(1.5)
 		if not dir and typeof(args[3]) == "Vector3" and flat(args[3]).Magnitude > 0.1 then dir = flat(args[3]) end
+		-- used to wait up to 0.1s for the game to tell us which exact dribble move this was before gliding at all -
+		-- that wait is what made the glide feel like it started a beat late instead of instantly with the press.
+		-- fire the dribble glide right now, in whatever direction you are already dribbling toward; the wait below
+		-- only still runs to catch the moves that need a different glide entirely (step backs, gather steps), and
+		-- to correct direction for those - it no longer gates the normal, by-far-most-common dribble case at all.
+		Glide.fire("dribble", "dribble press " .. tostring(args[1]), dir)
 		task.spawn(function()
 			local t0 = tick()
 			while JH.Running and tick() - t0 < 0.1 do
@@ -7767,8 +7788,6 @@ do
 			dir = Mover.moveWhere(1.5) or dir
 			if matchAny(name, Mover.GATHER_MOVES) then
 				Glide.fire("gather", "gather move " .. name, dir)
-			else
-				Glide.fire("dribble", "dribble move " .. (name ~= "" and name or tostring(args[1])), dir)
 			end
 		end)
 	end
@@ -7778,7 +7797,11 @@ do
 	function Shot.onShootCall(args)
 	local d = args[1]
 	if type(d) == "table" then
-	if d.Shoot == true and (S.DribbleGlide or S.GatherGlide) then pcall(Glide.cancel) end
+	-- a gather step (hop/euro/spin into a shot) almost always leads straight into a shot press within a split
+	-- second of starting - cancelling it here the instant you press shoot was killing the gather glide before it
+	-- ever got to move you, which is exactly the case people actually want it for. Only the dribble glide still
+	-- gets cancelled on a shot press; the shot glide (if on) takes over the same glide slot on its own right after.
+	if d.Shoot == true and S.DribbleGlide then pcall(Glide.cancel) end
 	if d.Shoot == false then Mover.shotUpT = tick() end
 	end
 	return baseShoot(args)
@@ -12587,6 +12610,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.28 - Gather Step Glide was getting cancelled the instant you pressed shoot, which is almost always within a split second of a hop/euro/gather step - that's why it felt completely broken for exactly the moves people wanted it for. It no longer gets cancelled on a shot press (Dribble Glide still does). Dribble Glide now fires the moment you press a dribble button in whatever direction you're already dribbling, instead of waiting up to 0.1s to classify the move first - that wait is what made it feel like it started late. Both Dribble Glide and Gather Step Glide now keep following your live input direction the whole time they're active, instead of locking onto whichever direction you happened to be facing the instant they started. Shot Glide now fires while you're shooting by default instead of waiting until after you've already released the shot.",
 "v2.27 (TEST, not published) - Found why Auto Green felt worse than the old v1.34 version people remember as the best: Ultra Auto Calibrate (on by default) was force-enabling six experimental upgrades (AdaptPlus, SmartSteps, AutoAdaptAll, AllJumpers, LagSync, PrecFit) on every single load, silently undoing an earlier attempt to turn them back off and keeping everyone on a fancier, more reactive-to-noise version of the learner instead of the plain one Auto Green has always run. Ultra Auto Calibrate no longer touches any of those - it only does its own direct additions now (Learn speed control, instant Perfect-sharing, community seeding for brand-new shots), none of which change how the core learner reacts shot to shot. The actual core algorithm (lock in instantly on a real Perfect, small momentum-based nudge otherwise) is unchanged from how it has always worked. Anyone who wants the experimental stuff can still turn each one on individually under Auto Green MAX.",
 "v2.26 (TEST, not published) - Reverted v2.25's change that let a Perfect hard-lock a shot even when it already had a built-in base timing: one lucky Perfect is not necessarily dead-center, and locking onto it with nothing left afterward to correct it made shooting noticeably worse. Back to only hard-locking shots with no known base timing at all. The Learn speed slider now genuinely speeding up the built-in shots' ongoing small adjustment (also from v2.25) is kept, since that is not a one-shot permanent override.",
 "v2.25 (TEST, not published) - Speed boost and dribble/shot/gather glide now always do at least a tiny, not-humanly-noticeable amount when their toggle is on, even at the lowest slider setting, instead of the lowest setting silently doing nothing. A real Perfect now locks in and shares the timing for ANY shot, including ones with a built-in base timing (most normal jumpshots) - it used to skip the lock for those entirely, which is almost certainly why locking in off a Perfect felt like it was not doing anything. The gradual adjustment for built-in shots (Auto adapt toggle) now actually scales with the Learn speed slider instead of ignoring it. Also fixed a bug where the auto-update check could downgrade a newer build back down to whatever is published, going only off whether the version matched instead of checking which one is actually newer.",
@@ -13402,7 +13426,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.27"
+local VERSION = "v2.28"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -13602,7 +13626,7 @@ local S = {
 	DribbleGlideSpeed = 1, ShotGlideSpeed = 1, GatherGlideSpeed = 1,
 	GfxLow = false, GfxEffects = false, GfxTextures = false, GfxShadows = false, GfxPost = false, GfxHideOthers = false, GfxCull = false,
 	GfxCullDist = 250, GfxBoost = false, GfxFpsCap = 0, PingStab = false, PingWindow = 3, FinalAdj = "",
-	ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
+	ShotGlideMethod = "GameVel", ShotGlideWhen = "During shot", NoStun = false, StunIds = "", HoopMarks = "",
 LagSync = false, LagK = 2, PrecFit = false, PeakBin = 0.014, AdaptPlus = false, GreenMax = false,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = false, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
@@ -13780,8 +13804,12 @@ if S.SettingsVer < 38 then S.LowFix = false end
 -- be the same learner it has always been, with a little added on top, not the more experimental version these
 -- six add up to - resetting them one more time now that the thing that kept re-enabling them is actually gone.
 if S.SettingsVer < 39 then S.AdaptPlus, S.SmartSteps, S.AutoAdaptAll, S.AllJumpers, S.LagSync, S.PrecFit = false, false, false, false, false, false end
-S.SettingsVer = 39
-DEFAULTS.SettingsVer = 39
+-- shot glide used to wait for the shot to fully release before gliding at all, which is why it felt like it
+-- glided after you were already done shooting instead of while you were shooting - flipping anyone still on
+-- that old default over to "During shot" too, not just new installs
+if S.SettingsVer < 40 then S.ShotGlideWhen = "During shot" end
+S.SettingsVer = 40
+DEFAULTS.SettingsVer = 40
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 S.ShotTimes = S.ShotTimes
 S.RecOn = false
@@ -20471,6 +20499,17 @@ function Glide.start(kind, power, duration, dirOverride)
 			return nil
 		end
 		if Glide.input then Glide.input.paused = false end
+		-- dribble and gather glides should follow wherever you are actually dribbling toward right now, not keep
+		-- pushing in whatever direction you happened to be facing the instant the glide started - re-read your
+		-- live stick/input direction every frame for those two kinds so you lead the glide instead of the glide
+		-- dragging you off in a stale direction. Shot glide stays locked to its direction at release on purpose.
+		if kind == "dribble" or kind == "gather" then
+			local okI, liveIntent = pcall(Mover.intent, h, r)
+			if okI and liveIntent then
+				local liveDir = flat(liveIntent)
+				if liveDir.Magnitude > 0.1 then dir = liveDir.Unit end
+			end
+		end
 		local p = clamp((tick() - now) / duration, 0, 1)
 		if method == "CFrame" then
 			local want = power * duration * 0.8 * (2 * p - p * p)
@@ -21051,6 +21090,12 @@ do
 		local pk0 = c0 and c0:GetAttribute("LastDribblePackage")
 		local dir = Mover.moveWhere(1.5)
 		if not dir and typeof(args[3]) == "Vector3" and flat(args[3]).Magnitude > 0.1 then dir = flat(args[3]) end
+		-- used to wait up to 0.1s for the game to tell us which exact dribble move this was before gliding at all -
+		-- that wait is what made the glide feel like it started a beat late instead of instantly with the press.
+		-- fire the dribble glide right now, in whatever direction you are already dribbling toward; the wait below
+		-- only still runs to catch the moves that need a different glide entirely (step backs, gather steps), and
+		-- to correct direction for those - it no longer gates the normal, by-far-most-common dribble case at all.
+		Glide.fire("dribble", "dribble press " .. tostring(args[1]), dir)
 		task.spawn(function()
 			local t0 = tick()
 			while JH.Running and tick() - t0 < 0.1 do
@@ -21072,8 +21117,6 @@ do
 			dir = Mover.moveWhere(1.5) or dir
 			if matchAny(name, Mover.GATHER_MOVES) then
 				Glide.fire("gather", "gather move " .. name, dir)
-			else
-				Glide.fire("dribble", "dribble move " .. (name ~= "" and name or tostring(args[1])), dir)
 			end
 		end)
 	end
@@ -21083,7 +21126,11 @@ do
 	function Shot.onShootCall(args)
 	local d = args[1]
 	if type(d) == "table" then
-	if d.Shoot == true and (S.DribbleGlide or S.GatherGlide) then pcall(Glide.cancel) end
+	-- a gather step (hop/euro/spin into a shot) almost always leads straight into a shot press within a split
+	-- second of starting - cancelling it here the instant you press shoot was killing the gather glide before it
+	-- ever got to move you, which is exactly the case people actually want it for. Only the dribble glide still
+	-- gets cancelled on a shot press; the shot glide (if on) takes over the same glide slot on its own right after.
+	if d.Shoot == true and S.DribbleGlide then pcall(Glide.cancel) end
 	if d.Shoot == false then Mover.shotUpT = tick() end
 	end
 	return baseShoot(args)
@@ -25892,6 +25939,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.28 - Gather Step Glide was getting cancelled the instant you pressed shoot, which is almost always within a split second of a hop/euro/gather step - that's why it felt completely broken for exactly the moves people wanted it for. It no longer gets cancelled on a shot press (Dribble Glide still does). Dribble Glide now fires the moment you press a dribble button in whatever direction you're already dribbling, instead of waiting up to 0.1s to classify the move first - that wait is what made it feel like it started late. Both Dribble Glide and Gather Step Glide now keep following your live input direction the whole time they're active, instead of locking onto whichever direction you happened to be facing the instant they started. Shot Glide now fires while you're shooting by default instead of waiting until after you've already released the shot.",
 "v2.27 (TEST, not published) - Found why Auto Green felt worse than the old v1.34 version people remember as the best: Ultra Auto Calibrate (on by default) was force-enabling six experimental upgrades (AdaptPlus, SmartSteps, AutoAdaptAll, AllJumpers, LagSync, PrecFit) on every single load, silently undoing an earlier attempt to turn them back off and keeping everyone on a fancier, more reactive-to-noise version of the learner instead of the plain one Auto Green has always run. Ultra Auto Calibrate no longer touches any of those - it only does its own direct additions now (Learn speed control, instant Perfect-sharing, community seeding for brand-new shots), none of which change how the core learner reacts shot to shot. The actual core algorithm (lock in instantly on a real Perfect, small momentum-based nudge otherwise) is unchanged from how it has always worked. Anyone who wants the experimental stuff can still turn each one on individually under Auto Green MAX.",
 "v2.26 (TEST, not published) - Reverted v2.25's change that let a Perfect hard-lock a shot even when it already had a built-in base timing: one lucky Perfect is not necessarily dead-center, and locking onto it with nothing left afterward to correct it made shooting noticeably worse. Back to only hard-locking shots with no known base timing at all. The Learn speed slider now genuinely speeding up the built-in shots' ongoing small adjustment (also from v2.25) is kept, since that is not a one-shot permanent override.",
 "v2.25 (TEST, not published) - Speed boost and dribble/shot/gather glide now always do at least a tiny, not-humanly-noticeable amount when their toggle is on, even at the lowest slider setting, instead of the lowest setting silently doing nothing. A real Perfect now locks in and shares the timing for ANY shot, including ones with a built-in base timing (most normal jumpshots) - it used to skip the lock for those entirely, which is almost certainly why locking in off a Perfect felt like it was not doing anything. The gradual adjustment for built-in shots (Auto adapt toggle) now actually scales with the Learn speed slider instead of ignoring it. Also fixed a bug where the auto-update check could downgrade a newer build back down to whatever is published, going only off whether the version matched instead of checking which one is actually newer.",
