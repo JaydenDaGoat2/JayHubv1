@@ -11,7 +11,7 @@
     Tabs: Main, Shooting, Dribbling, Players, UI
     Tap the moving JH logo to open / close the menu.
 
-    JHUB_VERSION: v2.30
+    JHUB_VERSION: v2.31
     (this header is never obfuscated, so the auto-update check below can always read the version
     here even from the published build, where "local VERSION = ..." is hidden by the obfuscator -
     keep this line in sync with VERSION on every bump, or the auto-update check breaks again)
@@ -97,7 +97,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.30"
+local VERSION = "v2.31"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -3079,7 +3079,11 @@ end
 function Speed.extraNow()
 	local kind, level = Speed.pick()
 	Speed.kind = kind
-	local extra = (kind and level > 0) and Speed.gameWS * (1.1 ^ level - 1) or 0
+	-- back to the original v1 speed boost math: a plain straight-line amount per level instead of a curve that
+	-- multiplies off your current game WalkSpeed - the exponential version made the actual amount of extra speed
+	-- swing around with whatever your base speed happened to be at the time, which is what made it feel broken
+	-- and inconsistent instead of just being a fixed, predictable boost
+	local extra = (kind and level > 0) and level * Speed.PER_LEVEL or 0
 	local f = Speed.lowFactor()
 	local more = 1 + ((S.LowBoostPct or 25) / 100) * f
 	extra = clamp(extra * more, 0, S.SpeedCap * more)
@@ -4454,15 +4458,10 @@ function Rec.scanLoop()
 end
 function Rec.hook()
 	if Rec.hooked or type(hookmetamethod) ~= "function" or type(getnamecallmethod) ~= "function" then return end
+	Rec.hooked = true
+	Shot.hooked = true
 	local wrap = type(newcclosure) == "function" and newcclosure or function(f) return f end
 	local old
-	-- hookmetamethod existing on this executor is no guarantee the call below actually installs the hook - if it
-	-- throws, the hook never goes in, but Rec.hooked/Shot.hooked used to get set to true right before this call
-	-- regardless, which told the rest of the script the fast, remote-based detection (what Auto Green's main
-	-- path and every glide's shot-cancel run through) was working when it silently was not - every fallback
-	-- gated on "not Shot.hooked" stayed off too, leaving nothing in its place. Namecall hooking is one of the
-	-- least standardized parts of the executor API, so only mark either one hooked once this has actually gone through.
-	local okHook = pcall(function()
 	old = hookmetamethod(game, "__namecall", wrap(function(self, ...)
 		local method = getnamecallmethod()
 		if Rec.on and method == "SetAttribute" and JH.Running and type(checkcaller) == "function" and checkcaller() and not Rec.fromUs() then
@@ -4510,10 +4509,6 @@ function Rec.hook()
 		end
 		return old(self, ...)
 	end))
-	end)
-	if not okHook then return end
-	Rec.hooked = true
-	Shot.hooked = true
 end
 -- and what the server sends back
 function Rec.connectRemotes()
@@ -12633,6 +12628,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.31 - Reverted the Xeno/MacSploit shoot-hook change from v2.30 (back to how v2.29 did it) and put speed boost's math back to the original v1 version: a plain fixed amount of extra speed per level instead of a curve multiplied off your current game WalkSpeed, which is what made the amount of boost feel inconsistent. Shooting/Auto Green's own code is unchanged from v2.27.",
 "v2.30 - Found a real reason Auto Green can be bad specifically on some executors (reported on Xeno and MacSploit): the script marked itself as having successfully hooked the game's shoot signal the instant it started trying, before actually confirming that hook went through. On an executor where that specific kind of hook (namecall hooking, one of the least standardized parts of the executor API) doesn't fully work, the hook silently failed - but the script still believed it had it, so it never switched on the backup detection method it was built to fall back to. Auto Green was effectively running on no detection at all on those executors instead of falling back to the slower-but-working button/keybind method. Now it only marks itself hooked once the hook call has actually succeeded, so the fallback kicks in for real when it needs to.",
 "v2.29 - Cross-executor fix: the shared timing network (chat, locked jumpshot timings, roles) and the !ai chat command only ever tried calling a function named exactly \"request\" to make their HTTP calls. Most executors expose that, but not all of them do under that exact name - on ones that don't, those three features were silently doing nothing with no error at all. They now fall back through http_request / syn.request / http.request the same way the rest of the script already does for everything else.",
 "v2.28 - Gather Step Glide was getting cancelled the instant you pressed shoot, which is almost always within a split second of a hop/euro/gather step - that's why it felt completely broken for exactly the moves people wanted it for. It no longer gets cancelled on a shot press (Dribble Glide still does). Dribble Glide now fires the moment you press a dribble button in whatever direction you're already dribbling, instead of waiting up to 0.1s to classify the move first - that wait is what made it feel like it started late. Both Dribble Glide and Gather Step Glide now keep following your live input direction the whole time they're active, instead of locking onto whichever direction you happened to be facing the instant they started. Shot Glide now fires while you're shooting by default instead of waiting until after you've already released the shot.",
@@ -13451,7 +13447,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.30"
+local VERSION = "v2.31"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -16433,7 +16429,11 @@ end
 function Speed.extraNow()
 	local kind, level = Speed.pick()
 	Speed.kind = kind
-	local extra = (kind and level > 0) and Speed.gameWS * (1.1 ^ level - 1) or 0
+	-- back to the original v1 speed boost math: a plain straight-line amount per level instead of a curve that
+	-- multiplies off your current game WalkSpeed - the exponential version made the actual amount of extra speed
+	-- swing around with whatever your base speed happened to be at the time, which is what made it feel broken
+	-- and inconsistent instead of just being a fixed, predictable boost
+	local extra = (kind and level > 0) and level * Speed.PER_LEVEL or 0
 	local f = Speed.lowFactor()
 	local more = 1 + ((S.LowBoostPct or 25) / 100) * f
 	extra = clamp(extra * more, 0, S.SpeedCap * more)
@@ -17808,15 +17808,10 @@ function Rec.scanLoop()
 end
 function Rec.hook()
 	if Rec.hooked or type(hookmetamethod) ~= "function" or type(getnamecallmethod) ~= "function" then return end
+	Rec.hooked = true
+	Shot.hooked = true
 	local wrap = type(newcclosure) == "function" and newcclosure or function(f) return f end
 	local old
-	-- hookmetamethod existing on this executor is no guarantee the call below actually installs the hook - if it
-	-- throws, the hook never goes in, but Rec.hooked/Shot.hooked used to get set to true right before this call
-	-- regardless, which told the rest of the script the fast, remote-based detection (what Auto Green's main
-	-- path and every glide's shot-cancel run through) was working when it silently was not - every fallback
-	-- gated on "not Shot.hooked" stayed off too, leaving nothing in its place. Namecall hooking is one of the
-	-- least standardized parts of the executor API, so only mark either one hooked once this has actually gone through.
-	local okHook = pcall(function()
 	old = hookmetamethod(game, "__namecall", wrap(function(self, ...)
 		local method = getnamecallmethod()
 		if Rec.on and method == "SetAttribute" and JH.Running and type(checkcaller) == "function" and checkcaller() and not Rec.fromUs() then
@@ -17864,10 +17859,6 @@ function Rec.hook()
 		end
 		return old(self, ...)
 	end))
-	end)
-	if not okHook then return end
-	Rec.hooked = true
-	Shot.hooked = true
 end
 -- and what the server sends back
 function Rec.connectRemotes()
@@ -25987,6 +25978,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.31 - Reverted the Xeno/MacSploit shoot-hook change from v2.30 (back to how v2.29 did it) and put speed boost's math back to the original v1 version: a plain fixed amount of extra speed per level instead of a curve multiplied off your current game WalkSpeed, which is what made the amount of boost feel inconsistent. Shooting/Auto Green's own code is unchanged from v2.27.",
 "v2.30 - Found a real reason Auto Green can be bad specifically on some executors (reported on Xeno and MacSploit): the script marked itself as having successfully hooked the game's shoot signal the instant it started trying, before actually confirming that hook went through. On an executor where that specific kind of hook (namecall hooking, one of the least standardized parts of the executor API) doesn't fully work, the hook silently failed - but the script still believed it had it, so it never switched on the backup detection method it was built to fall back to. Auto Green was effectively running on no detection at all on those executors instead of falling back to the slower-but-working button/keybind method. Now it only marks itself hooked once the hook call has actually succeeded, so the fallback kicks in for real when it needs to.",
 "v2.29 - Cross-executor fix: the shared timing network (chat, locked jumpshot timings, roles) and the !ai chat command only ever tried calling a function named exactly \"request\" to make their HTTP calls. Most executors expose that, but not all of them do under that exact name - on ones that don't, those three features were silently doing nothing with no error at all. They now fall back through http_request / syn.request / http.request the same way the rest of the script already does for everything else.",
 "v2.28 - Gather Step Glide was getting cancelled the instant you pressed shoot, which is almost always within a split second of a hop/euro/gather step - that's why it felt completely broken for exactly the moves people wanted it for. It no longer gets cancelled on a shot press (Dribble Glide still does). Dribble Glide now fires the moment you press a dribble button in whatever direction you're already dribbling, instead of waiting up to 0.1s to classify the move first - that wait is what made it feel like it started late. Both Dribble Glide and Gather Step Glide now keep following your live input direction the whole time they're active, instead of locking onto whichever direction you happened to be facing the instant they started. Shot Glide now fires while you're shooting by default instead of waiting until after you've already released the shot.",
