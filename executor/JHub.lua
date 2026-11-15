@@ -11,7 +11,7 @@
     Tabs: Main, Shooting, Dribbling, Players, UI
     Tap the moving JH logo to open / close the menu.
 
-    JHUB_VERSION: v2.29
+    JHUB_VERSION: v2.30
     (this header is never obfuscated, so the auto-update check below can always read the version
     here even from the published build, where "local VERSION = ..." is hidden by the obfuscator -
     keep this line in sync with VERSION on every bump, or the auto-update check breaks again)
@@ -97,7 +97,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.29"
+local VERSION = "v2.30"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -4454,10 +4454,15 @@ function Rec.scanLoop()
 end
 function Rec.hook()
 	if Rec.hooked or type(hookmetamethod) ~= "function" or type(getnamecallmethod) ~= "function" then return end
-	Rec.hooked = true
-	Shot.hooked = true
 	local wrap = type(newcclosure) == "function" and newcclosure or function(f) return f end
 	local old
+	-- hookmetamethod existing on this executor is no guarantee the call below actually installs the hook - if it
+	-- throws, the hook never goes in, but Rec.hooked/Shot.hooked used to get set to true right before this call
+	-- regardless, which told the rest of the script the fast, remote-based detection (what Auto Green's main
+	-- path and every glide's shot-cancel run through) was working when it silently was not - every fallback
+	-- gated on "not Shot.hooked" stayed off too, leaving nothing in its place. Namecall hooking is one of the
+	-- least standardized parts of the executor API, so only mark either one hooked once this has actually gone through.
+	local okHook = pcall(function()
 	old = hookmetamethod(game, "__namecall", wrap(function(self, ...)
 		local method = getnamecallmethod()
 		if Rec.on and method == "SetAttribute" and JH.Running and type(checkcaller) == "function" and checkcaller() and not Rec.fromUs() then
@@ -4505,6 +4510,10 @@ function Rec.hook()
 		end
 		return old(self, ...)
 	end))
+	end)
+	if not okHook then return end
+	Rec.hooked = true
+	Shot.hooked = true
 end
 -- and what the server sends back
 function Rec.connectRemotes()
@@ -12624,6 +12633,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.30 - Found a real reason Auto Green can be bad specifically on some executors (reported on Xeno and MacSploit): the script marked itself as having successfully hooked the game's shoot signal the instant it started trying, before actually confirming that hook went through. On an executor where that specific kind of hook (namecall hooking, one of the least standardized parts of the executor API) doesn't fully work, the hook silently failed - but the script still believed it had it, so it never switched on the backup detection method it was built to fall back to. Auto Green was effectively running on no detection at all on those executors instead of falling back to the slower-but-working button/keybind method. Now it only marks itself hooked once the hook call has actually succeeded, so the fallback kicks in for real when it needs to.",
 "v2.29 - Cross-executor fix: the shared timing network (chat, locked jumpshot timings, roles) and the !ai chat command only ever tried calling a function named exactly \"request\" to make their HTTP calls. Most executors expose that, but not all of them do under that exact name - on ones that don't, those three features were silently doing nothing with no error at all. They now fall back through http_request / syn.request / http.request the same way the rest of the script already does for everything else.",
 "v2.28 - Gather Step Glide was getting cancelled the instant you pressed shoot, which is almost always within a split second of a hop/euro/gather step - that's why it felt completely broken for exactly the moves people wanted it for. It no longer gets cancelled on a shot press (Dribble Glide still does). Dribble Glide now fires the moment you press a dribble button in whatever direction you're already dribbling, instead of waiting up to 0.1s to classify the move first - that wait is what made it feel like it started late. Both Dribble Glide and Gather Step Glide now keep following your live input direction the whole time they're active, instead of locking onto whichever direction you happened to be facing the instant they started. Shot Glide now fires while you're shooting by default instead of waiting until after you've already released the shot.",
 "v2.27 (TEST, not published) - Found why Auto Green felt worse than the old v1.34 version people remember as the best: Ultra Auto Calibrate (on by default) was force-enabling six experimental upgrades (AdaptPlus, SmartSteps, AutoAdaptAll, AllJumpers, LagSync, PrecFit) on every single load, silently undoing an earlier attempt to turn them back off and keeping everyone on a fancier, more reactive-to-noise version of the learner instead of the plain one Auto Green has always run. Ultra Auto Calibrate no longer touches any of those - it only does its own direct additions now (Learn speed control, instant Perfect-sharing, community seeding for brand-new shots), none of which change how the core learner reacts shot to shot. The actual core algorithm (lock in instantly on a real Perfect, small momentum-based nudge otherwise) is unchanged from how it has always worked. Anyone who wants the experimental stuff can still turn each one on individually under Auto Green MAX.",
@@ -13441,7 +13451,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.29"
+local VERSION = "v2.30"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -17798,10 +17808,15 @@ function Rec.scanLoop()
 end
 function Rec.hook()
 	if Rec.hooked or type(hookmetamethod) ~= "function" or type(getnamecallmethod) ~= "function" then return end
-	Rec.hooked = true
-	Shot.hooked = true
 	local wrap = type(newcclosure) == "function" and newcclosure or function(f) return f end
 	local old
+	-- hookmetamethod existing on this executor is no guarantee the call below actually installs the hook - if it
+	-- throws, the hook never goes in, but Rec.hooked/Shot.hooked used to get set to true right before this call
+	-- regardless, which told the rest of the script the fast, remote-based detection (what Auto Green's main
+	-- path and every glide's shot-cancel run through) was working when it silently was not - every fallback
+	-- gated on "not Shot.hooked" stayed off too, leaving nothing in its place. Namecall hooking is one of the
+	-- least standardized parts of the executor API, so only mark either one hooked once this has actually gone through.
+	local okHook = pcall(function()
 	old = hookmetamethod(game, "__namecall", wrap(function(self, ...)
 		local method = getnamecallmethod()
 		if Rec.on and method == "SetAttribute" and JH.Running and type(checkcaller) == "function" and checkcaller() and not Rec.fromUs() then
@@ -17849,6 +17864,10 @@ function Rec.hook()
 		end
 		return old(self, ...)
 	end))
+	end)
+	if not okHook then return end
+	Rec.hooked = true
+	Shot.hooked = true
 end
 -- and what the server sends back
 function Rec.connectRemotes()
@@ -25968,6 +25987,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.30 - Found a real reason Auto Green can be bad specifically on some executors (reported on Xeno and MacSploit): the script marked itself as having successfully hooked the game's shoot signal the instant it started trying, before actually confirming that hook went through. On an executor where that specific kind of hook (namecall hooking, one of the least standardized parts of the executor API) doesn't fully work, the hook silently failed - but the script still believed it had it, so it never switched on the backup detection method it was built to fall back to. Auto Green was effectively running on no detection at all on those executors instead of falling back to the slower-but-working button/keybind method. Now it only marks itself hooked once the hook call has actually succeeded, so the fallback kicks in for real when it needs to.",
 "v2.29 - Cross-executor fix: the shared timing network (chat, locked jumpshot timings, roles) and the !ai chat command only ever tried calling a function named exactly \"request\" to make their HTTP calls. Most executors expose that, but not all of them do under that exact name - on ones that don't, those three features were silently doing nothing with no error at all. They now fall back through http_request / syn.request / http.request the same way the rest of the script already does for everything else.",
 "v2.28 - Gather Step Glide was getting cancelled the instant you pressed shoot, which is almost always within a split second of a hop/euro/gather step - that's why it felt completely broken for exactly the moves people wanted it for. It no longer gets cancelled on a shot press (Dribble Glide still does). Dribble Glide now fires the moment you press a dribble button in whatever direction you're already dribbling, instead of waiting up to 0.1s to classify the move first - that wait is what made it feel like it started late. Both Dribble Glide and Gather Step Glide now keep following your live input direction the whole time they're active, instead of locking onto whichever direction you happened to be facing the instant they started. Shot Glide now fires while you're shooting by default instead of waiting until after you've already released the shot.",
 "v2.27 (TEST, not published) - Found why Auto Green felt worse than the old v1.34 version people remember as the best: Ultra Auto Calibrate (on by default) was force-enabling six experimental upgrades (AdaptPlus, SmartSteps, AutoAdaptAll, AllJumpers, LagSync, PrecFit) on every single load, silently undoing an earlier attempt to turn them back off and keeping everyone on a fancier, more reactive-to-noise version of the learner instead of the plain one Auto Green has always run. Ultra Auto Calibrate no longer touches any of those - it only does its own direct additions now (Learn speed control, instant Perfect-sharing, community seeding for brand-new shots), none of which change how the core learner reacts shot to shot. The actual core algorithm (lock in instantly on a real Perfect, small momentum-based nudge otherwise) is unchanged from how it has always worked. Anyone who wants the experimental stuff can still turn each one on individually under Auto Green MAX.",
