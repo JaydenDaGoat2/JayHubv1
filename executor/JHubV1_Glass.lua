@@ -76,7 +76,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.14"
+local VERSION = "v2.15"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -233,7 +233,7 @@ local S = {
 LagSync = false, LagK = 2, PrecFit = false, PeakBin = 0.014, AdaptPlus = false, GreenMax = false,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = false, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-FadeNudge = 0, MagnetDelay = 120, AutoAdaptAll = false, InstantGreen = false, GlideShotSafe = true, LabOn = true,FamLead = "", SmartSteps = false, ContestShow = false, GuardSpeed = 0, GuardSpeedOn = false, OwnerCodeOK = false, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false, OutlineTrans = 0, OutlineCustomR = 255, OutlineCustomG = 255, OutlineCustomB = 255,
+FadeNudge = 0, MagnetDelay = 120, AutoAdaptAll = false, InstantGreen = false, GlideShotSafe = true, LabOn = true,FamLead = "", SmartSteps = false, ContestShow = false, GuardSpeed = 0, GuardSpeedOn = false, OwnerCodeOK = false, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false, OutlineTrans = 0, OutlineCustomR = 255, OutlineCustomG = 255, OutlineCustomB = 255, AutoUpdate = true,
 	AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 	AGOnlyBall = true,
 	BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
@@ -11497,6 +11497,42 @@ do
 		return src, string.match(src, 'local VERSION = "(v[%d%.]+)')
 	end
 	local mine = string.match(tostring(VERSION), "^(v[%d%.]+)") or tostring(VERSION)
+	local busy = false
+	local newestLbl
+	local function doUpdate(silent)
+		if busy then return end
+		busy = true
+		if newestLbl then newestLbl.Text = "downloading..." end
+		local src, ver = fetchNewest()
+		if not src then
+			if newestLbl then newestLbl.Text = "could not reach GitHub" end
+			busy = false
+			return
+		end
+		if newestLbl then newestLbl.Text = ver or "?" end
+		if ver == mine then
+			if not silent then notify("Update", "You already have the newest version (" .. mine .. ")", 4) end
+			busy = false
+			return
+		end
+		local fn = loadstring(src)
+		if not fn then
+			if not silent then notify("Update", "The download could not be read", 4) end
+			busy = false
+			return
+		end
+		notify("Update", "A newer version (" .. tostring(ver) .. ") was found, updating now...", 4)
+		pcall(JH.Unload)
+		task.defer(fn)
+	end
+	-- auto-executed copies kept replaying whatever version was saved on the device at the moment Auto Execute was
+	-- first turned on, forever, since nothing ever re-checked GitHub on its own - every fix after that point silently
+	-- never reached that device until someone remembered the manual Update button existed. Every load now checks once,
+	-- a few seconds in so it never delays opening the menu, and silently updates itself if GitHub has a newer version.
+	task.spawn(function()
+		task.wait(6)
+		if S.AutoUpdate ~= false and JH.Running then pcall(doUpdate, true) end
+	end)
 	local mainPage
 	for _, p in ipairs(UI.pages) do
 		if p.name == "Main" then mainPage = p end
@@ -11505,44 +11541,19 @@ do
 		local c = UI.Card(mainPage, "Updates")
 		local cur = UI.Stat(c, "This version")
 		cur.Text = mine
-		local newest = UI.Stat(c, "Newest version")
-		newest.Text = "tap Check"
-		local busy = false
+		newestLbl = UI.Stat(c, "Newest version")
+		newestLbl.Text = "tap Check"
+		UI.Toggle(c, "Check for updates automatically on load", "AutoUpdate")
 		UI.Buttons(c, {
 			{ "Check", function()
 				if busy then return end
 				busy = true
-				newest.Text = "checking..."
+				newestLbl.Text = "checking..."
 				local src, ver = fetchNewest()
-				newest.Text = ver or "could not reach GitHub"
+				newestLbl.Text = ver or "could not reach GitHub"
 				busy = false
 			end },
-			{ "Update now", function()
-				if busy then return end
-				busy = true
-				newest.Text = "downloading..."
-				local src, ver = fetchNewest()
-				if not src then
-					newest.Text = "could not reach GitHub"
-					busy = false
-					return
-				end
-				newest.Text = ver or "?"
-				if ver == mine then
-					notify("Update", "You already have the newest version (" .. mine .. ")", 4)
-					busy = false
-					return
-				end
-				local fn = loadstring(src)
-				if not fn then
-					notify("Update", "The download could not be read", 4)
-					busy = false
-					return
-				end
-				notify("Update", "Updating to " .. tostring(ver) .. "...", 3)
-				pcall(JH.Unload)
-				task.defer(fn)
-			end },
+			{ "Update now", function() doUpdate(false) end },
 		})
 		UI.Note(c, "Loads the newest version from GitHub and restarts JHub. Your settings stay.")
 	end
@@ -12431,6 +12442,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.15 - Found why fixes never seemed to reach some devices: once Auto Execute is turned on, it saves a frozen copy of whatever version was running at that exact moment and replays that same frozen copy forever on every later join - nothing ever checked GitHub again after that, so every fix shipped after someone turned Auto Execute on never reached them, update button or not. Every load now checks GitHub a few seconds after opening (never delaying the menu) and silently updates itself if a newer version exists, auto-executed or not. Turn it off on the Updates card if you don't want that.",
 "v2.14 - Ultra Auto Calibrate now shares timing per shot FAMILY across the network too (every jumpshot together, every fade together, every step back together, etc), not just exact-shot locks - so a jumpshot literally nobody has ever taken yet still starts from everyone's combined experience with that whole style of shot instead of a blind guess, the moment it's ever played for the first time anywhere. An exact-shot lock, local or shared, always takes over the instant one exists.",
 "v2.13 - Fixed loading several copies of the menu at once on some setups. A second (or third, or seventh) copy starting at almost the same moment as the first used to pass right by the check that is supposed to close the previous copy, because that check ran before a wait that let every copy race ahead together, and only the very last one to finish actually took over the slot - so every other one it ran past stayed open as its own full, live menu. The slot is now claimed the instant the check runs, before anything that can cause that race, so only one copy ever stays open no matter how many start up together.",
 "v2.12 - Found the real reason Auto Guard never showed any animation: it was moving by CFrame-teleporting the character, so the Humanoid itself never registered as walking and no clip we forced on top ever stuck. It no longer moves that way at all - it now drives itself purely through the same MoveDirection remote a real joystick fires, with the real Guard button held, so the server moves it for real and the game's own animation system picks the real walk/defensive-slide clip on its own, same as it does for a real player.",
@@ -13205,7 +13217,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.14"
+local VERSION = "v2.15"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -13362,7 +13374,7 @@ local S = {
 LagSync = false, LagK = 2, PrecFit = false, PeakBin = 0.014, AdaptPlus = false, GreenMax = false,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = false, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-FadeNudge = 0, MagnetDelay = 120, AutoAdaptAll = false, InstantGreen = false, GlideShotSafe = true, LabOn = true,FamLead = "", SmartSteps = false, ContestShow = false, GuardSpeed = 0, GuardSpeedOn = false, OwnerCodeOK = false, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false, OutlineTrans = 0, OutlineCustomR = 255, OutlineCustomG = 255, OutlineCustomB = 255,
+FadeNudge = 0, MagnetDelay = 120, AutoAdaptAll = false, InstantGreen = false, GlideShotSafe = true, LabOn = true,FamLead = "", SmartSteps = false, ContestShow = false, GuardSpeed = 0, GuardSpeedOn = false, OwnerCodeOK = false, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false, OutlineTrans = 0, OutlineCustomR = 255, OutlineCustomG = 255, OutlineCustomB = 255, AutoUpdate = true,
 	AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 	AGOnlyBall = true,
 	BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
@@ -24626,6 +24638,42 @@ do
 		return src, string.match(src, 'local VERSION = "(v[%d%.]+)')
 	end
 	local mine = string.match(tostring(VERSION), "^(v[%d%.]+)") or tostring(VERSION)
+	local busy = false
+	local newestLbl
+	local function doUpdate(silent)
+		if busy then return end
+		busy = true
+		if newestLbl then newestLbl.Text = "downloading..." end
+		local src, ver = fetchNewest()
+		if not src then
+			if newestLbl then newestLbl.Text = "could not reach GitHub" end
+			busy = false
+			return
+		end
+		if newestLbl then newestLbl.Text = ver or "?" end
+		if ver == mine then
+			if not silent then notify("Update", "You already have the newest version (" .. mine .. ")", 4) end
+			busy = false
+			return
+		end
+		local fn = loadstring(src)
+		if not fn then
+			if not silent then notify("Update", "The download could not be read", 4) end
+			busy = false
+			return
+		end
+		notify("Update", "A newer version (" .. tostring(ver) .. ") was found, updating now...", 4)
+		pcall(JH.Unload)
+		task.defer(fn)
+	end
+	-- auto-executed copies kept replaying whatever version was saved on the device at the moment Auto Execute was
+	-- first turned on, forever, since nothing ever re-checked GitHub on its own - every fix after that point silently
+	-- never reached that device until someone remembered the manual Update button existed. Every load now checks once,
+	-- a few seconds in so it never delays opening the menu, and silently updates itself if GitHub has a newer version.
+	task.spawn(function()
+		task.wait(6)
+		if S.AutoUpdate ~= false and JH.Running then pcall(doUpdate, true) end
+	end)
 	local mainPage
 	for _, p in ipairs(UI.pages) do
 		if p.name == "Main" then mainPage = p end
@@ -24634,44 +24682,19 @@ do
 		local c = UI.Card(mainPage, "Updates")
 		local cur = UI.Stat(c, "This version")
 		cur.Text = mine
-		local newest = UI.Stat(c, "Newest version")
-		newest.Text = "tap Check"
-		local busy = false
+		newestLbl = UI.Stat(c, "Newest version")
+		newestLbl.Text = "tap Check"
+		UI.Toggle(c, "Check for updates automatically on load", "AutoUpdate")
 		UI.Buttons(c, {
 			{ "Check", function()
 				if busy then return end
 				busy = true
-				newest.Text = "checking..."
+				newestLbl.Text = "checking..."
 				local src, ver = fetchNewest()
-				newest.Text = ver or "could not reach GitHub"
+				newestLbl.Text = ver or "could not reach GitHub"
 				busy = false
 			end },
-			{ "Update now", function()
-				if busy then return end
-				busy = true
-				newest.Text = "downloading..."
-				local src, ver = fetchNewest()
-				if not src then
-					newest.Text = "could not reach GitHub"
-					busy = false
-					return
-				end
-				newest.Text = ver or "?"
-				if ver == mine then
-					notify("Update", "You already have the newest version (" .. mine .. ")", 4)
-					busy = false
-					return
-				end
-				local fn = loadstring(src)
-				if not fn then
-					notify("Update", "The download could not be read", 4)
-					busy = false
-					return
-				end
-				notify("Update", "Updating to " .. tostring(ver) .. "...", 3)
-				pcall(JH.Unload)
-				task.defer(fn)
-			end },
+			{ "Update now", function() doUpdate(false) end },
 		})
 		UI.Note(c, "Loads the newest version from GitHub and restarts JHub. Your settings stay.")
 	end
@@ -25560,6 +25583,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.15 - Found why fixes never seemed to reach some devices: once Auto Execute is turned on, it saves a frozen copy of whatever version was running at that exact moment and replays that same frozen copy forever on every later join - nothing ever checked GitHub again after that, so every fix shipped after someone turned Auto Execute on never reached them, update button or not. Every load now checks GitHub a few seconds after opening (never delaying the menu) and silently updates itself if a newer version exists, auto-executed or not. Turn it off on the Updates card if you don't want that.",
 "v2.14 - Ultra Auto Calibrate now shares timing per shot FAMILY across the network too (every jumpshot together, every fade together, every step back together, etc), not just exact-shot locks - so a jumpshot literally nobody has ever taken yet still starts from everyone's combined experience with that whole style of shot instead of a blind guess, the moment it's ever played for the first time anywhere. An exact-shot lock, local or shared, always takes over the instant one exists.",
 "v2.13 - Fixed loading several copies of the menu at once on some setups. A second (or third, or seventh) copy starting at almost the same moment as the first used to pass right by the check that is supposed to close the previous copy, because that check ran before a wait that let every copy race ahead together, and only the very last one to finish actually took over the slot - so every other one it ran past stayed open as its own full, live menu. The slot is now claimed the instant the check runs, before anything that can cause that race, so only one copy ever stays open no matter how many start up together.",
 "v2.12 - Found the real reason Auto Guard never showed any animation: it was moving by CFrame-teleporting the character, so the Humanoid itself never registered as walking and no clip we forced on top ever stuck. It no longer moves that way at all - it now drives itself purely through the same MoveDirection remote a real joystick fires, with the real Guard button held, so the server moves it for real and the game's own animation system picks the real walk/defensive-slide clip on its own, same as it does for a real player.",
