@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.99"
+local VERSION = "v2.00"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -6229,6 +6229,15 @@ UI.Toggle(al, "Notifications", "Notifications")
 UI.Toggle(al, "Sounds", "Sounds")
 UI.Input(al, "Green sound ID (Roblox audio number)", "GreenSoundId", nil, "paste a Roblox audio ID")
 UI.Slider(al, "Green sound volume", "GreenSoundVol", 0.1, 1, 0.05, 2)
+local sid = UI.Card(P, "Sound ID")
+local SOUND_CANDIDATES = { "8381480398", "6651571134", "2542613889", "7750368290", "133017003825496", "110998096461300" }
+UI.Note(sid, "Unverified candidate audio IDs pulled from around the web, not confirmed to work or sound like anything in particular - pick one to try as your Green sound ID above.")
+for i, idv in ipairs(SOUND_CANDIDATES) do
+UI.Button(sid, "Option " .. i, function()
+UI.set("GreenSoundId", idv)
+notify("Sound ID", "Set as Green sound ID", 2)
+end)
+end
 UI.Keybind(al, "Menu key (PC)", function() return S.MenuKey end, function(v) S.MenuKey = (v ~= "" and v) or "RightShift" end)
 local tl = UI.Card(P, "Tools")
 UI.Button(tl, "Save settings now", function()
@@ -11838,6 +11847,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.00 - added a Sound ID picker under Alerts and keys: 6 unverified candidate Roblox audio IDs pulled from the web (not labeled, not confirmed to work or sound like anything specific - a real search turned up almost nothing usable), pick one to try as the Green sound ID",
 "v1.99 - big batch: autoexec now self-refreshes to the current version every load instead of freezing at whatever was on disk when it was first turned on; re-added the locked-jumpshot-promotion fix (a real Perfect shoots the exact same way every time, shared per animation ID); Shot Green Stabilizer is now visible on the Shooting tab with a live status line and genuinely does nothing under 50ms ping; added a live ping/FPS list for everyone running the script plus click-a-name-to-add in the Owner tab; announcement banner text is pure white with a thinner role-colored outline; fixed Code/Announcement text boxes not clearing after submit (the {get,set} Input pattern never refreshed the box); chat now auto-scrolls to the bottom on new messages unless you scrolled up on purpose; Auto Block's range slider now doubles as an aggressiveness dial (maxed = always attempts a jump even from far away, minimized = near-instant jump up close); added outline transparency and a custom RGB color option (Rainbow already existed). Declined: a curated Roblox sound-ID list (can't verify real IDs without fabricating them), using a real person's photo as the logo/background, and further blind changes to tap-to-shoot/Auto Guard's walk animation/Glide without new evidence",
 "v1.98 - re-added, on request, specific pieces from the reverted batch: Shot Stabilizer (hidden, auto ping/FPS comp), Settings tab (copy/upload/search configs), defense contest highlight, Owner tab Co-Owner (blue)/Mod (red) colors with the top-of-screen announcement system, the tap-to-shoot Action-wait pump-fake fix, and the meter late-bias. Still not re-added: Shot Time, the Discord icon swap, the locked-jumpshot-promotion fix, and the live-catch feature",
 "v1.97 - reverted everything from v1.92 through v1.96 except Ultra Auto Calibrate (the rename and the momentum-based faster convergence): Shot Time, Shot Stabilizer, Settings tab, defense contest highlight, announcements, Co-Owner/Mod colors, the Discord icon swap, the tap-to-shoot fix, the meter late-bias, the locked-jumpshot fix, and the live-catch feature (and its revert) are all gone. Back to v1.91's shooting/UI behavior, with Ultra Auto Calibrate on top",
@@ -12251,7 +12261,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.99"
+local VERSION = "v2.00"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -24378,6 +24388,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.00 - added a Sound ID picker under Alerts and keys: 6 unverified candidate Roblox audio IDs pulled from the web (not labeled, not confirmed to work or sound like anything specific - a real search turned up almost nothing usable), pick one to try as the Green sound ID",
 "v1.99 - big batch: autoexec now self-refreshes to the current version every load instead of freezing at whatever was on disk when it was first turned on; re-added the locked-jumpshot-promotion fix (a real Perfect shoots the exact same way every time, shared per animation ID); Shot Green Stabilizer is now visible on the Shooting tab with a live status line and genuinely does nothing under 50ms ping; added a live ping/FPS list for everyone running the script plus click-a-name-to-add in the Owner tab; announcement banner text is pure white with a thinner role-colored outline; fixed Code/Announcement text boxes not clearing after submit (the {get,set} Input pattern never refreshed the box); chat now auto-scrolls to the bottom on new messages unless you scrolled up on purpose; Auto Block's range slider now doubles as an aggressiveness dial (maxed = always attempts a jump even from far away, minimized = near-instant jump up close); added outline transparency and a custom RGB color option (Rainbow already existed). Declined: a curated Roblox sound-ID list (can't verify real IDs without fabricating them), using a real person's photo as the logo/background, and further blind changes to tap-to-shoot/Auto Guard's walk animation/Glide without new evidence",
 "v1.98 - re-added, on request, specific pieces from the reverted batch: Shot Stabilizer (hidden, auto ping/FPS comp), Settings tab (copy/upload/search configs), defense contest highlight, Owner tab Co-Owner (blue)/Mod (red) colors with the top-of-screen announcement system, the tap-to-shoot Action-wait pump-fake fix, and the meter late-bias. Still not re-added: Shot Time, the Discord icon swap, the locked-jumpshot-promotion fix, and the live-catch feature",
 "v1.97 - reverted everything from v1.92 through v1.96 except Ultra Auto Calibrate (the rename and the momentum-based faster convergence): Shot Time, Shot Stabilizer, Settings tab, defense contest highlight, announcements, Co-Owner/Mod colors, the Discord icon swap, the tap-to-shoot fix, the meter late-bias, the locked-jumpshot fix, and the live-catch feature (and its revert) are all gone. Back to v1.91's shooting/UI behavior, with Ultra Auto Calibrate on top",
