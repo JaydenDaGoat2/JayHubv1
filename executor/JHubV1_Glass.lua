@@ -11,7 +11,7 @@
     Tabs: Main, Shooting, Dribbling, Players, UI
     Tap the moving JH logo to open / close the menu.
 
-    JHUB_VERSION: v2.21
+    JHUB_VERSION: v2.22
     (this header is never obfuscated, so the auto-update check below can always read the version
     here even from the published build, where "local VERSION = ..." is hidden by the obfuscator -
     keep this line in sync with VERSION on every bump, or the auto-update check breaks again)
@@ -81,7 +81,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.21"
+local VERSION = "v2.22"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -126,6 +126,22 @@ do
 				return (tonumber(maj) or 0) * 1000 + (tonumber(minr) or 0)
 			end
 			if num(VERSION) < num(minV) then
+				-- delete every saved copy of this script this exact code knows how to find, on its way out, whether
+				-- the GitHub self-update below works or not - an old copy that keeps getting autoexec'd or queued
+				-- back onto a teleport is exactly what was making it "spam load" the old version no matter what got
+				-- published, so this makes sure it cannot fire itself again after this run, autoexec setting or not
+				pcall(function()
+					for _, folder in ipairs({ "autoexec", "Autoexec", "autoexecute", "Autoexecute" }) do
+						pcall(function()
+							local p = folder .. "/JHubV1_Glass.lua"
+							if type(isfile) == "function" and isfile(p) and type(delfile) == "function" then delfile(p) end
+						end)
+					end
+					pcall(function()
+						local p = "JHubGlass/JHubV1_Glass.lua"
+						if type(isfile) == "function" and isfile(p) and type(delfile) == "function" then delfile(p) end
+					end)
+				end)
 				local updated = false
 				pcall(function()
 					local shaBody = game:HttpGet("https://api.github.com/repos/jaydendagoat2/jayhubv1/commits/claude%2Fclaudechud-8cord-executor-wclom3")
@@ -142,7 +158,7 @@ do
 					end
 				end)
 				if updated then return end
-				allowed, reason = false, "This copy is too old and could not reach GitHub to update itself. Rejoin once you're back online."
+				allowed, reason = false, "This copy is too old, was deleted from your autoexec folder, and could not reach GitHub to update itself. Rejoin once you're back online, or paste the loadstring yourself."
 			end
 		end
 	end)
@@ -12519,6 +12535,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.22 - A copy that finds itself below the minimum-version floor now deletes its own saved autoexec copy (every folder name this script knows about, plus the plain saved file) on its way out, whether or not it manages to reach GitHub to update itself - not just block itself and leave the old file sitting there to fire again next join. Only affects a copy running this version or newer; see v2.20's note.",
 "v2.21 - Added a button for the owner to actually set the minimum-version floor v2.20 added (Owner tab, Access control card: \"Require this version from now on\") - it was only checked before, never actually settable in-game.",
 "v2.20 - Added a minimum-version floor from the owner (control/minVersion): any copy below it now tries to silently replace itself with the newest version the instant it checks in with the backend, before anything else loads, and only shows a blocked message if it genuinely cannot reach GitHub. This only protects copies running this version or newer going forward, since an older copy that is already frozen on disk or queued for a teleport is running code that was written before this check existed and has no way to know to look for it - there is no way to reach back into a copy that old from here.",
 "v2.19 - Stopped an old version ever sitting on disk once a newer one exists. The auto-update check now rewrites the saved autoexec file (and the queued-teleport copy) to the new version immediately the moment it finds one, instead of waiting for the new instance to resave it a couple seconds after reloading - and the old instance's own pending resave now checks it is still actually running first, so a reload triggered mid-wait can no longer have the dying old copy put its old version right back on disk a moment after the new one just saved the correct one.",
@@ -13305,7 +13322,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.21"
+local VERSION = "v2.22"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -13350,6 +13367,22 @@ do
 				return (tonumber(maj) or 0) * 1000 + (tonumber(minr) or 0)
 			end
 			if num(VERSION) < num(minV) then
+				-- delete every saved copy of this script this exact code knows how to find, on its way out, whether
+				-- the GitHub self-update below works or not - an old copy that keeps getting autoexec'd or queued
+				-- back onto a teleport is exactly what was making it "spam load" the old version no matter what got
+				-- published, so this makes sure it cannot fire itself again after this run, autoexec setting or not
+				pcall(function()
+					for _, folder in ipairs({ "autoexec", "Autoexec", "autoexecute", "Autoexecute" }) do
+						pcall(function()
+							local p = folder .. "/JHubV1_Glass.lua"
+							if type(isfile) == "function" and isfile(p) and type(delfile) == "function" then delfile(p) end
+						end)
+					end
+					pcall(function()
+						local p = "JHubGlass/JHubV1_Glass.lua"
+						if type(isfile) == "function" and isfile(p) and type(delfile) == "function" then delfile(p) end
+					end)
+				end)
 				local updated = false
 				pcall(function()
 					local shaBody = game:HttpGet("https://api.github.com/repos/jaydendagoat2/jayhubv1/commits/claude%2Fclaudechud-8cord-executor-wclom3")
@@ -13366,7 +13399,7 @@ do
 					end
 				end)
 				if updated then return end
-				allowed, reason = false, "This copy is too old and could not reach GitHub to update itself. Rejoin once you're back online."
+				allowed, reason = false, "This copy is too old, was deleted from your autoexec folder, and could not reach GitHub to update itself. Rejoin once you're back online, or paste the loadstring yourself."
 			end
 		end
 	end)
@@ -25743,6 +25776,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.22 - A copy that finds itself below the minimum-version floor now deletes its own saved autoexec copy (every folder name this script knows about, plus the plain saved file) on its way out, whether or not it manages to reach GitHub to update itself - not just block itself and leave the old file sitting there to fire again next join. Only affects a copy running this version or newer; see v2.20's note.",
 "v2.21 - Added a button for the owner to actually set the minimum-version floor v2.20 added (Owner tab, Access control card: \"Require this version from now on\") - it was only checked before, never actually settable in-game.",
 "v2.20 - Added a minimum-version floor from the owner (control/minVersion): any copy below it now tries to silently replace itself with the newest version the instant it checks in with the backend, before anything else loads, and only shows a blocked message if it genuinely cannot reach GitHub. This only protects copies running this version or newer going forward, since an older copy that is already frozen on disk or queued for a teleport is running code that was written before this check existed and has no way to know to look for it - there is no way to reach back into a copy that old from here.",
 "v2.19 - Stopped an old version ever sitting on disk once a newer one exists. The auto-update check now rewrites the saved autoexec file (and the queued-teleport copy) to the new version immediately the moment it finds one, instead of waiting for the new instance to resave it a couple seconds after reloading - and the old instance's own pending resave now checks it is still actually running first, so a reload triggered mid-wait can no longer have the dying old copy put its old version right back on disk a moment after the new one just saved the correct one.",
