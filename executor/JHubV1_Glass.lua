@@ -59,7 +59,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.82"
+local VERSION = "v2.06"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -162,15 +162,15 @@ local S = {
 	GfxLow = false, GfxEffects = false, GfxTextures = false, GfxShadows = false, GfxPost = false, GfxHideOthers = false, GfxCull = false,
 	GfxCullDist = 250, GfxBoost = false, GfxFpsCap = 0, PingStab = false, PingWindow = 3, FinalAdj = "",
 	ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
-	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
+LagSync = false, LagK = 2, PrecFit = false, PeakBin = 0.014, AdaptPlus = false, GreenMax = false,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
-	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false,
+AllJumpers = false, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
+FadeNudge = 0, MagnetDelay = 120, AutoAdaptAll = false, InstantGreen = false, GlideShotSafe = true, LabOn = true,FamLead = "", SmartSteps = false, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false, OutlineTrans = 0, OutlineCustomR = 255, OutlineCustomG = 255, OutlineCustomB = 255,
 	AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 	AGOnlyBall = true,
 	BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
 	BindKey1 = "", BindArgs1 = "", BindKey2 = "", BindArgs2 = "", BindKey3 = "", BindArgs3 = "", BindKey4 = "", BindArgs4 = "", BindKey5 = "", BindArgs5 = "", BindKey6 = "", BindArgs6 = "",
-	LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
+LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3, PerfN = "", LiveHelps = false, CustomSounds = "", CustomPick = "",
 	AG = false, AGTarget = "Ball handler", AGDist = 4, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true, AGHoldToUse = false, WalkAnimId = "", GuardAnimId = "",
 	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
 	AR = false, ARSpeed = 1, ARReact = 0.18, ARRange = 45, ARJump = true, ARMagnet = true, ARMagRange = 4, ARMarker = false,
@@ -282,6 +282,7 @@ if S.LowFix == nil then S.LowFix = true end
 if S.LowBoostPct == nil then S.LowBoostPct = 25 end
 if S.LowGlidePct == nil then S.LowGlidePct = 60 end
 if S.LowLevel == nil then S.LowLevel = 3 end
+if S.TapAuto == nil then S.TapAuto = true end
 if S.PerfectGreenPct == nil then S.PerfectGreenPct = 100 end
 if S.AutoTimes == nil then S.AutoTimes = "" end
 if S.SettingsVer < 14 then
@@ -319,8 +320,13 @@ if S.SettingsVer < 36 then
 S.AccentTone, S.ARSpeed, S.ARReact, S.ARRange, S.ARMagRange = "Rainbow", 1, 0.18, 45, 4
 if S.MagnetRange > 25 then S.MagnetRange = 25 end
 end
-S.SettingsVer = 36
-DEFAULTS.SettingsVer = 36
+if S.SettingsVer < 37 then
+S.LagSync, S.PrecFit, S.AdaptPlus, S.GreenMax, S.AllJumpers, S.AutoAdaptAll, S.InstantGreen, S.SmartSteps, S.FirstShot = false, false, false, false, false, false, false, false, false
+S.FadeNudge, S.GLead, S.GLeadN, S.PFLead, S.PFLeadN = 0, 0, 0, 0, 0
+S.FinalAdj, S.FamLead = "", ""
+end
+S.SettingsVer = 37
+DEFAULTS.SettingsVer = 37
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 S.ShotTimes = S.ShotTimes
 S.RecOn = false
@@ -350,7 +356,7 @@ local OUTLINE_COLORS = {
 	White = Color3.new(1, 1, 1), Cyan = Color3.fromRGB(120, 235, 255), Pink = Color3.fromRGB(255, 150, 220),
 	Gold = Color3.fromRGB(255, 225, 120), Lime = Color3.fromRGB(170, 255, 140),
 }
-local OUTLINE_NAMES = { "White", "Cyan", "Pink", "Gold", "Lime", "Rainbow" }
+local OUTLINE_NAMES = { "White", "Cyan", "Pink", "Gold", "Lime", "Rainbow", "Custom" }
 local TEXT_NAMES = { "White", "Ice", "Gold", "Mint" }
 local FONTS = {
 	Gotham = { "Gotham", "GothamBold" }, Montserrat = { "Montserrat", "MontserratBold" },
@@ -368,7 +374,7 @@ local function computeTheme()
 	Theme.Stroke = Color3.fromHSV(h, 0.9, 0.18)
 	Theme.Text = TEXT_COLORS[S.TextColor] or WHITE
 	Theme.Sub = Theme.Text:Lerp(Theme.Glass, 0.28)
-	Theme.Outline = OUTLINE_COLORS[S.OutlineColor] or WHITE
+	Theme.Outline = S.OutlineColor == "Custom" and Color3.fromRGB(S.OutlineCustomR or 255, S.OutlineCustomG or 255, S.OutlineCustomB or 255) or (OUTLINE_COLORS[S.OutlineColor] or WHITE)
 	Theme.AccentA = Color3.fromHSV(h, 0.2, 1)
 	Theme.AccentB = Color3.fromHSV(((S.Hue - 28) % 360) / 360, 0.75, 1)
 	if S.AccentMode ~= "Match hue" then
@@ -1686,21 +1692,29 @@ function Shot.release(mode, ctx)
 		if S.ReleaseMethod ~= "Button" then Input.sendKey(S.ShootKey, false) end
 	end
 end
+Shot.momentum = Shot.momentum or {}
 function Shot.learnTiming(info, res, strength)
 	local rate = S.CalSpeed
 	local base, held = info.base, info.held
+	local mo = Shot.momentum[info.key]
+	if not mo then mo = { dir = 0, streak = 0 } Shot.momentum[info.key] = mo end
 	local function stepFor(from)
-		return math.max(S.CalStep * strength * rate, from * STRENGTH_STEP[strength] * rate / 0.6)
+		local base_step = math.max(S.CalStep * strength * rate, from * STRENGTH_STEP[strength] * rate / 0.6)
+		return base_step * (1 + 0.3 * math.min(mo.streak, 6))
 	end
 	if S.AutoTiming and info.track then
 		local newv
 		if info.manual or info.usedBar then
 			if res == "green" then newv = base + (held - base) * 0.5 end
+			mo.dir, mo.streak = 0, 0
 		elseif res == "green" then
 			newv = base
+			mo.dir, mo.streak = 0, 0
 		elseif res == "early" then
+			if mo.dir == 1 then mo.streak = mo.streak + 1 else mo.dir, mo.streak = 1, 0 end
 			newv = base + stepFor(base)
 		elseif res == "late" then
+			if mo.dir == -1 then mo.streak = mo.streak + 1 else mo.dir, mo.streak = -1, 0 end
 			newv = base - stepFor(base)
 		end
 		if newv then
@@ -1785,6 +1799,7 @@ function Shot.evaluate(info)
 	end
 	log("Shot: " .. note)
 	notify(res == "green" and "GREEN!" or "Shot", note, 2.2)
+	if res == "green" then pcall(JH.playGreenSound) end
 end
 -- the game's own shot signals, read from its remotes: the meter starting, its timing number and the result
 Shot.meterT, Shot.packet, Shot.packetT, Shot.greenT, Shot.fbT, Shot.fbText = 0, nil, 0, 0, 0, ""
@@ -1855,11 +1870,18 @@ function Shot.onRemoteEvent(name, ...)
 			Shot.packet, Shot.packetT = a[3], tick()
 		end
 	elseif name == "ShowFeedback" then
-		if typeof(a[1]) == "Instance" and (a[1].Name == LP.Name or a[1] == char()) and tonumber(a[3]) then Shot.fbIdx, Shot.fbIdxT = tonumber(a[3]), tick() end
+		if typeof(a[1]) == "Instance" and (a[1].Name == LP.Name or a[1] == char()) and tonumber(a[3]) then
+			Shot.fbIdx, Shot.fbIdxT = tonumber(a[3]), tick()
+			if Shot.fbIdx == 5 and JH.playGreenSound then pcall(JH.playGreenSound) end
+		end
 	elseif name == "RunGreenEffect" or name == "GreenCelebration" then
-		if isMine(a) then Shot.greenT = tick() end
+		if isMine(a) then
+			Shot.greenT = tick()
+			if JH.playGreenSound then pcall(JH.playGreenSound) end
+		end
 	elseif name == "Output" then
 		if type(a[2]) == "string" and string.find(a[2], "Shot Feedback", 1, true) then Shot.fbT, Shot.fbText = tick(), a[2] end
+if type(a[2]) == "string" and string.find(a[2], "Shot Feedback", 1, true) and Shot.classifyFB(a[2]) == "green" and JH.playGreenSound then pcall(JH.playGreenSound) end
 	end
 end
 Shot.remoteNames = { Meter = true, RegisterPacket = true, RunGreenEffect = true, GreenCelebration = true, Output = true, ShowFeedback = true,
@@ -1883,6 +1905,7 @@ function Shot.connectRemotes()
 	bind(ReplicatedStorage.DescendantAdded, watch)
 end
 -- runs inside the namecall hook for every Shoot remote the game fires: true means "do not send this one"
+-- a lift this soon after the press is a tap (the game would only turn it into a pump fake anyway)
 function Shot.onShootCall(args)
 	local d = args[1]
 	if type(d) ~= "table" or Shot.selfFire then return false end
@@ -1932,10 +1955,10 @@ Shot.SWEEPLIST = {
 Shot.FINAL = {
 	["15851912457+15851919155"] = 0.357,
 	["15851912457+15851919155+17285155256"] = 0.357,
-	["111074210919383"] = 0.367,
-	["71484695722621"] = 0.321,
-	["77401448272074"] = 0.339,
-	["128777513307709+77401448272074"] = 0.339,
+["111074210919383"] = 0.357,
+["71484695722621"] = 0.311,
+["77401448272074"] = 0.329,
+["128777513307709+77401448272074"] = 0.329,
 }
 Shot.VERDICT = { "Very early", "Early", "Slightly early", "Good", "Perfect", "Slightly late", "Late", "Very late" }
 Shot.NAMES = {
@@ -2094,8 +2117,16 @@ function Shot.peakLearn(info, res, strength, a, key)
 			end
 			a.lastD, a.dir = d, d
 		end
-		a.hold = clamp(lead + d * a.step * mag, 0, 0.1)
-		S.PeakLead = clamp(S.PeakLead + d * a.step * mag * 0.25, 0, 0.08)
+		-- Learn speed 1 is the normal small step. Above that, the miss is turned into the exact correction (the game's verdict says how many
+		-- notches off the release was, and one notch is this shot's own measured width), fully at speed 5 and above.
+		local fast = clamp(((S.CalSpeed or 1) - 1) / 4, 0, 1)
+		local nextLead = lead + d * a.step * mag
+		if fast > 0 and idx ~= 4 then
+			local exact = lead + (idx - 5) * (a.bin or S.PeakBin or 0.014)
+			nextLead = nextLead * (1 - fast) + exact * fast
+		end
+		a.hold = clamp(nextLead, 0, 0.1)
+		S.PeakLead = clamp(S.PeakLead + (a.hold - lead) * 0.25, 0, 0.08)
 		why = (Shot.VERDICT[idx] or "?") .. (d > 0 and ", letting go earlier" or ", letting go later")
 	end
 	if math.abs(a.hold - before) > 0.0003 or a.locked then Shot.noteAdjust(key, before, a.hold, why) end
@@ -12247,7 +12278,6 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
-"v2.06 - dribble glide, shot glide, gather step glide, speed boosts and tap-to-shoot restored to the v1.82 code (no quick-tap interception, glide lock back to v1.82)",
 "v2.05 - shooting restored to the v1.36 behaviour, confirmed Perfect sharing, Green Sounds length check",
 "v2.01 - reverted the meter late-bias, the tap-to-shoot Action-wait fix, and the locked-jumpshot-promotion fix - the bar was stopping/missing badly after those went back in. Shot Green Stabilizer stays (that one wasn't the problem). Back to plain prediction-only release timing on top of v2.00",
 "v2.00 - added a Sound ID picker under Alerts and keys: 6 unverified candidate Roblox audio IDs pulled from the web (not labeled, not confirmed to work or sound like anything specific - a real search turned up almost nothing usable), pick one to try as the Green sound ID",
@@ -12933,7 +12963,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.82"
+local VERSION = "v2.06"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -13036,15 +13066,15 @@ local S = {
 	GfxLow = false, GfxEffects = false, GfxTextures = false, GfxShadows = false, GfxPost = false, GfxHideOthers = false, GfxCull = false,
 	GfxCullDist = 250, GfxBoost = false, GfxFpsCap = 0, PingStab = false, PingWindow = 3, FinalAdj = "",
 	ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, StunIds = "", HoopMarks = "",
-	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
+LagSync = false, LagK = 2, PrecFit = false, PeakBin = 0.014, AdaptPlus = false, GreenMax = false,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
-	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false,
+AllJumpers = false, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
+FadeNudge = 0, MagnetDelay = 120, AutoAdaptAll = false, InstantGreen = false, GlideShotSafe = true, LabOn = true,FamLead = "", SmartSteps = false, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false, OutlineTrans = 0, OutlineCustomR = 255, OutlineCustomG = 255, OutlineCustomB = 255,
 	AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 	AGOnlyBall = true,
 	BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
 	BindKey1 = "", BindArgs1 = "", BindKey2 = "", BindArgs2 = "", BindKey3 = "", BindArgs3 = "", BindKey4 = "", BindArgs4 = "", BindKey5 = "", BindArgs5 = "", BindKey6 = "", BindArgs6 = "",
-	LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3,
+LowFix = true, LowBoostPct = 25, LowGlidePct = 60, LowLevel = 3, PerfN = "", LiveHelps = false, CustomSounds = "", CustomPick = "",
 	AG = false, AGTarget = "Ball handler", AGDist = 4, AGReact = 0.08, AGPredict = 0.18, AGRange = 45, AGLock = false, AGFace = true, AGSprint = true, AGHoldToUse = false, WalkAnimId = "", GuardAnimId = "",
 	AB = false, ABRange = 12, ABDelay = 0.1, ABKey = "Space", ABChance = 100, ABChase = true,
 	AR = false, ARSpeed = 1, ARReact = 0.18, ARRange = 45, ARJump = true, ARMagnet = true, ARMagRange = 4, ARMarker = false,
@@ -13156,6 +13186,7 @@ if S.LowFix == nil then S.LowFix = true end
 if S.LowBoostPct == nil then S.LowBoostPct = 25 end
 if S.LowGlidePct == nil then S.LowGlidePct = 60 end
 if S.LowLevel == nil then S.LowLevel = 3 end
+if S.TapAuto == nil then S.TapAuto = true end
 if S.PerfectGreenPct == nil then S.PerfectGreenPct = 100 end
 if S.AutoTimes == nil then S.AutoTimes = "" end
 if S.SettingsVer < 14 then
@@ -13193,8 +13224,13 @@ if S.SettingsVer < 36 then
 S.AccentTone, S.ARSpeed, S.ARReact, S.ARRange, S.ARMagRange = "Rainbow", 1, 0.18, 45, 4
 if S.MagnetRange > 25 then S.MagnetRange = 25 end
 end
-S.SettingsVer = 36
-DEFAULTS.SettingsVer = 36
+if S.SettingsVer < 37 then
+S.LagSync, S.PrecFit, S.AdaptPlus, S.GreenMax, S.AllJumpers, S.AutoAdaptAll, S.InstantGreen, S.SmartSteps, S.FirstShot = false, false, false, false, false, false, false, false, false
+S.FadeNudge, S.GLead, S.GLeadN, S.PFLead, S.PFLeadN = 0, 0, 0, 0, 0
+S.FinalAdj, S.FamLead = "", ""
+end
+S.SettingsVer = 37
+DEFAULTS.SettingsVer = 37
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 S.ShotTimes = S.ShotTimes
 S.RecOn = false
@@ -13224,7 +13260,7 @@ local OUTLINE_COLORS = {
 	White = Color3.new(1, 1, 1), Cyan = Color3.fromRGB(120, 235, 255), Pink = Color3.fromRGB(255, 150, 220),
 	Gold = Color3.fromRGB(255, 225, 120), Lime = Color3.fromRGB(170, 255, 140),
 }
-local OUTLINE_NAMES = { "White", "Cyan", "Pink", "Gold", "Lime", "Rainbow" }
+local OUTLINE_NAMES = { "White", "Cyan", "Pink", "Gold", "Lime", "Rainbow", "Custom" }
 local TEXT_NAMES = { "White", "Ice", "Gold", "Mint" }
 local FONTS = {
 	Gotham = { "Gotham", "GothamBold" }, Montserrat = { "Montserrat", "MontserratBold" },
@@ -13242,7 +13278,7 @@ local function computeTheme()
 	Theme.Stroke = Color3.fromHSV(h, 0.9, 0.18)
 	Theme.Text = TEXT_COLORS[S.TextColor] or WHITE
 	Theme.Sub = Theme.Text:Lerp(Theme.Glass, 0.28)
-	Theme.Outline = OUTLINE_COLORS[S.OutlineColor] or WHITE
+	Theme.Outline = S.OutlineColor == "Custom" and Color3.fromRGB(S.OutlineCustomR or 255, S.OutlineCustomG or 255, S.OutlineCustomB or 255) or (OUTLINE_COLORS[S.OutlineColor] or WHITE)
 	Theme.AccentA = Color3.fromHSV(h, 0.2, 1)
 	Theme.AccentB = Color3.fromHSV(((S.Hue - 28) % 360) / 360, 0.75, 1)
 	if S.AccentMode ~= "Match hue" then
@@ -14560,21 +14596,29 @@ function Shot.release(mode, ctx)
 		if S.ReleaseMethod ~= "Button" then Input.sendKey(S.ShootKey, false) end
 	end
 end
+Shot.momentum = Shot.momentum or {}
 function Shot.learnTiming(info, res, strength)
 	local rate = S.CalSpeed
 	local base, held = info.base, info.held
+	local mo = Shot.momentum[info.key]
+	if not mo then mo = { dir = 0, streak = 0 } Shot.momentum[info.key] = mo end
 	local function stepFor(from)
-		return math.max(S.CalStep * strength * rate, from * STRENGTH_STEP[strength] * rate / 0.6)
+		local base_step = math.max(S.CalStep * strength * rate, from * STRENGTH_STEP[strength] * rate / 0.6)
+		return base_step * (1 + 0.3 * math.min(mo.streak, 6))
 	end
 	if S.AutoTiming and info.track then
 		local newv
 		if info.manual or info.usedBar then
 			if res == "green" then newv = base + (held - base) * 0.5 end
+			mo.dir, mo.streak = 0, 0
 		elseif res == "green" then
 			newv = base
+			mo.dir, mo.streak = 0, 0
 		elseif res == "early" then
+			if mo.dir == 1 then mo.streak = mo.streak + 1 else mo.dir, mo.streak = 1, 0 end
 			newv = base + stepFor(base)
 		elseif res == "late" then
+			if mo.dir == -1 then mo.streak = mo.streak + 1 else mo.dir, mo.streak = -1, 0 end
 			newv = base - stepFor(base)
 		end
 		if newv then
@@ -14659,6 +14703,7 @@ function Shot.evaluate(info)
 	end
 	log("Shot: " .. note)
 	notify(res == "green" and "GREEN!" or "Shot", note, 2.2)
+	if res == "green" then pcall(JH.playGreenSound) end
 end
 -- the game's own shot signals, read from its remotes: the meter starting, its timing number and the result
 Shot.meterT, Shot.packet, Shot.packetT, Shot.greenT, Shot.fbT, Shot.fbText = 0, nil, 0, 0, 0, ""
@@ -14729,11 +14774,18 @@ function Shot.onRemoteEvent(name, ...)
 			Shot.packet, Shot.packetT = a[3], tick()
 		end
 	elseif name == "ShowFeedback" then
-		if typeof(a[1]) == "Instance" and (a[1].Name == LP.Name or a[1] == char()) and tonumber(a[3]) then Shot.fbIdx, Shot.fbIdxT = tonumber(a[3]), tick() end
+		if typeof(a[1]) == "Instance" and (a[1].Name == LP.Name or a[1] == char()) and tonumber(a[3]) then
+			Shot.fbIdx, Shot.fbIdxT = tonumber(a[3]), tick()
+			if Shot.fbIdx == 5 and JH.playGreenSound then pcall(JH.playGreenSound) end
+		end
 	elseif name == "RunGreenEffect" or name == "GreenCelebration" then
-		if isMine(a) then Shot.greenT = tick() end
+		if isMine(a) then
+			Shot.greenT = tick()
+			if JH.playGreenSound then pcall(JH.playGreenSound) end
+		end
 	elseif name == "Output" then
 		if type(a[2]) == "string" and string.find(a[2], "Shot Feedback", 1, true) then Shot.fbT, Shot.fbText = tick(), a[2] end
+if type(a[2]) == "string" and string.find(a[2], "Shot Feedback", 1, true) and Shot.classifyFB(a[2]) == "green" and JH.playGreenSound then pcall(JH.playGreenSound) end
 	end
 end
 Shot.remoteNames = { Meter = true, RegisterPacket = true, RunGreenEffect = true, GreenCelebration = true, Output = true, ShowFeedback = true,
@@ -14757,6 +14809,7 @@ function Shot.connectRemotes()
 	bind(ReplicatedStorage.DescendantAdded, watch)
 end
 -- runs inside the namecall hook for every Shoot remote the game fires: true means "do not send this one"
+-- a lift this soon after the press is a tap (the game would only turn it into a pump fake anyway)
 function Shot.onShootCall(args)
 	local d = args[1]
 	if type(d) ~= "table" or Shot.selfFire then return false end
@@ -14806,10 +14859,10 @@ Shot.SWEEPLIST = {
 Shot.FINAL = {
 	["15851912457+15851919155"] = 0.357,
 	["15851912457+15851919155+17285155256"] = 0.357,
-	["111074210919383"] = 0.367,
-	["71484695722621"] = 0.321,
-	["77401448272074"] = 0.339,
-	["128777513307709+77401448272074"] = 0.339,
+["111074210919383"] = 0.357,
+["71484695722621"] = 0.311,
+["77401448272074"] = 0.329,
+["128777513307709+77401448272074"] = 0.329,
 }
 Shot.VERDICT = { "Very early", "Early", "Slightly early", "Good", "Perfect", "Slightly late", "Late", "Very late" }
 Shot.NAMES = {
@@ -14968,8 +15021,16 @@ function Shot.peakLearn(info, res, strength, a, key)
 			end
 			a.lastD, a.dir = d, d
 		end
-		a.hold = clamp(lead + d * a.step * mag, 0, 0.1)
-		S.PeakLead = clamp(S.PeakLead + d * a.step * mag * 0.25, 0, 0.08)
+		-- Learn speed 1 is the normal small step. Above that, the miss is turned into the exact correction (the game's verdict says how many
+		-- notches off the release was, and one notch is this shot's own measured width), fully at speed 5 and above.
+		local fast = clamp(((S.CalSpeed or 1) - 1) / 4, 0, 1)
+		local nextLead = lead + d * a.step * mag
+		if fast > 0 and idx ~= 4 then
+			local exact = lead + (idx - 5) * (a.bin or S.PeakBin or 0.014)
+			nextLead = nextLead * (1 - fast) + exact * fast
+		end
+		a.hold = clamp(nextLead, 0, 0.1)
+		S.PeakLead = clamp(S.PeakLead + (a.hold - lead) * 0.25, 0, 0.08)
 		why = (Shot.VERDICT[idx] or "?") .. (d > 0 and ", letting go earlier" or ", letting go later")
 	end
 	if math.abs(a.hold - before) > 0.0003 or a.locked then Shot.noteAdjust(key, before, a.hold, why) end
@@ -25121,7 +25182,6 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
-"v2.06 - dribble glide, shot glide, gather step glide, speed boosts and tap-to-shoot restored to the v1.82 code (no quick-tap interception, glide lock back to v1.82)",
 "v2.05 - shooting restored to the v1.36 behaviour, confirmed Perfect sharing, Green Sounds length check",
 "v2.01 - reverted the meter late-bias, the tap-to-shoot Action-wait fix, and the locked-jumpshot-promotion fix - the bar was stopping/missing badly after those went back in. Shot Green Stabilizer stays (that one wasn't the problem). Back to plain prediction-only release timing on top of v2.00",
 "v2.00 - added a Sound ID picker under Alerts and keys: 6 unverified candidate Roblox audio IDs pulled from the web (not labeled, not confirmed to work or sound like anything specific - a real search turned up almost nothing usable), pick one to try as the Green sound ID",
