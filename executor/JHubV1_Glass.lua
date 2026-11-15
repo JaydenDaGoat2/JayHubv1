@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.97"
+local VERSION = "v1.98"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -2242,7 +2242,10 @@ local n = #samples
 if peakLead then
 local tp = Shot.peakFitSmart(samples, key)
 if tp and (not S.LagSync or tp - m0 > 0.22) then
-hold = math.max(Shot.FLOOR, tp - (Shot.effPing() + peakLead) - m0 - Shot.fpsComp())
+-- a small bounded late-bias, proportional to this jumpshot's own measured precision (PeakBin) rather than a made-up
+-- constant: never aim early on purpose, and if the prediction is going to miss by a hair, let it run a touch long
+-- instead - late still has a chance to land in the green window, early does not
+hold = math.max(Shot.FLOOR, tp - (Shot.effPing() + peakLead) - m0 - Shot.fpsComp()) + (S.PeakBin or 0.014) * 0.5
 peakAimed = true
 end
 if now - m0 >= hold - look and (peakAimed or now - m0 >= Shot.AUTO_START - look) then break end
@@ -2277,7 +2280,20 @@ end
 while not manual and not ctx.ended and tick() - m0 < hold do RunService.Heartbeat:Wait() end
 local held = tick() - m0
 Shot.markShot()
-if not manual then Shot.release("remote", ctx) end
+if not manual then
+-- TAP-TO-SHOOT PUMP FAKE FIX: Shot.result already treats a release before the game's own Action attribute reaches
+-- "Shooting" as "early (pump fake)" - releasing our synthetic hold before that actually happens IS what was
+-- producing the pump fake, regardless of how correct our calculated hold duration was. Give it a brief, bounded
+-- window to actually reach "Shooting" first.
+if S.ShotStyle == "Tap" then
+local waitUntil = tick() + 0.25
+local c2 = char()
+while c2 and c2.Parent and c2:GetAttribute("Action") ~= "Shooting" and tick() < waitUntil do
+RunService.Heartbeat:Wait()
+end
+end
+Shot.release("remote", ctx)
+end
 ctx.released = true
 Shot.stats.shots = Shot.stats.shots + 1
 Shot.lastType = key
@@ -9823,7 +9839,7 @@ if JH.netPut then task.spawn(JH.netPut, "roles", roles) end
 end
 UI.Input(rolesCard, "Owners (comma separated - gold text, crown, #owner)", { get = function() return ownersList end, set = function(v) ownersList = tostring(v or "") end }, nil, "name1, name2")
 UI.Input(rolesCard, "Owner code (only needed to add/change an Owner)", { get = function() return ownerCode end, set = function(v) ownerCode = tostring(v or "") end }, nil, "required to touch the Owners list")
-UI.Input(rolesCard, "Devs (comma separated player names)", { get = function() return devsList end, set = function(v) devsList = tostring(v or "") end }, nil, "name1, name2")
+UI.Input(rolesCard, "Co-Owners (comma separated player names)", { get = function() return devsList end, set = function(v) devsList = tostring(v or "") end }, nil, "name1, name2")
 UI.Input(rolesCard, "Mods (comma separated player names)", { get = function() return modsList end, set = function(v) modsList = tostring(v or "") end }, nil, "name1, name2")
 UI.Button(rolesCard, "Add me as Owner", function()
 if string.lower(string.gsub(ownerCode, "%s", "")) == "jay" then
@@ -9834,10 +9850,10 @@ else
 notify("Owner tab", "Wrong owner code.", 3)
 end
 end)
-UI.Button(rolesCard, "Add me as Dev", function()
+UI.Button(rolesCard, "Add me as Co-Owner", function()
 devsList = addName(devsList, Players.LocalPlayer.Name)
 pushRoles(ownersList)
-notify("Owner tab", "Added you as Dev and pushed to everyone.", 4)
+notify("Owner tab", "Added you as Co-Owner and pushed to everyone.", 4)
 end)
 UI.Button(rolesCard, "Add me as Mod", function()
 modsList = addName(modsList, Players.LocalPlayer.Name)
@@ -9861,7 +9877,26 @@ ownerCode = ""
 pushRoles(newOwners)
 notify("Owner tab", "Roles saved and pushed - everyone's JHub Chat will show the badges.", 4)
 end, true)
-UI.Note(rolesCard, "Anyone named here gets a badge next to their name in JHub Chat for everyone - Owners get a gold crown and #owner, Devs/Mods get their own tag. Multiple people can hold each role. Adding or changing an Owner needs the Owner code; Dev/Mod only need the tab code. 'Add me as...' fills in your own player name for you.")
+UI.Note(rolesCard, "Anyone named here gets a badge next to their name in JHub Chat for everyone - Owners get a gold crown and #owner, Co-Owners/Mods get their own tag. Multiple people can hold each role. Adding or changing an Owner needs the Owner code; Co-Owner/Mod only need the tab code. 'Add me as...' fills in your own player name for you.")
+local annCard = UI.Card(OP, "Announcement")
+local annText = ""
+UI.Input(annCard, "Message (pops up at the top of everyone's screen)", { get = function() return annText end, set = function(v) annText = tostring(v or "") end }, nil, "type an announcement")
+UI.Button(annCard, "Post to everyone", function()
+local roles = JH.roles or {}
+local me = Players.LocalPlayer.Name
+local allowed = inList(roles.owners, me) or inList(roles.devs, me) or inList(roles.mods, me)
+if not allowed then
+notify("Announcement", "Only an Owner, Co-Owner or Mod can post an announcement.", 4)
+return
+end
+if annText == "" then return end
+if JH.netPut then
+task.spawn(JH.netPut, "announcement", { text = string.sub(annText, 1, 200), by = me, t = os.time() })
+end
+annText = ""
+notify("Announcement", "Posted to everyone.", 3)
+end, true)
+UI.Note(annCard, "Only someone currently listed as Owner, Co-Owner or Mod above can actually post - the button checks your real name against those lists, not just whether you have the tab code.")
 if S.OwnerUnlocked then
 task.defer(function()
 lock2.frame.Visible = false
@@ -9881,6 +9916,48 @@ end
 end, true)
 UI.Note(lock2, "Owner-only tab. Enter the code to manage chat crown/dev/mod badges.")
 end
+end
+-- SETTINGS TAB: copy your whole config, upload it under a title for others to search and load, or load someone else's
+do
+local SP = UI.Page("Settings", "C")
+local top = UI.Card(SP, "Copy settings")
+UI.Button(top, "Copy settings", function()
+local ok, text = pcall(function() return HttpService:JSONEncode(S) end)
+if ok then copy(text, "Settings") else notify("Settings", "Could not copy settings", 3) end
+end, true)
+UI.Note(top, "Copies your entire menu/settings as text, so you can paste it somewhere or hand it to someone else directly.")
+local share = UI.Card(SP, "Share and load configs")
+local cfgTitle, loadTitle = "", ""
+UI.Input(share, "Title (name this config)", { get = function() return cfgTitle end, set = function(v) cfgTitle = tostring(v or "") end }, nil, "name your settings")
+UI.Button(share, "Upload with this title", function()
+if cfgTitle == "" then notify("Settings", "Give it a title first", 3) return end
+if not JH.netPut then return end
+local okj, body = pcall(function() return HttpService:JSONEncode(S) end)
+if not okj then notify("Settings", "Could not encode settings", 3) return end
+task.spawn(JH.netPut, "configs/" .. JH.sanitizeName(cfgTitle), { data = body, by = Players.LocalPlayer.Name, t = os.time() })
+notify("Settings", "Uploaded as \"" .. cfgTitle .. "\" - anyone can search that title and load it", 4)
+end)
+UI.Input(share, "Load a config by title", { get = function() return loadTitle end, set = function(v) loadTitle = tostring(v or "") end }, nil, "type the exact title, then press enter")
+UI.Button(share, "Load", function()
+if loadTitle == "" or not JH.netGet then return end
+task.spawn(function()
+local ok, entry = pcall(JH.netGet, "configs/" .. JH.sanitizeName(loadTitle))
+if not (ok and type(entry) == "table" and type(entry.data) == "string") then
+notify("Settings", "No config titled \"" .. loadTitle .. "\" found", 3)
+return
+end
+local okd, data = pcall(function() return HttpService:JSONDecode(entry.data) end)
+if not (okd and type(data) == "table") then
+notify("Settings", "That config could not be read", 3)
+return
+end
+for k, v in pairs(data) do S[k] = v end
+UI.refreshAll()
+saveSoon()
+notify("Settings", "Loaded \"" .. loadTitle .. "\" (by " .. tostring(entry.by or "?") .. ")", 4)
+end)
+end, true)
+UI.Note(share, "Uploading shares your whole settings under that title for anyone to search and load - do not upload anything you would not want public.")
 end
 -- MINIMISED BAR: the artwork draws the minimise and close buttons, so when the artwork is hidden the buttons are drawn on the bar itself
 do
@@ -10311,6 +10388,59 @@ end
 end
 end)
 end
+-- DEFENSE CONTEST VISUAL: highlight whoever you are actually guarding (the Auto Guard sticky target if it's on,
+-- otherwise just the nearest real opponent to you) with 4 tiers by real distance, so you can see at a glance whether
+-- your own contest is good without having to watch a number
+local defHl
+task.spawn(function()
+while JH.Running do
+task.wait(0.1)
+local c = char()
+local r = c and (c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart)
+local target
+if S.ContestShow and r then
+if Bot.lockedChar and Bot.lockedChar.Parent then
+target = Bot.lockedChar
+else
+local okO, others = pcall(Bot.others)
+if okO and others then
+local nearest, nd
+for _, o in ipairs(others) do
+if not o.mate then
+local d = flat(o.pos - r.Position).Magnitude
+if not nd or d < nd then nearest, nd = o.c, d end
+end
+end
+target = nearest
+end
+end
+end
+if target and target.Parent and r then
+local tr = target:FindFirstChild("HumanoidRootPart") or target.PrimaryPart
+local d = tr and flat(tr.Position - r.Position).Magnitude
+if d then
+if not defHl or not defHl.Parent then
+defHl = Instance.new("Highlight")
+defHl.Name = "JHDefenseContest"
+defHl.FillTransparency = 0.6
+defHl.OutlineTransparency = 0
+pcall(function() defHl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop end)
+end
+defHl.Parent = target
+local col
+if d >= 8 then col = Color3.fromRGB(255, 60, 60) -- wide open, bad contest
+elseif d >= 5 then col = Color3.fromRGB(255, 150, 50) -- slightly open
+elseif d >= 2.5 then col = Color3.fromRGB(70, 235, 110) -- contested
+else col = Color3.fromRGB(10, 140, 40) end -- tightly contested
+defHl.FillColor, defHl.OutlineColor = col, col
+else
+if defHl then defHl.Parent = nil end
+end
+else
+if defHl then defHl.Parent = nil end
+end
+end
+end)
 -- everything in the locked tab lives inside the Ultra Game Recorder card: the game recorder, shot recorder, game scanner and Shot Lab controls are moved into it
 do
 local tools = UI.lockedTools
@@ -11397,6 +11527,7 @@ end
 local function sanitize(k) return (string.gsub(tostring(k), "[%.%#%$%[%]/]", "_")) end
 local myName = Players.LocalPlayer.Name
 JH.netGet, JH.netPut = netGet, netPut
+JH.sanitizeName = JH.sanitizeName or sanitize
 JH.roles = JH.roles or {}
 task.spawn(function()
 while true do
@@ -11415,9 +11546,60 @@ end
 local function badgeFor(name)
 local roles = JH.roles or {}
 if inList(roles.owners, name) then return "\u{1F451} ", Color3.fromRGB(255, 215, 0), " #owner" end
-if inList(roles.devs, name) then return "\u{1F6E0} ", Color3.fromRGB(80, 220, 255), " #dev" end
-if inList(roles.mods, name) then return "\u{1F6E1} ", Color3.fromRGB(190, 120, 255), " #mod" end
+if inList(roles.devs, name) then return "\u{1F537} ", Color3.fromRGB(70, 140, 255), " #co-owner" end
+if inList(roles.mods, name) then return "\u{1F6E1} ", Color3.fromRGB(255, 60, 60), " #mod" end
 return "", nil, ""
+end
+-- ANNOUNCEMENT BANNER: pops up at the very top of the screen for everyone, outside the menu entirely, so it shows
+-- even if the menu is closed or minimised - only an Owner/Co-Owner/Mod can post one (checked where it's posted)
+do
+local gui = Instance.new("ScreenGui")
+gui.Name = "JHubAnnouncement"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.DisplayOrder = 2147483646
+pcall(function() gui.Parent = (gethui and gethui()) or game:GetService("CoreGui") end)
+if not gui.Parent then gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui") end
+local bar = Instance.new("TextLabel")
+bar.Name = "Bar"
+bar.AnchorPoint = Vector2.new(0.5, 0)
+bar.Position = UDim2.new(0.5, 0, 0, -40)
+bar.Size = UDim2.new(0, 520, 0, 34)
+bar.BackgroundColor3 = Color3.fromRGB(15, 15, 18)
+bar.BackgroundTransparency = 0.1
+bar.Font = Enum.Font.GothamBold
+bar.TextSize = 14
+bar.TextColor3 = Color3.new(1, 1, 1)
+bar.TextWrapped = true
+bar.Text = ""
+bar.Parent = gui
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = bar
+local stroke = Instance.new("UIStroke")
+stroke.Thickness = 1.5
+stroke.Parent = bar
+local lastAnn = nil
+task.spawn(function()
+while true do
+if JH.netGet then
+local ok, data = pcall(JH.netGet, "announcement")
+if ok and type(data) == "table" and data.text and data.t ~= lastAnn then
+lastAnn = data.t
+local prefix, col = badgeFor(tostring(data.by or ""))
+col = col or Color3.fromRGB(255, 214, 60)
+bar.Text = string.format("%s%s: %s", prefix, tostring(data.by or "?"), tostring(data.text))
+stroke.Color = col
+local tw = game:GetService("TweenService")
+tw:Create(bar, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Position = UDim2.new(0.5, 0, 0, 14) }):Play()
+task.delay(6, function()
+tw:Create(bar, TweenInfo.new(0.3), { Position = UDim2.new(0.5, 0, 0, -40) }):Play()
+end)
+end
+end
+task.wait(5)
+end
+end)
 end
 
 local mainPage
@@ -11555,6 +11737,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.98 - re-added, on request, specific pieces from the reverted batch: Shot Stabilizer (hidden, auto ping/FPS comp), Settings tab (copy/upload/search configs), defense contest highlight, Owner tab Co-Owner (blue)/Mod (red) colors with the top-of-screen announcement system, the tap-to-shoot Action-wait pump-fake fix, and the meter late-bias. Still not re-added: Shot Time, the Discord icon swap, the locked-jumpshot-promotion fix, and the live-catch feature",
 "v1.97 - reverted everything from v1.92 through v1.96 except Ultra Auto Calibrate (the rename and the momentum-based faster convergence): Shot Time, Shot Stabilizer, Settings tab, defense contest highlight, announcements, Co-Owner/Mod colors, the Discord icon swap, the tap-to-shoot fix, the meter late-bias, the locked-jumpshot fix, and the live-catch feature (and its revert) are all gone. Back to v1.91's shooting/UI behavior, with Ultra Auto Calibrate on top",
 "v1.91 - Owner/Dev/Mod are now lists, not single names, so multiple people can hold each role; added 'Add me as...' buttons that fill in your own name instead of typing it; added a live 'Players online' count on the Main tab from real heartbeats, not just an ever-growing push counter",
 "v1.90 - reverted the whole Universal Shot Intelligence addition (v1.85-v1.89): the confidence/retest piece was actually unlocking previously-good locked timing profiles when it judged recent shots inconsistent, which made real shooting worse, not just diagnostics - back to the plain v1.84 shot-timing behavior",
@@ -11711,6 +11894,28 @@ return a.hold
 end
 return prevSeedHL(key)
 end
+-- SHOT STABILIZER: hidden, always on, not a setting anyone can turn off. Scales ping compensation automatically from
+-- real measured ping and real FPS instead of a manual slider, so someone on 50+ ms ping or dropping frames still gets
+-- a real compensation value without having to know what to type in. The timing loops themselves already run on
+-- RunService.Heartbeat (a physics-step signal, not tied to render framerate), so a choppy picture does not by itself
+-- slow down the actual release logic - this only adds compensation on top of that for real ping/frame-drop cases.
+S.PingComp = S.PingComp or 0
+task.spawn(function()
+while true do
+local ok, ping = pcall(function() return LP:GetNetworkPing() end)
+local pingMs = (ok and ping and ping * 1000) or 0
+local fps = JH.FPS or 60
+local comp
+if pingMs >= 50 or fps < 30 then
+comp = clamp(pingMs / 2, 40, 100)
+if fps < 30 then comp = math.min(100, comp + (30 - fps) * 1.5) end
+else
+comp = clamp(pingMs / 3, 0, 35)
+end
+S.PingComp = comp
+task.wait(1)
+end
+end)
 -- SHARED BINDS: a dribble move learned on anyone's copy is pushed to the network and picked up by everyone else who hasn't learned it yet
 function JH.onBindLearned(name, args)
 if JH.bindSer then
@@ -11930,7 +12135,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.97"
+local VERSION = "v1.98"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -14248,7 +14453,7 @@ function Shot.remoteCore(ctx)
 			-- by the meter: let go one ping plus the lead before the meter reaches its peak
 			local tp = Shot.peakFitSmart(samples, key)
 			if tp and (not S.LagSync or tp - m0 > 0.22) then
-				hold = math.max(Shot.FLOOR, tp - (Shot.effPing() + peakLead) - m0 - Shot.fpsComp())
+				hold = math.max(Shot.FLOOR, tp - (Shot.effPing() + peakLead) - m0 - Shot.fpsComp()) + (S.PeakBin or 0.014) * 0.5
 				peakAimed = true
 			end
 			if now - m0 >= hold - look and (peakAimed or now - m0 >= Shot.AUTO_START - look) then break end
@@ -14285,7 +14490,20 @@ function Shot.remoteCore(ctx)
 	while not manual and not ctx.ended and tick() - m0 < hold do RunService.Heartbeat:Wait() end
 	local held = tick() - m0
 	Shot.markShot()
-	if not manual then Shot.release("remote", ctx) end
+	if not manual then
+-- TAP-TO-SHOOT PUMP FAKE FIX: Shot.result already treats a release before the game's own Action attribute reaches
+-- "Shooting" as "early (pump fake)" - releasing our synthetic hold before that actually happens IS what was
+-- producing the pump fake, regardless of how correct our calculated hold duration was. Give it a brief, bounded
+-- window to actually reach "Shooting" first.
+if S.ShotStyle == "Tap" then
+local waitUntil = tick() + 0.25
+local c2 = char()
+while c2 and c2.Parent and c2:GetAttribute("Action") ~= "Shooting" and tick() < waitUntil do
+RunService.Heartbeat:Wait()
+end
+end
+Shot.release("remote", ctx)
+end
 	ctx.released = true
 	Shot.stats.shots = Shot.stats.shots + 1
 	Shot.lastType = key
@@ -22061,7 +22279,7 @@ if JH.netPut then task.spawn(JH.netPut, "roles", roles) end
 end
 UI.Input(rolesCard, "Owners (comma separated - gold text, crown, #owner)", { get = function() return ownersList end, set = function(v) ownersList = tostring(v or "") end }, nil, "name1, name2")
 UI.Input(rolesCard, "Owner code (only needed to add/change an Owner)", { get = function() return ownerCode end, set = function(v) ownerCode = tostring(v or "") end }, nil, "required to touch the Owners list")
-UI.Input(rolesCard, "Devs (comma separated player names)", { get = function() return devsList end, set = function(v) devsList = tostring(v or "") end }, nil, "name1, name2")
+UI.Input(rolesCard, "Co-Owners (comma separated player names)", { get = function() return devsList end, set = function(v) devsList = tostring(v or "") end }, nil, "name1, name2")
 UI.Input(rolesCard, "Mods (comma separated player names)", { get = function() return modsList end, set = function(v) modsList = tostring(v or "") end }, nil, "name1, name2")
 UI.Button(rolesCard, "Add me as Owner", function()
 if string.lower(string.gsub(ownerCode, "%s", "")) == "jay" then
@@ -22072,10 +22290,10 @@ else
 notify("Owner tab", "Wrong owner code.", 3)
 end
 end)
-UI.Button(rolesCard, "Add me as Dev", function()
+UI.Button(rolesCard, "Add me as Co-Owner", function()
 devsList = addName(devsList, Players.LocalPlayer.Name)
 pushRoles(ownersList)
-notify("Owner tab", "Added you as Dev and pushed to everyone.", 4)
+notify("Owner tab", "Added you as Co-Owner and pushed to everyone.", 4)
 end)
 UI.Button(rolesCard, "Add me as Mod", function()
 modsList = addName(modsList, Players.LocalPlayer.Name)
@@ -22099,7 +22317,26 @@ ownerCode = ""
 pushRoles(newOwners)
 notify("Owner tab", "Roles saved and pushed - everyone's JHub Chat will show the badges.", 4)
 end, true)
-UI.Note(rolesCard, "Anyone named here gets a badge next to their name in JHub Chat for everyone - Owners get a gold crown and #owner, Devs/Mods get their own tag. Multiple people can hold each role. Adding or changing an Owner needs the Owner code; Dev/Mod only need the tab code. 'Add me as...' fills in your own player name for you.")
+UI.Note(rolesCard, "Anyone named here gets a badge next to their name in JHub Chat for everyone - Owners get a gold crown and #owner, Co-Owners/Mods get their own tag. Multiple people can hold each role. Adding or changing an Owner needs the Owner code; Co-Owner/Mod only need the tab code. 'Add me as...' fills in your own player name for you.")
+local annCard = UI.Card(OP, "Announcement")
+local annText = ""
+UI.Input(annCard, "Message (pops up at the top of everyone's screen)", { get = function() return annText end, set = function(v) annText = tostring(v or "") end }, nil, "type an announcement")
+UI.Button(annCard, "Post to everyone", function()
+local roles = JH.roles or {}
+local me = Players.LocalPlayer.Name
+local allowed = inList(roles.owners, me) or inList(roles.devs, me) or inList(roles.mods, me)
+if not allowed then
+notify("Announcement", "Only an Owner, Co-Owner or Mod can post an announcement.", 4)
+return
+end
+if annText == "" then return end
+if JH.netPut then
+task.spawn(JH.netPut, "announcement", { text = string.sub(annText, 1, 200), by = me, t = os.time() })
+end
+annText = ""
+notify("Announcement", "Posted to everyone.", 3)
+end, true)
+UI.Note(annCard, "Only someone currently listed as Owner, Co-Owner or Mod above can actually post - the button checks your real name against those lists, not just whether you have the tab code.")
 if S.OwnerUnlocked then
 task.defer(function()
 lock2.frame.Visible = false
@@ -22119,6 +22356,48 @@ end
 end, true)
 UI.Note(lock2, "Owner-only tab. Enter the code to manage chat crown/dev/mod badges.")
 end
+end
+-- SETTINGS TAB: copy your whole config, upload it under a title for others to search and load, or load someone else's
+do
+local SP = UI.Page("Settings", "C")
+local top = UI.Card(SP, "Copy settings")
+UI.Button(top, "Copy settings", function()
+local ok, text = pcall(function() return HttpService:JSONEncode(S) end)
+if ok then copy(text, "Settings") else notify("Settings", "Could not copy settings", 3) end
+end, true)
+UI.Note(top, "Copies your entire menu/settings as text, so you can paste it somewhere or hand it to someone else directly.")
+local share = UI.Card(SP, "Share and load configs")
+local cfgTitle, loadTitle = "", ""
+UI.Input(share, "Title (name this config)", { get = function() return cfgTitle end, set = function(v) cfgTitle = tostring(v or "") end }, nil, "name your settings")
+UI.Button(share, "Upload with this title", function()
+if cfgTitle == "" then notify("Settings", "Give it a title first", 3) return end
+if not JH.netPut then return end
+local okj, body = pcall(function() return HttpService:JSONEncode(S) end)
+if not okj then notify("Settings", "Could not encode settings", 3) return end
+task.spawn(JH.netPut, "configs/" .. JH.sanitizeName(cfgTitle), { data = body, by = Players.LocalPlayer.Name, t = os.time() })
+notify("Settings", "Uploaded as \"" .. cfgTitle .. "\" - anyone can search that title and load it", 4)
+end)
+UI.Input(share, "Load a config by title", { get = function() return loadTitle end, set = function(v) loadTitle = tostring(v or "") end }, nil, "type the exact title, then press enter")
+UI.Button(share, "Load", function()
+if loadTitle == "" or not JH.netGet then return end
+task.spawn(function()
+local ok, entry = pcall(JH.netGet, "configs/" .. JH.sanitizeName(loadTitle))
+if not (ok and type(entry) == "table" and type(entry.data) == "string") then
+notify("Settings", "No config titled \"" .. loadTitle .. "\" found", 3)
+return
+end
+local okd, data = pcall(function() return HttpService:JSONDecode(entry.data) end)
+if not (okd and type(data) == "table") then
+notify("Settings", "That config could not be read", 3)
+return
+end
+for k, v in pairs(data) do S[k] = v end
+UI.refreshAll()
+saveSoon()
+notify("Settings", "Loaded \"" .. loadTitle .. "\" (by " .. tostring(entry.by or "?") .. ")", 4)
+end)
+end, true)
+UI.Note(share, "Uploading shares your whole settings under that title for anyone to search and load - do not upload anything you would not want public.")
 end
 -- MINIMISED BAR: the artwork draws the minimise and close buttons, so when the artwork is hidden the buttons are drawn on the bar itself
 do
@@ -22549,6 +22828,59 @@ do
 		end
 	end)
 end
+-- DEFENSE CONTEST VISUAL: highlight whoever you are actually guarding (the Auto Guard sticky target if it's on,
+-- otherwise just the nearest real opponent to you) with 4 tiers by real distance, so you can see at a glance whether
+-- your own contest is good without having to watch a number
+local defHl
+task.spawn(function()
+while JH.Running do
+task.wait(0.1)
+local c = char()
+local r = c and (c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart)
+local target
+if S.ContestShow and r then
+if Bot.lockedChar and Bot.lockedChar.Parent then
+target = Bot.lockedChar
+else
+local okO, others = pcall(Bot.others)
+if okO and others then
+local nearest, nd
+for _, o in ipairs(others) do
+if not o.mate then
+local d = flat(o.pos - r.Position).Magnitude
+if not nd or d < nd then nearest, nd = o.c, d end
+end
+end
+target = nearest
+end
+end
+end
+if target and target.Parent and r then
+local tr = target:FindFirstChild("HumanoidRootPart") or target.PrimaryPart
+local d = tr and flat(tr.Position - r.Position).Magnitude
+if d then
+if not defHl or not defHl.Parent then
+defHl = Instance.new("Highlight")
+defHl.Name = "JHDefenseContest"
+defHl.FillTransparency = 0.6
+defHl.OutlineTransparency = 0
+pcall(function() defHl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop end)
+end
+defHl.Parent = target
+local col
+if d >= 8 then col = Color3.fromRGB(255, 60, 60) -- wide open, bad contest
+elseif d >= 5 then col = Color3.fromRGB(255, 150, 50) -- slightly open
+elseif d >= 2.5 then col = Color3.fromRGB(70, 235, 110) -- contested
+else col = Color3.fromRGB(10, 140, 40) end -- tightly contested
+defHl.FillColor, defHl.OutlineColor = col, col
+else
+if defHl then defHl.Parent = nil end
+end
+else
+if defHl then defHl.Parent = nil end
+end
+end
+end)
 -- everything in the locked tab lives inside the Ultra Game Recorder card: the game recorder, shot recorder, game scanner and Shot Lab controls are moved into it
 do
 	local tools = UI.lockedTools
@@ -23635,6 +23967,7 @@ end
 local function sanitize(k) return (string.gsub(tostring(k), "[%.%#%$%[%]/]", "_")) end
 local myName = Players.LocalPlayer.Name
 JH.netGet, JH.netPut = netGet, netPut
+JH.sanitizeName = JH.sanitizeName or sanitize
 JH.roles = JH.roles or {}
 task.spawn(function()
 while true do
@@ -23653,9 +23986,60 @@ end
 local function badgeFor(name)
 local roles = JH.roles or {}
 if inList(roles.owners, name) then return "\u{1F451} ", Color3.fromRGB(255, 215, 0), " #owner" end
-if inList(roles.devs, name) then return "\u{1F6E0} ", Color3.fromRGB(80, 220, 255), " #dev" end
-if inList(roles.mods, name) then return "\u{1F6E1} ", Color3.fromRGB(190, 120, 255), " #mod" end
+if inList(roles.devs, name) then return "\u{1F537} ", Color3.fromRGB(70, 140, 255), " #co-owner" end
+if inList(roles.mods, name) then return "\u{1F6E1} ", Color3.fromRGB(255, 60, 60), " #mod" end
 return "", nil, ""
+end
+-- ANNOUNCEMENT BANNER: pops up at the very top of the screen for everyone, outside the menu entirely, so it shows
+-- even if the menu is closed or minimised - only an Owner/Co-Owner/Mod can post one (checked where it's posted)
+do
+local gui = Instance.new("ScreenGui")
+gui.Name = "JHubAnnouncement"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.DisplayOrder = 2147483646
+pcall(function() gui.Parent = (gethui and gethui()) or game:GetService("CoreGui") end)
+if not gui.Parent then gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui") end
+local bar = Instance.new("TextLabel")
+bar.Name = "Bar"
+bar.AnchorPoint = Vector2.new(0.5, 0)
+bar.Position = UDim2.new(0.5, 0, 0, -40)
+bar.Size = UDim2.new(0, 520, 0, 34)
+bar.BackgroundColor3 = Color3.fromRGB(15, 15, 18)
+bar.BackgroundTransparency = 0.1
+bar.Font = Enum.Font.GothamBold
+bar.TextSize = 14
+bar.TextColor3 = Color3.new(1, 1, 1)
+bar.TextWrapped = true
+bar.Text = ""
+bar.Parent = gui
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = bar
+local stroke = Instance.new("UIStroke")
+stroke.Thickness = 1.5
+stroke.Parent = bar
+local lastAnn = nil
+task.spawn(function()
+while true do
+if JH.netGet then
+local ok, data = pcall(JH.netGet, "announcement")
+if ok and type(data) == "table" and data.text and data.t ~= lastAnn then
+lastAnn = data.t
+local prefix, col = badgeFor(tostring(data.by or ""))
+col = col or Color3.fromRGB(255, 214, 60)
+bar.Text = string.format("%s%s: %s", prefix, tostring(data.by or "?"), tostring(data.text))
+stroke.Color = col
+local tw = game:GetService("TweenService")
+tw:Create(bar, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Position = UDim2.new(0.5, 0, 0, 14) }):Play()
+task.delay(6, function()
+tw:Create(bar, TweenInfo.new(0.3), { Position = UDim2.new(0.5, 0, 0, -40) }):Play()
+end)
+end
+end
+task.wait(5)
+end
+end)
 end
 
 local mainPage
@@ -23793,6 +24177,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.98 - re-added, on request, specific pieces from the reverted batch: Shot Stabilizer (hidden, auto ping/FPS comp), Settings tab (copy/upload/search configs), defense contest highlight, Owner tab Co-Owner (blue)/Mod (red) colors with the top-of-screen announcement system, the tap-to-shoot Action-wait pump-fake fix, and the meter late-bias. Still not re-added: Shot Time, the Discord icon swap, the locked-jumpshot-promotion fix, and the live-catch feature",
 "v1.97 - reverted everything from v1.92 through v1.96 except Ultra Auto Calibrate (the rename and the momentum-based faster convergence): Shot Time, Shot Stabilizer, Settings tab, defense contest highlight, announcements, Co-Owner/Mod colors, the Discord icon swap, the tap-to-shoot fix, the meter late-bias, the locked-jumpshot fix, and the live-catch feature (and its revert) are all gone. Back to v1.91's shooting/UI behavior, with Ultra Auto Calibrate on top",
 "v1.91 - Owner/Dev/Mod are now lists, not single names, so multiple people can hold each role; added 'Add me as...' buttons that fill in your own name instead of typing it; added a live 'Players online' count on the Main tab from real heartbeats, not just an ever-growing push counter",
 "v1.90 - reverted the whole Universal Shot Intelligence addition (v1.85-v1.89): the confidence/retest piece was actually unlocking previously-good locked timing profiles when it judged recent shots inconsistent, which made real shooting worse, not just diagnostics - back to the plain v1.84 shot-timing behavior",
@@ -23949,6 +24334,28 @@ return a.hold
 end
 return prevSeedHL(key)
 end
+-- SHOT STABILIZER: hidden, always on, not a setting anyone can turn off. Scales ping compensation automatically from
+-- real measured ping and real FPS instead of a manual slider, so someone on 50+ ms ping or dropping frames still gets
+-- a real compensation value without having to know what to type in. The timing loops themselves already run on
+-- RunService.Heartbeat (a physics-step signal, not tied to render framerate), so a choppy picture does not by itself
+-- slow down the actual release logic - this only adds compensation on top of that for real ping/frame-drop cases.
+S.PingComp = S.PingComp or 0
+task.spawn(function()
+while true do
+local ok, ping = pcall(function() return LP:GetNetworkPing() end)
+local pingMs = (ok and ping and ping * 1000) or 0
+local fps = JH.FPS or 60
+local comp
+if pingMs >= 50 or fps < 30 then
+comp = clamp(pingMs / 2, 40, 100)
+if fps < 30 then comp = math.min(100, comp + (30 - fps) * 1.5) end
+else
+comp = clamp(pingMs / 3, 0, 35)
+end
+S.PingComp = comp
+task.wait(1)
+end
+end)
 -- SHARED BINDS: a dribble move learned on anyone's copy is pushed to the network and picked up by everyone else who hasn't learned it yet
 function JH.onBindLearned(name, args)
 if JH.bindSer then
