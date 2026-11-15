@@ -33,6 +33,23 @@ for _, key in ipairs({ "JHubGlass", "JHubV1", "JayHubPB" }) do
 	end
 	genv[key] = nil
 end
+-- claim the slot immediately, with nothing that can yield between the unload loop above and this -
+-- if the executor fires several copies of this script at once (e.g. more than one autoexec folder
+-- holding a copy), each copy's unload-then-claim now runs as one uninterrupted stretch with no gap
+-- for another copy to slip through, so only the very last one to reach this line survives: every
+-- earlier one gets torn down here, before it ever gets as far as building its own menu. Previously
+-- this claim happened after the LocalPlayer wait below, which yields and let every racing copy pass
+-- the unload check seeing nothing to unload yet, then each one built its own full menu - the 7 (or
+-- however many autoexec copies exist) stacked windows this caused.
+local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
+genv.JHubGlass = JH
+-- an early, minimal unload so a second load started before this one finishes can always stop
+-- this one's background loops - the full Unload (destroys the menu, saves settings) replaces
+-- this once it is defined further down
+function JH.Unload()
+	JH.Running = false
+	for _, c in ipairs(JH.Connections) do pcall(function() c:Disconnect() end) end
+end
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -59,17 +76,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.12"
-
-local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
-genv.JHubGlass = JH
--- an early, minimal unload so a second load started before this one finishes can always stop
--- this one's background loops - the full Unload (destroys the menu, saves settings) replaces
--- this once it is defined further down
-function JH.Unload()
-	JH.Running = false
-	for _, c in ipairs(JH.Connections) do pcall(function() c:Disconnect() end) end
-end
+local VERSION = "v2.13"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -12424,6 +12431,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.13 - Fixed loading several copies of the menu at once on some setups. A second (or third, or seventh) copy starting at almost the same moment as the first used to pass right by the check that is supposed to close the previous copy, because that check ran before a wait that let every copy race ahead together, and only the very last one to finish actually took over the slot - so every other one it ran past stayed open as its own full, live menu. The slot is now claimed the instant the check runs, before anything that can cause that race, so only one copy ever stays open no matter how many start up together.",
 "v2.12 - Found the real reason Auto Guard never showed any animation: it was moving by CFrame-teleporting the character, so the Humanoid itself never registered as walking and no clip we forced on top ever stuck. It no longer moves that way at all - it now drives itself purely through the same MoveDirection remote a real joystick fires, with the real Guard button held, so the server moves it for real and the game's own animation system picks the real walk/defensive-slide clip on its own, same as it does for a real player.",
 "v2.11 - Auto Guard now plays the real left/right/forward/backward defensive slide animation that matches the direction it is actually sliding in, instead of always forcing the forward walk clip while moving sideways or backward - this is what made it look like it was just gliding. It also now holds the real defensive stance when it catches up and stops instead of freezing with no animation.",
 "v2.10 - Fixed glides/boost feeling stuck on after turning them off: a glide that was already running kept pushing you for its full duration even after the toggle was switched off. Also fixed small unwanted movement while you have no dribbles left or are mid-shot/mid-gather: glides were only pausing for one of their push methods when the game takes away your movement, not all of them.",
@@ -13089,6 +13097,23 @@ for _, key in ipairs({ "JHubGlass", "JHubV1", "JayHubPB" }) do
 	end
 	genv[key] = nil
 end
+-- claim the slot immediately, with nothing that can yield between the unload loop above and this -
+-- if the executor fires several copies of this script at once (e.g. more than one autoexec folder
+-- holding a copy), each copy's unload-then-claim now runs as one uninterrupted stretch with no gap
+-- for another copy to slip through, so only the very last one to reach this line survives: every
+-- earlier one gets torn down here, before it ever gets as far as building its own menu. Previously
+-- this claim happened after the LocalPlayer wait below, which yields and let every racing copy pass
+-- the unload check seeing nothing to unload yet, then each one built its own full menu - the 7 (or
+-- however many autoexec copies exist) stacked windows this caused.
+local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
+genv.JHubGlass = JH
+-- an early, minimal unload so a second load started before this one finishes can always stop
+-- this one's background loops - the full Unload (destroys the menu, saves settings) replaces
+-- this once it is defined further down
+function JH.Unload()
+	JH.Running = false
+	for _, c in ipairs(JH.Connections) do pcall(function() c:Disconnect() end) end
+end
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -13115,17 +13140,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.12"
-
-local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
-genv.JHubGlass = JH
--- an early, minimal unload so a second load started before this one finishes can always stop
--- this one's background loops - the full Unload (destroys the menu, saves settings) replaces
--- this once it is defined further down
-function JH.Unload()
-	JH.Running = false
-	for _, c in ipairs(JH.Connections) do pcall(function() c:Disconnect() end) end
-end
+local VERSION = "v2.13"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -25480,6 +25495,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.13 - Fixed loading several copies of the menu at once on some setups. A second (or third, or seventh) copy starting at almost the same moment as the first used to pass right by the check that is supposed to close the previous copy, because that check ran before a wait that let every copy race ahead together, and only the very last one to finish actually took over the slot - so every other one it ran past stayed open as its own full, live menu. The slot is now claimed the instant the check runs, before anything that can cause that race, so only one copy ever stays open no matter how many start up together.",
 "v2.12 - Found the real reason Auto Guard never showed any animation: it was moving by CFrame-teleporting the character, so the Humanoid itself never registered as walking and no clip we forced on top ever stuck. It no longer moves that way at all - it now drives itself purely through the same MoveDirection remote a real joystick fires, with the real Guard button held, so the server moves it for real and the game's own animation system picks the real walk/defensive-slide clip on its own, same as it does for a real player.",
 "v2.11 - Auto Guard now plays the real left/right/forward/backward defensive slide animation that matches the direction it is actually sliding in, instead of always forcing the forward walk clip while moving sideways or backward - this is what made it look like it was just gliding. It also now holds the real defensive stance when it catches up and stops instead of freezing with no animation.",
 "v2.10 - Fixed glides/boost feeling stuck on after turning them off: a glide that was already running kept pushing you for its full duration even after the toggle was switched off. Also fixed small unwanted movement while you have no dribbles left or are mid-shot/mid-gather: glides were only pausing for one of their push methods when the game takes away your movement, not all of them.",
