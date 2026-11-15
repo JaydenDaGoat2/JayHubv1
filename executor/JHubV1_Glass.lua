@@ -76,7 +76,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.16"
+local VERSION = "v2.17"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -464,6 +464,43 @@ local gui = new("ScreenGui", { Name = "JHubGlass", ResetOnSpawn = false, IgnoreG
 	ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 999 })
 local parentedOk = pcall(function() gui.Parent = (gethui and gethui()) or game:GetService("CoreGui") end)
 if not parentedOk or not gui.Parent then gui.Parent = LP:WaitForChild("PlayerGui") end
+
+-- WATCHDOG: a second, independent line of defense against more than one menu showing at once, on top of the
+-- unload-then-claim logic at the very top of this script. Whatever actually causes several copies to start at
+-- once on some setups - an autoexec folder copy and a queued-teleport copy both firing on the same join, or an
+-- executor that keeps a script's UI alive as its own persistent overlay across runs instead of really ending
+-- it - this does not try to guess which one; it just actively looks for and destroys any OTHER ScreenGui
+-- actually named "JHubGlass" anywhere it could have landed, every half second at first and then every few
+-- seconds for as long as this copy keeps running, so at most one ever stays on screen no matter how it happened.
+task.spawn(function()
+	local function realGethui()
+		if type(gethui) == "function" then
+			local ok, h = pcall(gethui)
+			if ok and h then return h end
+		end
+		return nil
+	end
+	local function sweep()
+		for _, container in ipairs({ realGethui(), game:GetService("CoreGui"), LP:FindFirstChild("PlayerGui") }) do
+			if container then
+				for _, other in ipairs(container:GetChildren()) do
+					if other ~= gui and other.Name == "JHubGlass" and other:IsA("ScreenGui") then
+						pcall(function() other:Destroy() end)
+					end
+				end
+			end
+		end
+	end
+	for i = 1, 20 do
+		if not JH.Running then return end
+		sweep()
+		task.wait(0.5)
+	end
+	while JH.Running do
+		sweep()
+		task.wait(5)
+	end
+end)
 
 local function playSound(id, vol)
 	if not S.Sounds then return end
@@ -12411,6 +12448,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.17 - Added a second, independent defense against more than one menu window showing at once: on top of the unload-then-claim logic at the top of the script, it now actively hunts for and destroys any OTHER JHubGlass menu window wherever it could have landed, repeatedly for a while after load - so even if several copies manage to start at once for whatever reason on a given setup (more than one autoexec folder/queued copy firing together, or an executor that keeps a script's window alive as its own overlay between runs instead of actually ending it), only one of them survives within a second or two, every time, instead of relying on a single check at the very start.",
 "v2.16 - Fixed glides stuttering/lagging whenever the game takes your movement away mid-glide (no dribbles left, mid-gather, mid-shot): the fix in v2.10 paused the push correctly but kept the glide's own clock running while paused, so the moment movement came back it tried to cover the whole distance it missed in a single frame - that single-frame catch-up was the lag. Also removed GlideShotSafe completely (toggle and setting both gone, not just defaulted off) - this is the exact flag that has silently killed every speed boost and glide outright more than once now, most recently from a shared/imported config quietly turning it back on; there is no switch left that can ever re-enable it.",
 "v2.15 - Found why fixes never seemed to reach some devices: once Auto Execute is turned on, it saves a frozen copy of whatever version was running at that exact moment and replays that same frozen copy forever on every later join - nothing ever checked GitHub again after that, so every fix shipped after someone turned Auto Execute on never reached them, update button or not. Every load now checks GitHub a few seconds after opening (never delaying the menu) and silently updates itself if a newer version exists, auto-executed or not. Turn it off on the Updates card if you don't want that.",
 "v2.14 - Ultra Auto Calibrate now shares timing per shot FAMILY across the network too (every jumpshot together, every fade together, every step back together, etc), not just exact-shot locks - so a jumpshot literally nobody has ever taken yet still starts from everyone's combined experience with that whole style of shot instead of a blind guess, the moment it's ever played for the first time anywhere. An exact-shot lock, local or shared, always takes over the instant one exists.",
@@ -13187,7 +13225,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.16"
+local VERSION = "v2.17"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -13575,6 +13613,43 @@ local gui = new("ScreenGui", { Name = "JHubGlass", ResetOnSpawn = false, IgnoreG
 	ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 999 })
 local parentedOk = pcall(function() gui.Parent = (gethui and gethui()) or game:GetService("CoreGui") end)
 if not parentedOk or not gui.Parent then gui.Parent = LP:WaitForChild("PlayerGui") end
+
+-- WATCHDOG: a second, independent line of defense against more than one menu showing at once, on top of the
+-- unload-then-claim logic at the very top of this script. Whatever actually causes several copies to start at
+-- once on some setups - an autoexec folder copy and a queued-teleport copy both firing on the same join, or an
+-- executor that keeps a script's UI alive as its own persistent overlay across runs instead of really ending
+-- it - this does not try to guess which one; it just actively looks for and destroys any OTHER ScreenGui
+-- actually named "JHubGlass" anywhere it could have landed, every half second at first and then every few
+-- seconds for as long as this copy keeps running, so at most one ever stays on screen no matter how it happened.
+task.spawn(function()
+	local function realGethui()
+		if type(gethui) == "function" then
+			local ok, h = pcall(gethui)
+			if ok and h then return h end
+		end
+		return nil
+	end
+	local function sweep()
+		for _, container in ipairs({ realGethui(), game:GetService("CoreGui"), LP:FindFirstChild("PlayerGui") }) do
+			if container then
+				for _, other in ipairs(container:GetChildren()) do
+					if other ~= gui and other.Name == "JHubGlass" and other:IsA("ScreenGui") then
+						pcall(function() other:Destroy() end)
+					end
+				end
+			end
+		end
+	end
+	for i = 1, 20 do
+		if not JH.Running then return end
+		sweep()
+		task.wait(0.5)
+	end
+	while JH.Running do
+		sweep()
+		task.wait(5)
+	end
+end)
 
 local function playSound(id, vol)
 	if not S.Sounds then return end
@@ -25522,6 +25597,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.17 - Added a second, independent defense against more than one menu window showing at once: on top of the unload-then-claim logic at the top of the script, it now actively hunts for and destroys any OTHER JHubGlass menu window wherever it could have landed, repeatedly for a while after load - so even if several copies manage to start at once for whatever reason on a given setup (more than one autoexec folder/queued copy firing together, or an executor that keeps a script's window alive as its own overlay between runs instead of actually ending it), only one of them survives within a second or two, every time, instead of relying on a single check at the very start.",
 "v2.16 - Fixed glides stuttering/lagging whenever the game takes your movement away mid-glide (no dribbles left, mid-gather, mid-shot): the fix in v2.10 paused the push correctly but kept the glide's own clock running while paused, so the moment movement came back it tried to cover the whole distance it missed in a single frame - that single-frame catch-up was the lag. Also removed GlideShotSafe completely (toggle and setting both gone, not just defaulted off) - this is the exact flag that has silently killed every speed boost and glide outright more than once now, most recently from a shared/imported config quietly turning it back on; there is no switch left that can ever re-enable it.",
 "v2.15 - Found why fixes never seemed to reach some devices: once Auto Execute is turned on, it saves a frozen copy of whatever version was running at that exact moment and replays that same frozen copy forever on every later join - nothing ever checked GitHub again after that, so every fix shipped after someone turned Auto Execute on never reached them, update button or not. Every load now checks GitHub a few seconds after opening (never delaying the menu) and silently updates itself if a newer version exists, auto-executed or not. Turn it off on the Updates card if you don't want that.",
 "v2.14 - Ultra Auto Calibrate now shares timing per shot FAMILY across the network too (every jumpshot together, every fade together, every step back together, etc), not just exact-shot locks - so a jumpshot literally nobody has ever taken yet still starts from everyone's combined experience with that whole style of shot instead of a blind guess, the moment it's ever played for the first time anywhere. An exact-shot lock, local or shared, always takes over the instant one exists.",
