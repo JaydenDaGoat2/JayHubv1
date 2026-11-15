@@ -11,7 +11,7 @@
     Tabs: Main, Shooting, Dribbling, Players, UI
     Tap the moving JH logo to open / close the menu.
 
-    JHUB_VERSION: v2.26
+    JHUB_VERSION: v2.27
     (this header is never obfuscated, so the auto-update check below can always read the version
     here even from the published build, where "local VERSION = ..." is hidden by the obfuscator -
     keep this line in sync with VERSION on every bump, or the auto-update check breaks again)
@@ -97,7 +97,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.26"
+local VERSION = "v2.27"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -411,11 +411,11 @@ if S.SettingsVer < 13 then
 	S.ShotTimes = table.concat(parts, " ")
 end
 S.AutoCal = S.AutoGreen ~= false
--- Ultra Auto Calibrate is meant to be the strongest version of the learner: keep the upgrade flags
--- it relies on in sync with it, including on a fresh install where it defaults on
-if S.AutoCalibrate then
-	for _, k in ipairs({ "AdaptPlus", "SmartSteps", "AutoAdaptAll", "AllJumpers", "LagSync", "PrecFit" }) do S[k] = true end
-end
+-- Ultra Auto Calibrate used to force AdaptPlus/SmartSteps/AutoAdaptAll/AllJumpers/LagSync/PrecFit on for everyone,
+-- every single load, since Ultra Auto Calibrate itself defaults on - this fought directly against the SettingsVer
+-- 37 migration further down that resets those same flags to false, undoing it every time and silently keeping
+-- everyone on the fancier, more experimental learner instead of the plain one Auto Green has always used. That
+-- fancier version is what people are calling worse than before - removed, see SettingsVer 39 below.
 S.Learn = S.AutoCal
 if S.PerfectGreen == nil then S.PerfectGreen = false end
 if S.PeakLead == nil then S.PeakLead = 0.027 end
@@ -470,8 +470,13 @@ end
 -- was making every glide feel like it just does not work on a low-end device or low settings - full strength,
 -- same as every other setting, is what actually matches how this behaved before that scaling existed
 if S.SettingsVer < 38 then S.LowFix = false end
-S.SettingsVer = 38
-DEFAULTS.SettingsVer = 38
+-- Ultra Auto Calibrate forced these six on, every load, for as long as it itself defaulted on - fighting directly
+-- against the very next line's own past attempt (SettingsVer 37) to turn them back off. Auto Green is supposed to
+-- be the same learner it has always been, with a little added on top, not the more experimental version these
+-- six add up to - resetting them one more time now that the thing that kept re-enabling them is actually gone.
+if S.SettingsVer < 39 then S.AdaptPlus, S.SmartSteps, S.AutoAdaptAll, S.AllJumpers, S.LagSync, S.PrecFit = false, false, false, false, false, false end
+S.SettingsVer = 39
+DEFAULTS.SettingsVer = 39
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 S.ShotTimes = S.ShotTimes
 S.RecOn = false
@@ -6564,15 +6569,16 @@ do
 	end
 
 	local cal = UI.Card(P, "Ultra Auto Calibrate")
-	UI.Toggle(cal, "Ultra Auto Calibrate", "AutoCalibrate", function(v)
-		-- this is meant to be the strongest version of the learner, not just the plain one - bring in the
-		-- same upgrades Auto Green MAX uses (faster/centered convergence, smarter step sizing, shared learning
-		-- across every shot and jumper) so turning this on actually does something real, not just gate the
-		-- basic learner on its own
-		for _, k in ipairs({ "AdaptPlus", "SmartSteps", "AutoAdaptAll", "AllJumpers", "LagSync", "PrecFit" }) do UI.set(k, v, false) end
-	end)
+	-- used to also force AdaptPlus/SmartSteps/AutoAdaptAll/AllJumpers/LagSync/PrecFit on with this toggle - the more
+	-- experimental version of the learner, not the plain one Auto Green has always used and that people want back.
+	-- Ultra Auto Calibrate now only does its own direct, additive things: the Learn speed slider below, locking in
+	-- and sharing an exact shot's timing the moment anyone gets a real Perfect on it, and seeding a shot nobody has
+	-- ever taken yet from the community's average for that whole style of shot - none of that changes how the core
+	-- learner reacts shot to shot. Anyone who specifically wants the fancier/experimental stuff can still turn each
+	-- one on by itself under Auto Green MAX.
+	UI.Toggle(cal, "Ultra Auto Calibrate", "AutoCalibrate")
 	UI.Slider(cal, "Learn speed (10 = near instant)", "CalSpeed", 0.1, 10, 0.1, 1)
-	UI.Note(cal, "Turning this on also turns on the faster/centered learning, smarter step sizing, and shared learning across every jumper that Auto Green MAX uses - this is the strongest the learner gets. It also pulls in timing other people running this script have already found: an exact shot someone has confirmed Perfects on locks in for you immediately, and even a shot nobody has ever taken yet starts from the community's average for that whole style of shot (every jumpshot, every fade, etc) instead of a blind guess - no other script shares that.")
+	UI.Note(cal, "This is the same learner Auto Green has always used (locks in the instant you hit a real Perfect, nudges a little after anything else), plus: the Learn speed slider actually controls how fast it converges, an exact shot someone else has confirmed Perfects on locks in for you immediately, and even a shot nobody has ever taken yet starts from the community's average for that whole style of shot instead of a blind guess. It does not turn on the more experimental stuff under Auto Green MAX by itself anymore - that was making this feel worse, not better.")
 	UI.Button(cal, "Forget learned animations", function()
 		Shot.autoReset()
 		notify("Auto Green", "Learned animations cleared", 2)
@@ -12581,6 +12587,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.27 (TEST, not published) - Found why Auto Green felt worse than the old v1.34 version people remember as the best: Ultra Auto Calibrate (on by default) was force-enabling six experimental upgrades (AdaptPlus, SmartSteps, AutoAdaptAll, AllJumpers, LagSync, PrecFit) on every single load, silently undoing an earlier attempt to turn them back off and keeping everyone on a fancier, more reactive-to-noise version of the learner instead of the plain one Auto Green has always run. Ultra Auto Calibrate no longer touches any of those - it only does its own direct additions now (Learn speed control, instant Perfect-sharing, community seeding for brand-new shots), none of which change how the core learner reacts shot to shot. The actual core algorithm (lock in instantly on a real Perfect, small momentum-based nudge otherwise) is unchanged from how it has always worked. Anyone who wants the experimental stuff can still turn each one on individually under Auto Green MAX.",
 "v2.26 (TEST, not published) - Reverted v2.25's change that let a Perfect hard-lock a shot even when it already had a built-in base timing: one lucky Perfect is not necessarily dead-center, and locking onto it with nothing left afterward to correct it made shooting noticeably worse. Back to only hard-locking shots with no known base timing at all. The Learn speed slider now genuinely speeding up the built-in shots' ongoing small adjustment (also from v2.25) is kept, since that is not a one-shot permanent override.",
 "v2.25 (TEST, not published) - Speed boost and dribble/shot/gather glide now always do at least a tiny, not-humanly-noticeable amount when their toggle is on, even at the lowest slider setting, instead of the lowest setting silently doing nothing. A real Perfect now locks in and shares the timing for ANY shot, including ones with a built-in base timing (most normal jumpshots) - it used to skip the lock for those entirely, which is almost certainly why locking in off a Perfect felt like it was not doing anything. The gradual adjustment for built-in shots (Auto adapt toggle) now actually scales with the Learn speed slider instead of ignoring it. Also fixed a bug where the auto-update check could downgrade a newer build back down to whatever is published, going only off whether the version matched instead of checking which one is actually newer.",
 "v2.24 - Glides no longer get scaled down on low graphics settings or low FPS by default - that \"low settings fix\" was exactly what was making every glide feel like it does not work at all on a low-end device or on Low graphics, instead of actually helping. Full strength now, same as everything else, matching how glides behaved before that scaling was ever added. The Low settings fix toggle (Shooting tab) still exists for anyone who wants it back, it is just off by default now. Speed boost (walk/run/ball) was not touched at all - nothing about how it works changed here.",
@@ -13395,7 +13402,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.26"
+local VERSION = "v2.27"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -13709,11 +13716,11 @@ if S.SettingsVer < 13 then
 	S.ShotTimes = table.concat(parts, " ")
 end
 S.AutoCal = S.AutoGreen ~= false
--- Ultra Auto Calibrate is meant to be the strongest version of the learner: keep the upgrade flags
--- it relies on in sync with it, including on a fresh install where it defaults on
-if S.AutoCalibrate then
-	for _, k in ipairs({ "AdaptPlus", "SmartSteps", "AutoAdaptAll", "AllJumpers", "LagSync", "PrecFit" }) do S[k] = true end
-end
+-- Ultra Auto Calibrate used to force AdaptPlus/SmartSteps/AutoAdaptAll/AllJumpers/LagSync/PrecFit on for everyone,
+-- every single load, since Ultra Auto Calibrate itself defaults on - this fought directly against the SettingsVer
+-- 37 migration further down that resets those same flags to false, undoing it every time and silently keeping
+-- everyone on the fancier, more experimental learner instead of the plain one Auto Green has always used. That
+-- fancier version is what people are calling worse than before - removed, see SettingsVer 39 below.
 S.Learn = S.AutoCal
 if S.PerfectGreen == nil then S.PerfectGreen = false end
 if S.PeakLead == nil then S.PeakLead = 0.027 end
@@ -13768,8 +13775,13 @@ end
 -- was making every glide feel like it just does not work on a low-end device or low settings - full strength,
 -- same as every other setting, is what actually matches how this behaved before that scaling existed
 if S.SettingsVer < 38 then S.LowFix = false end
-S.SettingsVer = 38
-DEFAULTS.SettingsVer = 38
+-- Ultra Auto Calibrate forced these six on, every load, for as long as it itself defaulted on - fighting directly
+-- against the very next line's own past attempt (SettingsVer 37) to turn them back off. Auto Green is supposed to
+-- be the same learner it has always been, with a little added on top, not the more experimental version these
+-- six add up to - resetting them one more time now that the thing that kept re-enabling them is actually gone.
+if S.SettingsVer < 39 then S.AdaptPlus, S.SmartSteps, S.AutoAdaptAll, S.AllJumpers, S.LagSync, S.PrecFit = false, false, false, false, false, false end
+S.SettingsVer = 39
+DEFAULTS.SettingsVer = 39
 DEFAULTS.ShotTimes = "la:15851912457+15851919155=0.357 lb:15851912457+15851919155=0.000 la:15851912457+15851919155+17285155256=0.357 lb:15851912457+15851919155+17285155256=0.000 16246923753=0.328 16205020756=0.328 16104888271=0.328 16104888271+17285155256=0.328 16205020756+17285155256=0.328 118403922040694=0.290 15997667717=0.347 16143619816=0.350 16143612725=0.350 84063020888988=0.322 138932071140330=0.316 111074210919383=0.357 71484695722621=0.311 77401448272074=0.329 128777513307709+77401448272074=0.329"
 S.ShotTimes = S.ShotTimes
 S.RecOn = false
@@ -19862,15 +19874,16 @@ do
 	end
 
 	local cal = UI.Card(P, "Ultra Auto Calibrate")
-	UI.Toggle(cal, "Ultra Auto Calibrate", "AutoCalibrate", function(v)
-		-- this is meant to be the strongest version of the learner, not just the plain one - bring in the
-		-- same upgrades Auto Green MAX uses (faster/centered convergence, smarter step sizing, shared learning
-		-- across every shot and jumper) so turning this on actually does something real, not just gate the
-		-- basic learner on its own
-		for _, k in ipairs({ "AdaptPlus", "SmartSteps", "AutoAdaptAll", "AllJumpers", "LagSync", "PrecFit" }) do UI.set(k, v, false) end
-	end)
+	-- used to also force AdaptPlus/SmartSteps/AutoAdaptAll/AllJumpers/LagSync/PrecFit on with this toggle - the more
+	-- experimental version of the learner, not the plain one Auto Green has always used and that people want back.
+	-- Ultra Auto Calibrate now only does its own direct, additive things: the Learn speed slider below, locking in
+	-- and sharing an exact shot's timing the moment anyone gets a real Perfect on it, and seeding a shot nobody has
+	-- ever taken yet from the community's average for that whole style of shot - none of that changes how the core
+	-- learner reacts shot to shot. Anyone who specifically wants the fancier/experimental stuff can still turn each
+	-- one on by itself under Auto Green MAX.
+	UI.Toggle(cal, "Ultra Auto Calibrate", "AutoCalibrate")
 	UI.Slider(cal, "Learn speed (10 = near instant)", "CalSpeed", 0.1, 10, 0.1, 1)
-	UI.Note(cal, "Turning this on also turns on the faster/centered learning, smarter step sizing, and shared learning across every jumper that Auto Green MAX uses - this is the strongest the learner gets. It also pulls in timing other people running this script have already found: an exact shot someone has confirmed Perfects on locks in for you immediately, and even a shot nobody has ever taken yet starts from the community's average for that whole style of shot (every jumpshot, every fade, etc) instead of a blind guess - no other script shares that.")
+	UI.Note(cal, "This is the same learner Auto Green has always used (locks in the instant you hit a real Perfect, nudges a little after anything else), plus: the Learn speed slider actually controls how fast it converges, an exact shot someone else has confirmed Perfects on locks in for you immediately, and even a shot nobody has ever taken yet starts from the community's average for that whole style of shot instead of a blind guess. It does not turn on the more experimental stuff under Auto Green MAX by itself anymore - that was making this feel worse, not better.")
 	UI.Button(cal, "Forget learned animations", function()
 		Shot.autoReset()
 		notify("Auto Green", "Learned animations cleared", 2)
@@ -25879,6 +25892,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.27 (TEST, not published) - Found why Auto Green felt worse than the old v1.34 version people remember as the best: Ultra Auto Calibrate (on by default) was force-enabling six experimental upgrades (AdaptPlus, SmartSteps, AutoAdaptAll, AllJumpers, LagSync, PrecFit) on every single load, silently undoing an earlier attempt to turn them back off and keeping everyone on a fancier, more reactive-to-noise version of the learner instead of the plain one Auto Green has always run. Ultra Auto Calibrate no longer touches any of those - it only does its own direct additions now (Learn speed control, instant Perfect-sharing, community seeding for brand-new shots), none of which change how the core learner reacts shot to shot. The actual core algorithm (lock in instantly on a real Perfect, small momentum-based nudge otherwise) is unchanged from how it has always worked. Anyone who wants the experimental stuff can still turn each one on individually under Auto Green MAX.",
 "v2.26 (TEST, not published) - Reverted v2.25's change that let a Perfect hard-lock a shot even when it already had a built-in base timing: one lucky Perfect is not necessarily dead-center, and locking onto it with nothing left afterward to correct it made shooting noticeably worse. Back to only hard-locking shots with no known base timing at all. The Learn speed slider now genuinely speeding up the built-in shots' ongoing small adjustment (also from v2.25) is kept, since that is not a one-shot permanent override.",
 "v2.25 (TEST, not published) - Speed boost and dribble/shot/gather glide now always do at least a tiny, not-humanly-noticeable amount when their toggle is on, even at the lowest slider setting, instead of the lowest setting silently doing nothing. A real Perfect now locks in and shares the timing for ANY shot, including ones with a built-in base timing (most normal jumpshots) - it used to skip the lock for those entirely, which is almost certainly why locking in off a Perfect felt like it was not doing anything. The gradual adjustment for built-in shots (Auto adapt toggle) now actually scales with the Learn speed slider instead of ignoring it. Also fixed a bug where the auto-update check could downgrade a newer build back down to whatever is published, going only off whether the version matched instead of checking which one is actually newer.",
 "v2.24 - Glides no longer get scaled down on low graphics settings or low FPS by default - that \"low settings fix\" was exactly what was making every glide feel like it does not work at all on a low-end device or on Low graphics, instead of actually helping. Full strength now, same as everything else, matching how glides behaved before that scaling was ever added. The Low settings fix toggle (Shooting tab) still exists for anyone who wants it back, it is just off by default now. Speed boost (walk/run/ball) was not touched at all - nothing about how it works changed here.",
