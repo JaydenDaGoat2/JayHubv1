@@ -59,7 +59,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.10"
+local VERSION = "v2.11"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -8012,6 +8012,13 @@ do
 	-- confirmed from a real remote guard recorder log (this game's real Jog/defensive slide ids) - bootstrap these so Auto Guard has a walk animation immediately instead of waiting on another learning pass, now that the old bad exclusion is gone
 	if not S.WalkAnimId or S.WalkAnimId == "" then S.WalkAnimId = "rbxassetid://135438934392621" saveSoon() end
 	if not S.GuardAnimId or S.GuardAnimId == "" then S.GuardAnimId = "rbxassetid://16597565910" saveSoon() end
+	-- real defensive-slide animations, confirmed off a recorder log of an actual opponent actually guarding someone (left/right/forward/backward shuffle, plus the stance it holds while not moving) -
+	-- used so a guarding character's legs match the direction it is really sliding in, instead of always forcing the forward walk clip while moving sideways or backing off
+	if not S.DefLeftAnimId or S.DefLeftAnimId == "" then S.DefLeftAnimId = "rbxassetid://15403954735" saveSoon() end
+	if not S.DefRightAnimId or S.DefRightAnimId == "" then S.DefRightAnimId = "rbxassetid://15403957696" saveSoon() end
+	if not S.DefFwdAnimId or S.DefFwdAnimId == "" then S.DefFwdAnimId = "rbxassetid://16597601100" saveSoon() end
+	if not S.DefBackAnimId or S.DefBackAnimId == "" then S.DefBackAnimId = "rbxassetid://16597565910" saveSoon() end
+	if not S.DefIdleAnimId or S.DefIdleAnimId == "" then S.DefIdleAnimId = "rbxassetid://94168381909455" saveSoon() end
 	-- learn two real animations from how you actually move: a normal walk (facing roughly the way you're moving) and a defensive slide (facing one way, moving sideways/backward - the real signature of guarding someone), instead of guessing an id or treating all movement the same
 	local walkLastPos, walkLastT
 	bind(RunService.Heartbeat, function()
@@ -8076,6 +8083,8 @@ do
 		if not r then return end
 		local now = tick()
 		local moving = Bot.cmd and now - Bot.cmdT < 0.35 and Bot.cmd.Magnitude > 0.05
+		-- Bot.guardingNow is only set by Auto Guard once it is actually close to its real guard spot (see the "LESS OBVIOUS GUARD" block below), so this is true only while really guarding someone, not while just moving around on offense
+		local guarding = Bot.guardingNow and now - Bot.guardingNow < 0.5
 		-- Humanoid:Move produced zero effect on animation too (confirmed: the real guard/defensive animation only shows up because it's tied directly to the HoldingG attribute by the game's own systems, not because of anything we send through Humanoid.MoveDirection - same "this game doesn't react to MoveDirection" finding as the movement side). CFrame drives position; load and play the confirmed real walk animation ourselves on top of it.
 		if moving then
 			-- speed eases in like a real walk instead of snapping to full speed
@@ -8083,8 +8092,22 @@ do
 			Bot.vel = (Bot.vel or Vector3.new(0, 0, 0)):Lerp(want, clamp(dt * 9, 0, 1))
 			r.CFrame = r.CFrame + Bot.vel * dt
 			Mover.sync(r)
-			-- GuardAnimId never actually won out over the game's own real defensive animation in any recorder log, stationary or moving - so stop competing with it and just always play the real walk animation whenever actually moving, guarding or not
+			-- while really guarding, pick the real defensive-slide clip for whichever way it is actually sliding relative to the man it's facing -
+			-- GuardAnimId (one fixed clip) never beat the game's own animation in testing because a defender's legs do not just play one pose, they shuffle left/right/back/forward depending on the dribbler; otherwise play the normal forward walk clip same as before
 			local id = S.WalkAnimId
+			if guarding and Bot.vel and Bot.vel.Magnitude > 0.1 then
+				local facing = (Bot.face and Bot.face.Magnitude > 0.1) and Bot.face.Unit or flat(r.CFrame.LookVector)
+				if facing.Magnitude > 0.1 then
+					local right = CFrame.lookAt(Vector3.new(), facing).RightVector
+					local travel = Bot.vel.Unit
+					local fwd, side = travel:Dot(facing), travel:Dot(right)
+					if math.abs(fwd) >= math.abs(side) then
+						id = (fwd >= 0) and S.DefFwdAnimId or S.DefBackAnimId
+					else
+						id = (side >= 0) and S.DefRightAnimId or S.DefLeftAnimId
+					end
+				end
+			end
 			if id ~= activeId then
 				if activeTrack then pcall(function() activeTrack:Stop(0.1) end) end
 				activeTrack = trackFor(id)
@@ -8093,6 +8116,19 @@ do
 			if activeTrack then
 				activeTrack.Speed = math.clamp((Bot.vel and Bot.vel.Magnitude or 0) / math.max(Speed.gameWS, 1), 0.5, 1.8)
 				if not activeTrack.IsPlaying then activeTrack:Play(0.15, 0.8) end
+			end
+		elseif guarding then
+			-- stopped but still guarding someone: hold the real defensive stance instead of freezing with no animation at all, which is what made this look like it was gliding whenever it caught up and stood still for a moment
+			Bot.vel = nil
+			local id = S.DefIdleAnimId
+			if id ~= activeId then
+				if activeTrack then pcall(function() activeTrack:Stop(0.15) end) end
+				activeTrack = trackFor(id)
+				activeId = id
+			end
+			if activeTrack then
+				activeTrack.Speed = 1
+				if not activeTrack.IsPlaying then activeTrack:Play(0.2, 0.6) end
 			end
 		else
 			Bot.vel = nil
@@ -12407,6 +12443,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.11 - Auto Guard now plays the real left/right/forward/backward defensive slide animation that matches the direction it is actually sliding in, instead of always forcing the forward walk clip while moving sideways or backward - this is what made it look like it was just gliding. It also now holds the real defensive stance when it catches up and stops instead of freezing with no animation.",
 "v2.10 - Fixed glides/boost feeling stuck on after turning them off: a glide that was already running kept pushing you for its full duration even after the toggle was switched off. Also fixed small unwanted movement while you have no dribbles left or are mid-shot/mid-gather: glides were only pausing for one of their push methods when the game takes away your movement, not all of them.",
 "v2.09 - Ultra Auto Calibrate turning on now also turns on the same faster/centered learning, smarter step sizing, and shared-across-every-jumper learning that Auto Green MAX uses, instead of gating only the plain/basic learner - it is meant to be the strongest version and now actually is, including on a fresh install where it defaults on",
 "v2.08 - fixed Auto Guard speed boost being a separate thing from the other speed boosts with no switch of its own, so it could add speed even with everything else off (new Guard speed boost toggle); found why loading the script twice gave two menus and heavy lag - the old copy's cleanup only existed once it finished loading, so a second load mid-startup could not find it and left the first copy fully running underneath - it now exists from the very first moment the script creates itself, so any second load can always stop the first one's loops immediately; the Owner code only needs to be entered once now, not for every single action; lowered the glide power/speed sliders so their lowest setting can actually reach near enough to nothing. If speed boost or guard speed still feels strong on low graphics, check the \"Low settings fix\" toggle on the Players tab - it deliberately adds up to 25% more boost on low graphics on purpose and can be turned off",
@@ -13096,7 +13133,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.10"
+local VERSION = "v2.11"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -21049,6 +21086,13 @@ do
 	-- confirmed from a real remote guard recorder log (this game's real Jog/defensive slide ids) - bootstrap these so Auto Guard has a walk animation immediately instead of waiting on another learning pass, now that the old bad exclusion is gone
 	if not S.WalkAnimId or S.WalkAnimId == "" then S.WalkAnimId = "rbxassetid://135438934392621" saveSoon() end
 	if not S.GuardAnimId or S.GuardAnimId == "" then S.GuardAnimId = "rbxassetid://16597565910" saveSoon() end
+	-- real defensive-slide animations, confirmed off a recorder log of an actual opponent actually guarding someone (left/right/forward/backward shuffle, plus the stance it holds while not moving) -
+	-- used so a guarding character's legs match the direction it is really sliding in, instead of always forcing the forward walk clip while moving sideways or backing off
+	if not S.DefLeftAnimId or S.DefLeftAnimId == "" then S.DefLeftAnimId = "rbxassetid://15403954735" saveSoon() end
+	if not S.DefRightAnimId or S.DefRightAnimId == "" then S.DefRightAnimId = "rbxassetid://15403957696" saveSoon() end
+	if not S.DefFwdAnimId or S.DefFwdAnimId == "" then S.DefFwdAnimId = "rbxassetid://16597601100" saveSoon() end
+	if not S.DefBackAnimId or S.DefBackAnimId == "" then S.DefBackAnimId = "rbxassetid://16597565910" saveSoon() end
+	if not S.DefIdleAnimId or S.DefIdleAnimId == "" then S.DefIdleAnimId = "rbxassetid://94168381909455" saveSoon() end
 	-- learn two real animations from how you actually move: a normal walk (facing roughly the way you're moving) and a defensive slide (facing one way, moving sideways/backward - the real signature of guarding someone), instead of guessing an id or treating all movement the same
 	local walkLastPos, walkLastT
 	bind(RunService.Heartbeat, function()
@@ -21113,6 +21157,8 @@ do
 		if not r then return end
 		local now = tick()
 		local moving = Bot.cmd and now - Bot.cmdT < 0.35 and Bot.cmd.Magnitude > 0.05
+		-- Bot.guardingNow is only set by Auto Guard once it is actually close to its real guard spot (see the "LESS OBVIOUS GUARD" block below), so this is true only while really guarding someone, not while just moving around on offense
+		local guarding = Bot.guardingNow and now - Bot.guardingNow < 0.5
 		-- Humanoid:Move produced zero effect on animation too (confirmed: the real guard/defensive animation only shows up because it's tied directly to the HoldingG attribute by the game's own systems, not because of anything we send through Humanoid.MoveDirection - same "this game doesn't react to MoveDirection" finding as the movement side). CFrame drives position; load and play the confirmed real walk animation ourselves on top of it.
 		if moving then
 			-- speed eases in like a real walk instead of snapping to full speed
@@ -21120,8 +21166,22 @@ do
 			Bot.vel = (Bot.vel or Vector3.new(0, 0, 0)):Lerp(want, clamp(dt * 9, 0, 1))
 			r.CFrame = r.CFrame + Bot.vel * dt
 			Mover.sync(r)
-			-- GuardAnimId never actually won out over the game's own real defensive animation in any recorder log, stationary or moving - so stop competing with it and just always play the real walk animation whenever actually moving, guarding or not
+			-- while really guarding, pick the real defensive-slide clip for whichever way it is actually sliding relative to the man it's facing -
+			-- GuardAnimId (one fixed clip) never beat the game's own animation in testing because a defender's legs do not just play one pose, they shuffle left/right/back/forward depending on the dribbler; otherwise play the normal forward walk clip same as before
 			local id = S.WalkAnimId
+			if guarding and Bot.vel and Bot.vel.Magnitude > 0.1 then
+				local facing = (Bot.face and Bot.face.Magnitude > 0.1) and Bot.face.Unit or flat(r.CFrame.LookVector)
+				if facing.Magnitude > 0.1 then
+					local right = CFrame.lookAt(Vector3.new(), facing).RightVector
+					local travel = Bot.vel.Unit
+					local fwd, side = travel:Dot(facing), travel:Dot(right)
+					if math.abs(fwd) >= math.abs(side) then
+						id = (fwd >= 0) and S.DefFwdAnimId or S.DefBackAnimId
+					else
+						id = (side >= 0) and S.DefRightAnimId or S.DefLeftAnimId
+					end
+				end
+			end
 			if id ~= activeId then
 				if activeTrack then pcall(function() activeTrack:Stop(0.1) end) end
 				activeTrack = trackFor(id)
@@ -21130,6 +21190,19 @@ do
 			if activeTrack then
 				activeTrack.Speed = math.clamp((Bot.vel and Bot.vel.Magnitude or 0) / math.max(Speed.gameWS, 1), 0.5, 1.8)
 				if not activeTrack.IsPlaying then activeTrack:Play(0.15, 0.8) end
+			end
+		elseif guarding then
+			-- stopped but still guarding someone: hold the real defensive stance instead of freezing with no animation at all, which is what made this look like it was gliding whenever it caught up and stood still for a moment
+			Bot.vel = nil
+			local id = S.DefIdleAnimId
+			if id ~= activeId then
+				if activeTrack then pcall(function() activeTrack:Stop(0.15) end) end
+				activeTrack = trackFor(id)
+				activeId = id
+			end
+			if activeTrack then
+				activeTrack.Speed = 1
+				if not activeTrack.IsPlaying then activeTrack:Play(0.2, 0.6) end
 			end
 		else
 			Bot.vel = nil
@@ -25444,6 +25517,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.11 - Auto Guard now plays the real left/right/forward/backward defensive slide animation that matches the direction it is actually sliding in, instead of always forcing the forward walk clip while moving sideways or backward - this is what made it look like it was just gliding. It also now holds the real defensive stance when it catches up and stops instead of freezing with no animation.",
 "v2.10 - Fixed glides/boost feeling stuck on after turning them off: a glide that was already running kept pushing you for its full duration even after the toggle was switched off. Also fixed small unwanted movement while you have no dribbles left or are mid-shot/mid-gather: glides were only pausing for one of their push methods when the game takes away your movement, not all of them.",
 "v2.09 - Ultra Auto Calibrate turning on now also turns on the same faster/centered learning, smarter step sizing, and shared-across-every-jumper learning that Auto Green MAX uses, instead of gating only the plain/basic learner - it is meant to be the strongest version and now actually is, including on a fresh install where it defaults on",
 "v2.08 - fixed Auto Guard speed boost being a separate thing from the other speed boosts with no switch of its own, so it could add speed even with everything else off (new Guard speed boost toggle); found why loading the script twice gave two menus and heavy lag - the old copy's cleanup only existed once it finished loading, so a second load mid-startup could not find it and left the first copy fully running underneath - it now exists from the very first moment the script creates itself, so any second load can always stop the first one's loops immediately; the Owner code only needs to be entered once now, not for every single action; lowered the glide power/speed sliders so their lowest setting can actually reach near enough to nothing. If speed boost or guard speed still feels strong on low graphics, check the \"Low settings fix\" toggle on the Players tab - it deliberately adds up to 25% more boost on low graphics on purpose and can be turned off",
