@@ -59,10 +59,17 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.07"
+local VERSION = "v2.08"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
+-- an early, minimal unload so a second load started before this one finishes can always stop
+-- this one's background loops - the full Unload (destroys the menu, saves settings) replaces
+-- this once it is defined further down
+function JH.Unload()
+	JH.Running = false
+	for _, c in ipairs(JH.Connections) do pcall(function() c:Disconnect() end) end
+end
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -219,7 +226,7 @@ local S = {
 LagSync = false, LagK = 2, PrecFit = false, PeakBin = 0.014, AdaptPlus = false, GreenMax = false,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = false, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-FadeNudge = 0, MagnetDelay = 120, AutoAdaptAll = false, InstantGreen = false, GlideShotSafe = true, LabOn = true,FamLead = "", SmartSteps = false, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false, OutlineTrans = 0, OutlineCustomR = 255, OutlineCustomG = 255, OutlineCustomB = 255,
+FadeNudge = 0, MagnetDelay = 120, AutoAdaptAll = false, InstantGreen = false, GlideShotSafe = true, LabOn = true,FamLead = "", SmartSteps = false, ContestShow = false, GuardSpeed = 0, GuardSpeedOn = false, OwnerCodeOK = false, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false, OutlineTrans = 0, OutlineCustomR = 255, OutlineCustomG = 255, OutlineCustomB = 255,
 	AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 	AGOnlyBall = true,
 	BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
@@ -6456,22 +6463,22 @@ P = UI.Page("Dribbling", "D")
 do
 	local d = UI.Card(P, "Dribble Glide")
 	UI.Toggle(d, "Dribble Glide", "DribbleGlide")
-	UI.Slider(d, "Glide power", "DribbleGlidePower", 1, 80, 1, 0)
-	UI.Slider(d, "Glide speed", "DribbleGlideSpeed", 0.5, 3, 0.1, 1, "x")
+	UI.Slider(d, "Glide power", "DribbleGlidePower", 0, 80, 1, 0)
+	UI.Slider(d, "Glide speed", "DribbleGlideSpeed", 0.1, 3, 0.1, 1, "x")
 	UI.Slider(d, "Time", "DribbleGlideTime", 0.05, 1, 0.01, 2, "s")
 
 	local sg = UI.Card(P, "Shot Glide")
 	UI.Toggle(sg, "Shot Glide", "ShotGlide")
-	UI.Slider(sg, "Glide power", "ShotGlidePower", 1, 80, 1, 0)
-	UI.Slider(sg, "Glide speed", "ShotGlideSpeed", 0.5, 3, 0.1, 1, "x")
+	UI.Slider(sg, "Glide power", "ShotGlidePower", 0, 80, 1, 0)
+	UI.Slider(sg, "Glide speed", "ShotGlideSpeed", 0.1, 3, 0.1, 1, "x")
 	UI.Dropdown(sg, "Shot glide method", "ShotGlideMethod", { "GameVel", "CFrame", "Velocity", "Auto" })
 	UI.Dropdown(sg, "Shot glide starts", "ShotGlideWhen", { "After release", "During shot" })
 	UI.Slider(sg, "Time", "ShotGlideTime", 0.05, 1, 0.01, 2, "s")
 
 	local gt = UI.Card(P, "Gather Step Glide")
 	UI.Toggle(gt, "Gather Step Glide", "GatherGlide")
-	UI.Slider(gt, "Glide power", "GatherGlidePower", 1, 80, 1, 0)
-	UI.Slider(gt, "Glide speed", "GatherGlideSpeed", 0.5, 3, 0.1, 1, "x")
+	UI.Slider(gt, "Glide power", "GatherGlidePower", 0, 80, 1, 0)
+	UI.Slider(gt, "Glide speed", "GatherGlideSpeed", 0.1, 3, 0.1, 1, "x")
 	UI.Slider(gt, "Time", "GatherGlideTime", 0.05, 1, 0.01, 2, "s")
 
 	local rs = UI.Card(P, "Restore")
@@ -10337,6 +10344,15 @@ local rolesCard = UI.Card(OP, "Chat roles")
 rolesCard.frame.Visible = false
 local existing = JH.roles or {}
 local ownersList, devsList, modsList, ownerCode = tostring(existing.owners or existing.owner or ""), tostring(existing.devs or ""), tostring(existing.mods or ""), ""
+local function ownerVerified(codeInput)
+	if S.OwnerCodeOK then return true end
+	if string.lower(string.gsub(codeInput or "", "%s", "")) == "jay" then
+		S.OwnerCodeOK = true
+		saveSoon()
+		return true
+	end
+	return false
+end
 local function inList(list, name)
 if type(list) ~= "string" then return false end
 for n in string.gmatch(list, "([^,]+)") do
@@ -10358,7 +10374,7 @@ local ownerCodeBox = UI.Input(rolesCard, "Owner code (only needed to add/change 
 UI.Input(rolesCard, "Co-Owners (comma separated player names)", { get = function() return devsList end, set = function(v) devsList = tostring(v or "") end }, nil, "name1, name2")
 UI.Input(rolesCard, "Mods (comma separated player names)", { get = function() return modsList end, set = function(v) modsList = tostring(v or "") end }, nil, "name1, name2")
 UI.Button(rolesCard, "Add me as Owner", function()
-if string.lower(string.gsub(ownerCode, "%s", "")) == "jay" then
+if ownerVerified(ownerCode) then
 ownersList = addName(ownersList, Players.LocalPlayer.Name)
 pushRoles(ownersList)
 notify("Owner tab", "Added you as Owner and pushed to everyone.", 4)
@@ -10397,7 +10413,7 @@ end
 end)
 UI.Button(rolesCard, "Add picked as Owner", function()
 if pickedName == "" then notify("Owner tab", "Click a name from the list first", 3) return end
-if string.lower(string.gsub(ownerCode, "%s", "")) == "jay" then
+if ownerVerified(ownerCode) then
 ownersList = addName(ownersList, pickedName)
 pushRoles(ownersList)
 notify("Owner tab", "Added " .. pickedName .. " as Owner.", 4)
@@ -10424,7 +10440,7 @@ local cur = JH.roles or {}
 local curOwners = tostring(cur.owners or cur.owner or "")
 local newOwners = ownersList
 if ownersList ~= curOwners then
-if string.lower(string.gsub(ownerCode, "%s", "")) == "jay" then
+if ownerVerified(ownerCode) then
 newOwners = ownersList
 else
 newOwners = curOwners
@@ -10442,14 +10458,14 @@ UI.Note(rolesCard, "Anyone named here gets a badge next to their name in JHub Ch
 local accCard = UI.Card(OP, "Access control")
 UI.Note(accCard, "Every copy of this script checks in with this list before it loads anything. Turning it off, or blocking a name, breaks it for them immediately - no reinstall needed on their end, and it does not matter whether they have a cracked/deobfuscated copy of the file. Needs the Owner code.")
 UI.Button(accCard, "Turn the script OFF for everyone", function()
-	if string.lower(string.gsub(ownerCode, "%s", "")) ~= "jay" then notify("Access control", "Wrong owner code.", 3) return end
+	if not ownerVerified(ownerCode) then notify("Access control", "Wrong owner code.", 3) return end
 	if JH.netPut then task.spawn(JH.netPut, "control/enabled", false) end
 	notify("Access control", "Script disabled for everyone. They will see a blocked message next load.", 5)
 	ownerCode = ""
 	if ownerCodeBox then ownerCodeBox.Text = "" end
 end, true)
 UI.Button(accCard, "Turn the script back ON for everyone", function()
-	if string.lower(string.gsub(ownerCode, "%s", "")) ~= "jay" then notify("Access control", "Wrong owner code.", 3) return end
+	if not ownerVerified(ownerCode) then notify("Access control", "Wrong owner code.", 3) return end
 	if JH.netPut then task.spawn(JH.netPut, "control/enabled", true) end
 	notify("Access control", "Script re-enabled for everyone.", 4)
 	ownerCode = ""
@@ -10458,7 +10474,7 @@ end)
 UI.Buttons(accCard, {
 	{ "Block picked", function()
 		if pickedName == "" then notify("Access control", "Click a name from the list in Chat roles first", 3) return end
-		if string.lower(string.gsub(ownerCode, "%s", "")) ~= "jay" then notify("Access control", "Wrong owner code.", 3) return end
+		if not ownerVerified(ownerCode) then notify("Access control", "Wrong owner code.", 3) return end
 		if JH.netPut and JH.sanitizeName then task.spawn(JH.netPut, "control/banned/" .. JH.sanitizeName(pickedName), true) end
 		notify("Access control", "Blocked " .. pickedName .. ". Their next load will refuse to run.", 5)
 		ownerCode = ""
@@ -10466,7 +10482,7 @@ UI.Buttons(accCard, {
 	end },
 	{ "Unblock picked", function()
 		if pickedName == "" then notify("Access control", "Click a name from the list in Chat roles first", 3) return end
-		if string.lower(string.gsub(ownerCode, "%s", "")) ~= "jay" then notify("Access control", "Wrong owner code.", 3) return end
+		if not ownerVerified(ownerCode) then notify("Access control", "Wrong owner code.", 3) return end
 		if JH.netPut and JH.sanitizeName then task.spawn(JH.netPut, "control/banned/" .. JH.sanitizeName(pickedName), false) end
 		notify("Access control", "Unblocked " .. pickedName .. ".", 4)
 		ownerCode = ""
@@ -10878,7 +10894,7 @@ do
 	local baseExtra = Speed.extraNow
 	function Speed.extraNow()
 		local e = baseExtra()
-		if (S.GuardSpeed or 0) > 0 and Feat.isGuarding() then e = e + (Speed.gameWS or 16) * S.GuardSpeed / 100 end
+		if S.GuardSpeedOn and (S.GuardSpeed or 0) > 0 and Feat.isGuarding() then e = e + (Speed.gameWS or 16) * S.GuardSpeed / 100 end
 		return e
 	end
 	local pp
@@ -10887,7 +10903,8 @@ do
 	end
 	if pp then
 		local g = UI.Card(pp, "Guard speed")
-		UI.Slider(g, "Extra speed while guarding", "GuardSpeed", 0, 60, 1, 0, "%")
+		UI.Toggle(g, "Guard speed boost", "GuardSpeedOn")
+	UI.Slider(g, "Extra speed while guarding", "GuardSpeed", 0, 60, 1, 0, "%")
 		UI.Button(g, "Reset guard speed", function() UI.set("GuardSpeed", 0) end)
 		UI.Note(g, "Only faster while you guard the player with the ball. Normal speed the rest of the time.")
 	end
@@ -12367,6 +12384,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.08 - fixed Auto Guard speed boost being a separate thing from the other speed boosts with no switch of its own, so it could add speed even with everything else off (new Guard speed boost toggle); found why loading the script twice gave two menus and heavy lag - the old copy's cleanup only existed once it finished loading, so a second load mid-startup could not find it and left the first copy fully running underneath - it now exists from the very first moment the script creates itself, so any second load can always stop the first one's loops immediately; the Owner code only needs to be entered once now, not for every single action; lowered the glide power/speed sliders so their lowest setting can actually reach near enough to nothing. If speed boost or guard speed still feels strong on low graphics, check the \"Low settings fix\" toggle on the Players tab - it deliberately adds up to 25% more boost on low graphics on purpose and can be turned off",
 "v2.07 - merged with the x86h7a branch's fixes: GlideShotSafe was gating Glide.fire and Speed.step behind a shoot-held check that could stick true, silently killing Shot Glide, Gather Step Glide, and every speed boost (walk/run/ball) together - forced off, and fixed Gather Step Glide being grouped with Dribble Glide in that gate's block list. Also added a server check-in before anything loads (Firebase control/enabled, control/banned) plus an Access control card in the Owner tab for a remote kill switch and block/unblock by name",
 "v2.05 - shooting restored to the v1.36 behaviour, confirmed Perfect sharing, Green Sounds length check",
 "v2.01 - reverted the meter late-bias, the tap-to-shoot Action-wait fix, and the locked-jumpshot-promotion fix - the bar was stopping/missing badly after those went back in. Shot Green Stabilizer stays (that one wasn't the problem). Back to plain prediction-only release timing on top of v2.00",
@@ -13053,10 +13071,17 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.07"
+local VERSION = "v2.08"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
+-- an early, minimal unload so a second load started before this one finishes can always stop
+-- this one's background loops - the full Unload (destroys the menu, saves settings) replaces
+-- this once it is defined further down
+function JH.Unload()
+	JH.Running = false
+	for _, c in ipairs(JH.Connections) do pcall(function() c:Disconnect() end) end
+end
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -13213,7 +13238,7 @@ local S = {
 LagSync = false, LagK = 2, PrecFit = false, PeakBin = 0.014, AdaptPlus = false, GreenMax = false,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = false, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-FadeNudge = 0, MagnetDelay = 120, AutoAdaptAll = false, InstantGreen = false, GlideShotSafe = true, LabOn = true,FamLead = "", SmartSteps = false, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false, OutlineTrans = 0, OutlineCustomR = 255, OutlineCustomG = 255, OutlineCustomB = 255,
+FadeNudge = 0, MagnetDelay = 120, AutoAdaptAll = false, InstantGreen = false, GlideShotSafe = true, LabOn = true,FamLead = "", SmartSteps = false, ContestShow = false, GuardSpeed = 0, GuardSpeedOn = false, OwnerCodeOK = false, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false, OutlineTrans = 0, OutlineCustomR = 255, OutlineCustomG = 255, OutlineCustomB = 255,
 	AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 	AGOnlyBall = true,
 	BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
@@ -19450,22 +19475,22 @@ P = UI.Page("Dribbling", "D")
 do
 	local d = UI.Card(P, "Dribble Glide")
 	UI.Toggle(d, "Dribble Glide", "DribbleGlide")
-	UI.Slider(d, "Glide power", "DribbleGlidePower", 1, 80, 1, 0)
-	UI.Slider(d, "Glide speed", "DribbleGlideSpeed", 0.5, 3, 0.1, 1, "x")
+	UI.Slider(d, "Glide power", "DribbleGlidePower", 0, 80, 1, 0)
+	UI.Slider(d, "Glide speed", "DribbleGlideSpeed", 0.1, 3, 0.1, 1, "x")
 	UI.Slider(d, "Time", "DribbleGlideTime", 0.05, 1, 0.01, 2, "s")
 
 	local sg = UI.Card(P, "Shot Glide")
 	UI.Toggle(sg, "Shot Glide", "ShotGlide")
-	UI.Slider(sg, "Glide power", "ShotGlidePower", 1, 80, 1, 0)
-	UI.Slider(sg, "Glide speed", "ShotGlideSpeed", 0.5, 3, 0.1, 1, "x")
+	UI.Slider(sg, "Glide power", "ShotGlidePower", 0, 80, 1, 0)
+	UI.Slider(sg, "Glide speed", "ShotGlideSpeed", 0.1, 3, 0.1, 1, "x")
 	UI.Dropdown(sg, "Shot glide method", "ShotGlideMethod", { "GameVel", "CFrame", "Velocity", "Auto" })
 	UI.Dropdown(sg, "Shot glide starts", "ShotGlideWhen", { "After release", "During shot" })
 	UI.Slider(sg, "Time", "ShotGlideTime", 0.05, 1, 0.01, 2, "s")
 
 	local gt = UI.Card(P, "Gather Step Glide")
 	UI.Toggle(gt, "Gather Step Glide", "GatherGlide")
-	UI.Slider(gt, "Glide power", "GatherGlidePower", 1, 80, 1, 0)
-	UI.Slider(gt, "Glide speed", "GatherGlideSpeed", 0.5, 3, 0.1, 1, "x")
+	UI.Slider(gt, "Glide power", "GatherGlidePower", 0, 80, 1, 0)
+	UI.Slider(gt, "Glide speed", "GatherGlideSpeed", 0.1, 3, 0.1, 1, "x")
 	UI.Slider(gt, "Time", "GatherGlideTime", 0.05, 1, 0.01, 2, "s")
 
 	local rs = UI.Card(P, "Restore")
@@ -23331,6 +23356,15 @@ local rolesCard = UI.Card(OP, "Chat roles")
 rolesCard.frame.Visible = false
 local existing = JH.roles or {}
 local ownersList, devsList, modsList, ownerCode = tostring(existing.owners or existing.owner or ""), tostring(existing.devs or ""), tostring(existing.mods or ""), ""
+local function ownerVerified(codeInput)
+	if S.OwnerCodeOK then return true end
+	if string.lower(string.gsub(codeInput or "", "%s", "")) == "jay" then
+		S.OwnerCodeOK = true
+		saveSoon()
+		return true
+	end
+	return false
+end
 local function inList(list, name)
 if type(list) ~= "string" then return false end
 for n in string.gmatch(list, "([^,]+)") do
@@ -23352,7 +23386,7 @@ local ownerCodeBox = UI.Input(rolesCard, "Owner code (only needed to add/change 
 UI.Input(rolesCard, "Co-Owners (comma separated player names)", { get = function() return devsList end, set = function(v) devsList = tostring(v or "") end }, nil, "name1, name2")
 UI.Input(rolesCard, "Mods (comma separated player names)", { get = function() return modsList end, set = function(v) modsList = tostring(v or "") end }, nil, "name1, name2")
 UI.Button(rolesCard, "Add me as Owner", function()
-if string.lower(string.gsub(ownerCode, "%s", "")) == "jay" then
+if ownerVerified(ownerCode) then
 ownersList = addName(ownersList, Players.LocalPlayer.Name)
 pushRoles(ownersList)
 notify("Owner tab", "Added you as Owner and pushed to everyone.", 4)
@@ -23391,7 +23425,7 @@ end
 end)
 UI.Button(rolesCard, "Add picked as Owner", function()
 if pickedName == "" then notify("Owner tab", "Click a name from the list first", 3) return end
-if string.lower(string.gsub(ownerCode, "%s", "")) == "jay" then
+if ownerVerified(ownerCode) then
 ownersList = addName(ownersList, pickedName)
 pushRoles(ownersList)
 notify("Owner tab", "Added " .. pickedName .. " as Owner.", 4)
@@ -23418,7 +23452,7 @@ local cur = JH.roles or {}
 local curOwners = tostring(cur.owners or cur.owner or "")
 local newOwners = ownersList
 if ownersList ~= curOwners then
-if string.lower(string.gsub(ownerCode, "%s", "")) == "jay" then
+if ownerVerified(ownerCode) then
 newOwners = ownersList
 else
 newOwners = curOwners
@@ -23436,14 +23470,14 @@ UI.Note(rolesCard, "Anyone named here gets a badge next to their name in JHub Ch
 local accCard = UI.Card(OP, "Access control")
 UI.Note(accCard, "Every copy of this script checks in with this list before it loads anything. Turning it off, or blocking a name, breaks it for them immediately - no reinstall needed on their end, and it does not matter whether they have a cracked/deobfuscated copy of the file. Needs the Owner code.")
 UI.Button(accCard, "Turn the script OFF for everyone", function()
-	if string.lower(string.gsub(ownerCode, "%s", "")) ~= "jay" then notify("Access control", "Wrong owner code.", 3) return end
+	if not ownerVerified(ownerCode) then notify("Access control", "Wrong owner code.", 3) return end
 	if JH.netPut then task.spawn(JH.netPut, "control/enabled", false) end
 	notify("Access control", "Script disabled for everyone. They will see a blocked message next load.", 5)
 	ownerCode = ""
 	if ownerCodeBox then ownerCodeBox.Text = "" end
 end, true)
 UI.Button(accCard, "Turn the script back ON for everyone", function()
-	if string.lower(string.gsub(ownerCode, "%s", "")) ~= "jay" then notify("Access control", "Wrong owner code.", 3) return end
+	if not ownerVerified(ownerCode) then notify("Access control", "Wrong owner code.", 3) return end
 	if JH.netPut then task.spawn(JH.netPut, "control/enabled", true) end
 	notify("Access control", "Script re-enabled for everyone.", 4)
 	ownerCode = ""
@@ -23452,7 +23486,7 @@ end)
 UI.Buttons(accCard, {
 	{ "Block picked", function()
 		if pickedName == "" then notify("Access control", "Click a name from the list in Chat roles first", 3) return end
-		if string.lower(string.gsub(ownerCode, "%s", "")) ~= "jay" then notify("Access control", "Wrong owner code.", 3) return end
+		if not ownerVerified(ownerCode) then notify("Access control", "Wrong owner code.", 3) return end
 		if JH.netPut and JH.sanitizeName then task.spawn(JH.netPut, "control/banned/" .. JH.sanitizeName(pickedName), true) end
 		notify("Access control", "Blocked " .. pickedName .. ". Their next load will refuse to run.", 5)
 		ownerCode = ""
@@ -23460,7 +23494,7 @@ UI.Buttons(accCard, {
 	end },
 	{ "Unblock picked", function()
 		if pickedName == "" then notify("Access control", "Click a name from the list in Chat roles first", 3) return end
-		if string.lower(string.gsub(ownerCode, "%s", "")) ~= "jay" then notify("Access control", "Wrong owner code.", 3) return end
+		if not ownerVerified(ownerCode) then notify("Access control", "Wrong owner code.", 3) return end
 		if JH.netPut and JH.sanitizeName then task.spawn(JH.netPut, "control/banned/" .. JH.sanitizeName(pickedName), false) end
 		notify("Access control", "Unblocked " .. pickedName .. ".", 4)
 		ownerCode = ""
@@ -23872,7 +23906,7 @@ do
 	local baseExtra = Speed.extraNow
 	function Speed.extraNow()
 		local e = baseExtra()
-		if (S.GuardSpeed or 0) > 0 and Feat.isGuarding() then e = e + (Speed.gameWS or 16) * S.GuardSpeed / 100 end
+		if S.GuardSpeedOn and (S.GuardSpeed or 0) > 0 and Feat.isGuarding() then e = e + (Speed.gameWS or 16) * S.GuardSpeed / 100 end
 		return e
 	end
 	local pp
@@ -23881,7 +23915,8 @@ do
 	end
 	if pp then
 		local g = UI.Card(pp, "Guard speed")
-		UI.Slider(g, "Extra speed while guarding", "GuardSpeed", 0, 60, 1, 0, "%")
+		UI.Toggle(g, "Guard speed boost", "GuardSpeedOn")
+	UI.Slider(g, "Extra speed while guarding", "GuardSpeed", 0, 60, 1, 0, "%")
 		UI.Button(g, "Reset guard speed", function() UI.set("GuardSpeed", 0) end)
 		UI.Note(g, "Only faster while you guard the player with the ball. Normal speed the rest of the time.")
 	end
@@ -25361,6 +25396,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.08 - fixed Auto Guard speed boost being a separate thing from the other speed boosts with no switch of its own, so it could add speed even with everything else off (new Guard speed boost toggle); found why loading the script twice gave two menus and heavy lag - the old copy's cleanup only existed once it finished loading, so a second load mid-startup could not find it and left the first copy fully running underneath - it now exists from the very first moment the script creates itself, so any second load can always stop the first one's loops immediately; the Owner code only needs to be entered once now, not for every single action; lowered the glide power/speed sliders so their lowest setting can actually reach near enough to nothing. If speed boost or guard speed still feels strong on low graphics, check the \"Low settings fix\" toggle on the Players tab - it deliberately adds up to 25% more boost on low graphics on purpose and can be turned off",
 "v2.07 - merged with the x86h7a branch's fixes: GlideShotSafe was gating Glide.fire and Speed.step behind a shoot-held check that could stick true, silently killing Shot Glide, Gather Step Glide, and every speed boost (walk/run/ball) together - forced off, and fixed Gather Step Glide being grouped with Dribble Glide in that gate's block list. Also added a server check-in before anything loads (Firebase control/enabled, control/banned) plus an Access control card in the Owner tab for a remote kill switch and block/unblock by name",
 "v2.05 - shooting restored to the v1.36 behaviour, confirmed Perfect sharing, Green Sounds length check",
 "v2.01 - reverted the meter late-bias, the tap-to-shoot Action-wait fix, and the locked-jumpshot-promotion fix - the bar was stopping/missing badly after those went back in. Shot Green Stabilizer stays (that one wasn't the problem). Back to plain prediction-only release timing on top of v2.00",
