@@ -11,7 +11,7 @@
     Tabs: Main, Shooting, Dribbling, Players, UI
     Tap the moving JH logo to open / close the menu.
 
-    JHUB_VERSION: v2.24
+    JHUB_VERSION: v2.25
     (this header is never obfuscated, so the auto-update check below can always read the version
     here even from the published build, where "local VERSION = ..." is hidden by the obfuscator -
     keep this line in sync with VERSION on every bump, or the auto-update check breaks again)
@@ -97,7 +97,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.24"
+local VERSION = "v2.25"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -2830,6 +2830,10 @@ end
 function Glide.start(kind, power, duration, dirOverride)
 	local r, h = Mover.body(), hum()
 	power = power * (S.GlideSpeed or 1) * Glide.lowScale()
+	-- the power slider's own floor is 0, which used to mean "lowest setting" was actually "no glide at all" (power<=0
+	-- bailed out below before anything happened) - a tiny floor here means the lowest setting still does something,
+	-- small enough you cannot see it, instead of silently doing nothing and feeling like the feature stopped working
+	power = math.max(power, 0.3)
 	if not r or not h or power <= 0 or duration <= 0 then return end
 	local now = tick()
 	-- one move plays several animations at once, so repeat triggers during the slide are ignored
@@ -3072,6 +3076,10 @@ function Speed.extraNow()
 	extra = clamp(extra * more, 0, S.SpeedCap * more)
 	local lv = Speed.level * (1 - f)
 	if S.AntiRubber and lv > 0 then extra = extra / (1 + lv) end
+	-- the slider's own floor is 0, which meant "lowest setting" was really "boost toggle on, doing nothing" - with
+	-- the toggle on, there is always at least a small, not-humanly-noticeable amount of extra speed, so it never
+	-- silently reads as "off" just because the slider is turned all the way down
+	if kind then extra = math.max(extra, 0.2) end
 	return extra
 end
 -- the server keeps pulling you back: boost is cut automatically so you do not get flagged or stuck
@@ -7076,6 +7084,10 @@ end
 function Glide.start(kind, power, duration, dirOverride)
 	local r, h = Mover.body(), hum()
 	power = power * (S.GlideSpeed or 1) * Glide.lowScale()
+	-- the power slider's own floor is 0, which used to mean "lowest setting" was actually "no glide at all" (power<=0
+	-- bailed out below before anything happened) - a tiny floor here means the lowest setting still does something,
+	-- small enough you cannot see it, instead of silently doing nothing and feeling like the feature stopped working
+	power = math.max(power, 0.3)
 	if not r or not h or power <= 0 or duration <= 0 then return end
 	local now = tick()
 	if now - (Glide.lastStart[kind] or 0) < duration * 0.5 then return end
@@ -9549,12 +9561,18 @@ do
 		st[key] = s
 		local first = (s.n or 0) == 0
 s.n = (s.n or 0) + 1
-local bin, old = 0.014 * (first and 1.5 or 1) * (Shot.adaptGain and Shot.adaptGain(key, off) or 1), Shot.finalAdj[key] or 0
+-- the "Learn speed" slider used to do nothing here at all - this adjustment ran at one fixed speed no matter what
+-- it was set to. It now actually scales the step size, how fast the running average reacts, and how little it
+-- takes to trigger a correction, all with that same slider, so turning it up really does make this converge faster.
+local rate = clamp(S.CalSpeed or 1, 0.1, 10)
+local bin, old = 0.014 * (first and 1.5 or 1) * (Shot.adaptGain and Shot.adaptGain(key, off) or 1) * math.min(rate, 4), Shot.finalAdj[key] or 0
 		local new = old
-		s.b = s.b * 0.7 + off * 0.3
+		local k = clamp(0.3 * rate, 0.15, 0.9)
+		s.b = s.b * (1 - k) + off * k
+		local trigger = clamp(0.45 / math.max(rate, 1), 0.2, 0.45)
 		if math.abs(off) >= 2 then
 			new, s.b = old - off * bin * 0.9, 0
-		elseif math.abs(s.b) >= 0.45 then
+		elseif math.abs(s.b) >= trigger then
 			new, s.b = old - s.b * bin * 0.8, 0
 		end
 		new = clamp(new, -0.06, 0.06)
@@ -11586,6 +11604,10 @@ do
 		return src, ver
 	end
 	local mine = string.match(tostring(VERSION), "^(v[%d%.]+)") or tostring(VERSION)
+	local function numver(v)
+		local maj, minr = string.match(tostring(v), "v?(%d+)%.?(%d*)")
+		return (tonumber(maj) or 0) * 1000 + (tonumber(minr) or 0)
+	end
 	local busy = false
 	local newestLbl
 	local function doUpdate(silent)
@@ -11607,7 +11629,11 @@ do
 			busy = false
 			return
 		end
-		if ver == mine then
+		if numver(ver) <= numver(mine) then
+			-- used to only check "ver == mine" - anything merely DIFFERENT (including older, e.g. a local test build
+			-- ahead of whatever is actually published) counted as "found an update" and got loaded, which would have
+			-- silently downgraded a newer build right back down to the public one. Only a genuinely higher version
+			-- counts as an update now.
 			if not silent then notify("Update", "You already have the newest version (" .. mine .. ")", 4) end
 			busy = false
 			return
@@ -12555,6 +12581,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.25 (TEST, not published) - Speed boost and dribble/shot/gather glide now always do at least a tiny, not-humanly-noticeable amount when their toggle is on, even at the lowest slider setting, instead of the lowest setting silently doing nothing. A real Perfect now locks in and shares the timing for ANY shot, including ones with a built-in base timing (most normal jumpshots) - it used to skip the lock for those entirely, which is almost certainly why locking in off a Perfect felt like it was not doing anything. The gradual adjustment for built-in shots (Auto adapt toggle) now actually scales with the Learn speed slider instead of ignoring it. Also fixed a bug where the auto-update check could downgrade a newer build back down to whatever is published, going only off whether the version matched instead of checking which one is actually newer.",
 "v2.24 - Glides no longer get scaled down on low graphics settings or low FPS by default - that \"low settings fix\" was exactly what was making every glide feel like it does not work at all on a low-end device or on Low graphics, instead of actually helping. Full strength now, same as everything else, matching how glides behaved before that scaling was ever added. The Low settings fix toggle (Shooting tab) still exists for anyone who wants it back, it is just off by default now. Speed boost (walk/run/ball) was not touched at all - nothing about how it works changed here.",
 "v2.23 - Renamed the script file itself, from JHubV1_Glass.lua to JHub.lua - same logo, same background, same tabs, same everything, just a clean filename/identity going forward instead of continuing to build on the one that kept getting stuck. It also now deletes any old JHubV1_Glass.lua it finds sitting in your autoexec folders or saved on disk the first time it runs, on top of the usual old-genv-key cleanup, so an old stuck copy under the old name gets cleared out instead of sitting there alongside this one.",
 "v2.22 - A copy that finds itself below the minimum-version floor now deletes its own saved autoexec copy (every folder name this script knows about, plus the plain saved file) on its way out, whether or not it manages to reach GitHub to update itself - not just block itself and leave the old file sitting there to fire again next join. Only affects a copy running this version or newer; see v2.20's note.",
@@ -12787,6 +12814,19 @@ saveSoon()
 end
 end
 JH.hardLocked = readHard()
+-- a hard-locked key (a real confirmed Perfect, yours or shared) now wins outright over the game's own built-in base
+-- timing, which Shot.remoteHold otherwise always returns early with before ever looking at a learned/locked value -
+-- without this, locking a built-in shot here did nothing: the built-in guess kept being used no matter what
+local prevHoldHL = Shot.remoteHold
+function Shot.remoteHold(key, pk)
+	if JH.hardLocked[key] and Shot.auto and Shot.auto[key] and Shot.auto[key].locked then
+		local a = Shot.auto[key]
+		Shot.lastSweep = nil
+		Shot.cur = { key = key, hold = a.hold, mode = "peak", state = "Locked (Perfect)" }
+		return a.hold, a.hold, "peak"
+	end
+	return prevHoldHL(key, pk)
+end
 local prevLearnHL = Shot.autoLearn
 function Shot.autoLearn(info, res, strength)
 if info and info.key and JH.hardLocked[info.key] then
@@ -12794,7 +12834,11 @@ pcall(JH.lockedResult, info, res, strength)
 return true
 end
 local r = prevLearnHL(info, res, strength)
-if info and info.key and info.idx == 5 and not info.manual and not Shot.FINAL[info.key] and not JH.hardLocked[info.key] and info.lead then
+if info and info.key and info.idx == 5 and not info.manual and not JH.hardLocked[info.key] and info.lead then
+-- used to also require "not Shot.FINAL[info.key]" - skipping the lock for any shot that already had a built-in base
+-- timing, which is most of them. That meant a real Perfect on almost any normal jumpshot only ever nudged it a
+-- little (see Shot.finalLearn below) instead of actually locking in, which is exactly why it felt like hitting a
+-- real Perfect "did not do anything": a Perfect on ANY shot, known base timing or not, now locks it in for good.
 local a = Shot.auto and Shot.auto[info.key]
 if not a then
 a = { hold = info.lead, greens = {}, locked = false, dir = 1, mode = "peak", bin = S.PeakBin }
@@ -13360,7 +13404,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.24"
+local VERSION = "v2.25"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -16093,6 +16137,10 @@ end
 function Glide.start(kind, power, duration, dirOverride)
 	local r, h = Mover.body(), hum()
 	power = power * (S.GlideSpeed or 1) * Glide.lowScale()
+	-- the power slider's own floor is 0, which used to mean "lowest setting" was actually "no glide at all" (power<=0
+	-- bailed out below before anything happened) - a tiny floor here means the lowest setting still does something,
+	-- small enough you cannot see it, instead of silently doing nothing and feeling like the feature stopped working
+	power = math.max(power, 0.3)
 	if not r or not h or power <= 0 or duration <= 0 then return end
 	local now = tick()
 	-- one move plays several animations at once, so repeat triggers during the slide are ignored
@@ -16335,6 +16383,10 @@ function Speed.extraNow()
 	extra = clamp(extra * more, 0, S.SpeedCap * more)
 	local lv = Speed.level * (1 - f)
 	if S.AntiRubber and lv > 0 then extra = extra / (1 + lv) end
+	-- the slider's own floor is 0, which meant "lowest setting" was really "boost toggle on, doing nothing" - with
+	-- the toggle on, there is always at least a small, not-humanly-noticeable amount of extra speed, so it never
+	-- silently reads as "off" just because the slider is turned all the way down
+	if kind then extra = math.max(extra, 0.2) end
 	return extra
 end
 -- the server keeps pulling you back: boost is cut automatically so you do not get flagged or stuck
@@ -20339,6 +20391,10 @@ end
 function Glide.start(kind, power, duration, dirOverride)
 	local r, h = Mover.body(), hum()
 	power = power * (S.GlideSpeed or 1) * Glide.lowScale()
+	-- the power slider's own floor is 0, which used to mean "lowest setting" was actually "no glide at all" (power<=0
+	-- bailed out below before anything happened) - a tiny floor here means the lowest setting still does something,
+	-- small enough you cannot see it, instead of silently doing nothing and feeling like the feature stopped working
+	power = math.max(power, 0.3)
 	if not r or not h or power <= 0 or duration <= 0 then return end
 	local now = tick()
 	if now - (Glide.lastStart[kind] or 0) < duration * 0.5 then return end
@@ -22812,12 +22868,18 @@ do
 		st[key] = s
 		local first = (s.n or 0) == 0
 s.n = (s.n or 0) + 1
-local bin, old = 0.014 * (first and 1.5 or 1) * (Shot.adaptGain and Shot.adaptGain(key, off) or 1), Shot.finalAdj[key] or 0
+-- the "Learn speed" slider used to do nothing here at all - this adjustment ran at one fixed speed no matter what
+-- it was set to. It now actually scales the step size, how fast the running average reacts, and how little it
+-- takes to trigger a correction, all with that same slider, so turning it up really does make this converge faster.
+local rate = clamp(S.CalSpeed or 1, 0.1, 10)
+local bin, old = 0.014 * (first and 1.5 or 1) * (Shot.adaptGain and Shot.adaptGain(key, off) or 1) * math.min(rate, 4), Shot.finalAdj[key] or 0
 		local new = old
-		s.b = s.b * 0.7 + off * 0.3
+		local k = clamp(0.3 * rate, 0.15, 0.9)
+		s.b = s.b * (1 - k) + off * k
+		local trigger = clamp(0.45 / math.max(rate, 1), 0.2, 0.45)
 		if math.abs(off) >= 2 then
 			new, s.b = old - off * bin * 0.9, 0
-		elseif math.abs(s.b) >= 0.45 then
+		elseif math.abs(s.b) >= trigger then
 			new, s.b = old - s.b * bin * 0.8, 0
 		end
 		new = clamp(new, -0.06, 0.06)
@@ -24849,6 +24911,10 @@ do
 		return src, ver
 	end
 	local mine = string.match(tostring(VERSION), "^(v[%d%.]+)") or tostring(VERSION)
+	local function numver(v)
+		local maj, minr = string.match(tostring(v), "v?(%d+)%.?(%d*)")
+		return (tonumber(maj) or 0) * 1000 + (tonumber(minr) or 0)
+	end
 	local busy = false
 	local newestLbl
 	local function doUpdate(silent)
@@ -24870,7 +24936,11 @@ do
 			busy = false
 			return
 		end
-		if ver == mine then
+		if numver(ver) <= numver(mine) then
+			-- used to only check "ver == mine" - anything merely DIFFERENT (including older, e.g. a local test build
+			-- ahead of whatever is actually published) counted as "found an update" and got loaded, which would have
+			-- silently downgraded a newer build right back down to the public one. Only a genuinely higher version
+			-- counts as an update now.
 			if not silent then notify("Update", "You already have the newest version (" .. mine .. ")", 4) end
 			busy = false
 			return
@@ -25818,6 +25888,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.25 (TEST, not published) - Speed boost and dribble/shot/gather glide now always do at least a tiny, not-humanly-noticeable amount when their toggle is on, even at the lowest slider setting, instead of the lowest setting silently doing nothing. A real Perfect now locks in and shares the timing for ANY shot, including ones with a built-in base timing (most normal jumpshots) - it used to skip the lock for those entirely, which is almost certainly why locking in off a Perfect felt like it was not doing anything. The gradual adjustment for built-in shots (Auto adapt toggle) now actually scales with the Learn speed slider instead of ignoring it. Also fixed a bug where the auto-update check could downgrade a newer build back down to whatever is published, going only off whether the version matched instead of checking which one is actually newer.",
 "v2.24 - Glides no longer get scaled down on low graphics settings or low FPS by default - that \"low settings fix\" was exactly what was making every glide feel like it does not work at all on a low-end device or on Low graphics, instead of actually helping. Full strength now, same as everything else, matching how glides behaved before that scaling was ever added. The Low settings fix toggle (Shooting tab) still exists for anyone who wants it back, it is just off by default now. Speed boost (walk/run/ball) was not touched at all - nothing about how it works changed here.",
 "v2.23 - Renamed the script file itself, from JHubV1_Glass.lua to JHub.lua - same logo, same background, same tabs, same everything, just a clean filename/identity going forward instead of continuing to build on the one that kept getting stuck. It also now deletes any old JHubV1_Glass.lua it finds sitting in your autoexec folders or saved on disk the first time it runs, on top of the usual old-genv-key cleanup, so an old stuck copy under the old name gets cleared out instead of sitting there alongside this one.",
 "v2.22 - A copy that finds itself below the minimum-version floor now deletes its own saved autoexec copy (every folder name this script knows about, plus the plain saved file) on its way out, whether or not it manages to reach GitHub to update itself - not just block itself and leave the old file sitting there to fire again next join. Only affects a copy running this version or newer; see v2.20's note.",
@@ -26050,6 +26121,19 @@ saveSoon()
 end
 end
 JH.hardLocked = readHard()
+-- a hard-locked key (a real confirmed Perfect, yours or shared) now wins outright over the game's own built-in base
+-- timing, which Shot.remoteHold otherwise always returns early with before ever looking at a learned/locked value -
+-- without this, locking a built-in shot here did nothing: the built-in guess kept being used no matter what
+local prevHoldHL = Shot.remoteHold
+function Shot.remoteHold(key, pk)
+	if JH.hardLocked[key] and Shot.auto and Shot.auto[key] and Shot.auto[key].locked then
+		local a = Shot.auto[key]
+		Shot.lastSweep = nil
+		Shot.cur = { key = key, hold = a.hold, mode = "peak", state = "Locked (Perfect)" }
+		return a.hold, a.hold, "peak"
+	end
+	return prevHoldHL(key, pk)
+end
 local prevLearnHL = Shot.autoLearn
 function Shot.autoLearn(info, res, strength)
 if info and info.key and JH.hardLocked[info.key] then
@@ -26057,7 +26141,11 @@ pcall(JH.lockedResult, info, res, strength)
 return true
 end
 local r = prevLearnHL(info, res, strength)
-if info and info.key and info.idx == 5 and not info.manual and not Shot.FINAL[info.key] and not JH.hardLocked[info.key] and info.lead then
+if info and info.key and info.idx == 5 and not info.manual and not JH.hardLocked[info.key] and info.lead then
+-- used to also require "not Shot.FINAL[info.key]" - skipping the lock for any shot that already had a built-in base
+-- timing, which is most of them. That meant a real Perfect on almost any normal jumpshot only ever nudged it a
+-- little (see Shot.finalLearn below) instead of actually locking in, which is exactly why it felt like hitting a
+-- real Perfect "did not do anything": a Perfect on ANY shot, known base timing or not, now locks it in for good.
 local a = Shot.auto and Shot.auto[info.key]
 if not a then
 a = { hold = info.lead, greens = {}, locked = false, dir = 1, mode = "peak", bin = S.PeakBin }
