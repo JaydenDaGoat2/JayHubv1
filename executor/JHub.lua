@@ -11,7 +11,7 @@
     Tabs: Main, Shooting, Dribbling, Players, UI
     Tap the moving JH logo to open / close the menu.
 
-    JHUB_VERSION: v2.25
+    JHUB_VERSION: v2.26
     (this header is never obfuscated, so the auto-update check below can always read the version
     here even from the published build, where "local VERSION = ..." is hidden by the obfuscator -
     keep this line in sync with VERSION on every bump, or the auto-update check breaks again)
@@ -97,7 +97,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.25"
+local VERSION = "v2.26"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -12581,6 +12581,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.26 (TEST, not published) - Reverted v2.25's change that let a Perfect hard-lock a shot even when it already had a built-in base timing: one lucky Perfect is not necessarily dead-center, and locking onto it with nothing left afterward to correct it made shooting noticeably worse. Back to only hard-locking shots with no known base timing at all. The Learn speed slider now genuinely speeding up the built-in shots' ongoing small adjustment (also from v2.25) is kept, since that is not a one-shot permanent override.",
 "v2.25 (TEST, not published) - Speed boost and dribble/shot/gather glide now always do at least a tiny, not-humanly-noticeable amount when their toggle is on, even at the lowest slider setting, instead of the lowest setting silently doing nothing. A real Perfect now locks in and shares the timing for ANY shot, including ones with a built-in base timing (most normal jumpshots) - it used to skip the lock for those entirely, which is almost certainly why locking in off a Perfect felt like it was not doing anything. The gradual adjustment for built-in shots (Auto adapt toggle) now actually scales with the Learn speed slider instead of ignoring it. Also fixed a bug where the auto-update check could downgrade a newer build back down to whatever is published, going only off whether the version matched instead of checking which one is actually newer.",
 "v2.24 - Glides no longer get scaled down on low graphics settings or low FPS by default - that \"low settings fix\" was exactly what was making every glide feel like it does not work at all on a low-end device or on Low graphics, instead of actually helping. Full strength now, same as everything else, matching how glides behaved before that scaling was ever added. The Low settings fix toggle (Shooting tab) still exists for anyone who wants it back, it is just off by default now. Speed boost (walk/run/ball) was not touched at all - nothing about how it works changed here.",
 "v2.23 - Renamed the script file itself, from JHubV1_Glass.lua to JHub.lua - same logo, same background, same tabs, same everything, just a clean filename/identity going forward instead of continuing to build on the one that kept getting stuck. It also now deletes any old JHubV1_Glass.lua it finds sitting in your autoexec folders or saved on disk the first time it runs, on top of the usual old-genv-key cleanup, so an old stuck copy under the old name gets cleared out instead of sitting there alongside this one.",
@@ -12814,19 +12815,6 @@ saveSoon()
 end
 end
 JH.hardLocked = readHard()
--- a hard-locked key (a real confirmed Perfect, yours or shared) now wins outright over the game's own built-in base
--- timing, which Shot.remoteHold otherwise always returns early with before ever looking at a learned/locked value -
--- without this, locking a built-in shot here did nothing: the built-in guess kept being used no matter what
-local prevHoldHL = Shot.remoteHold
-function Shot.remoteHold(key, pk)
-	if JH.hardLocked[key] and Shot.auto and Shot.auto[key] and Shot.auto[key].locked then
-		local a = Shot.auto[key]
-		Shot.lastSweep = nil
-		Shot.cur = { key = key, hold = a.hold, mode = "peak", state = "Locked (Perfect)" }
-		return a.hold, a.hold, "peak"
-	end
-	return prevHoldHL(key, pk)
-end
 local prevLearnHL = Shot.autoLearn
 function Shot.autoLearn(info, res, strength)
 if info and info.key and JH.hardLocked[info.key] then
@@ -12834,11 +12822,14 @@ pcall(JH.lockedResult, info, res, strength)
 return true
 end
 local r = prevLearnHL(info, res, strength)
-if info and info.key and info.idx == 5 and not info.manual and not JH.hardLocked[info.key] and info.lead then
--- used to also require "not Shot.FINAL[info.key]" - skipping the lock for any shot that already had a built-in base
--- timing, which is most of them. That meant a real Perfect on almost any normal jumpshot only ever nudged it a
--- little (see Shot.finalLearn below) instead of actually locking in, which is exactly why it felt like hitting a
--- real Perfect "did not do anything": a Perfect on ANY shot, known base timing or not, now locks it in for good.
+-- tried letting a Perfect hard-lock a shot even when it already had a built-in base timing, overriding the game's
+-- own tuned value outright and switching off the gradual adjuster for it for good. One lucky Perfect within the
+-- make-window is not necessarily dead-center, and locking onto it with nothing left to correct it afterward made
+-- shooting noticeably worse, not better - reverted back to only hard-locking shots that start with no known base
+-- timing at all, where there is nothing better to compare it against. The gradual adjuster + Learn speed scaling
+-- below still speeds up how fast a built-in shot's small ongoing nudge converges, this is just no longer a one-shot
+-- permanent override of the built-in number.
+if info and info.key and info.idx == 5 and not info.manual and not Shot.FINAL[info.key] and not JH.hardLocked[info.key] and info.lead then
 local a = Shot.auto and Shot.auto[info.key]
 if not a then
 a = { hold = info.lead, greens = {}, locked = false, dir = 1, mode = "peak", bin = S.PeakBin }
@@ -13404,7 +13395,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.25"
+local VERSION = "v2.26"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -25888,6 +25879,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.26 (TEST, not published) - Reverted v2.25's change that let a Perfect hard-lock a shot even when it already had a built-in base timing: one lucky Perfect is not necessarily dead-center, and locking onto it with nothing left afterward to correct it made shooting noticeably worse. Back to only hard-locking shots with no known base timing at all. The Learn speed slider now genuinely speeding up the built-in shots' ongoing small adjustment (also from v2.25) is kept, since that is not a one-shot permanent override.",
 "v2.25 (TEST, not published) - Speed boost and dribble/shot/gather glide now always do at least a tiny, not-humanly-noticeable amount when their toggle is on, even at the lowest slider setting, instead of the lowest setting silently doing nothing. A real Perfect now locks in and shares the timing for ANY shot, including ones with a built-in base timing (most normal jumpshots) - it used to skip the lock for those entirely, which is almost certainly why locking in off a Perfect felt like it was not doing anything. The gradual adjustment for built-in shots (Auto adapt toggle) now actually scales with the Learn speed slider instead of ignoring it. Also fixed a bug where the auto-update check could downgrade a newer build back down to whatever is published, going only off whether the version matched instead of checking which one is actually newer.",
 "v2.24 - Glides no longer get scaled down on low graphics settings or low FPS by default - that \"low settings fix\" was exactly what was making every glide feel like it does not work at all on a low-end device or on Low graphics, instead of actually helping. Full strength now, same as everything else, matching how glides behaved before that scaling was ever added. The Low settings fix toggle (Shooting tab) still exists for anyone who wants it back, it is just off by default now. Speed boost (walk/run/ball) was not touched at all - nothing about how it works changed here.",
 "v2.23 - Renamed the script file itself, from JHubV1_Glass.lua to JHub.lua - same logo, same background, same tabs, same everything, just a clean filename/identity going forward instead of continuing to build on the one that kept getting stuck. It also now deletes any old JHubV1_Glass.lua it finds sitting in your autoexec folders or saved on disk the first time it runs, on top of the usual old-genv-key cleanup, so an old stuck copy under the old name gets cleared out instead of sitting there alongside this one.",
@@ -26121,19 +26113,6 @@ saveSoon()
 end
 end
 JH.hardLocked = readHard()
--- a hard-locked key (a real confirmed Perfect, yours or shared) now wins outright over the game's own built-in base
--- timing, which Shot.remoteHold otherwise always returns early with before ever looking at a learned/locked value -
--- without this, locking a built-in shot here did nothing: the built-in guess kept being used no matter what
-local prevHoldHL = Shot.remoteHold
-function Shot.remoteHold(key, pk)
-	if JH.hardLocked[key] and Shot.auto and Shot.auto[key] and Shot.auto[key].locked then
-		local a = Shot.auto[key]
-		Shot.lastSweep = nil
-		Shot.cur = { key = key, hold = a.hold, mode = "peak", state = "Locked (Perfect)" }
-		return a.hold, a.hold, "peak"
-	end
-	return prevHoldHL(key, pk)
-end
 local prevLearnHL = Shot.autoLearn
 function Shot.autoLearn(info, res, strength)
 if info and info.key and JH.hardLocked[info.key] then
@@ -26141,11 +26120,14 @@ pcall(JH.lockedResult, info, res, strength)
 return true
 end
 local r = prevLearnHL(info, res, strength)
-if info and info.key and info.idx == 5 and not info.manual and not JH.hardLocked[info.key] and info.lead then
--- used to also require "not Shot.FINAL[info.key]" - skipping the lock for any shot that already had a built-in base
--- timing, which is most of them. That meant a real Perfect on almost any normal jumpshot only ever nudged it a
--- little (see Shot.finalLearn below) instead of actually locking in, which is exactly why it felt like hitting a
--- real Perfect "did not do anything": a Perfect on ANY shot, known base timing or not, now locks it in for good.
+-- tried letting a Perfect hard-lock a shot even when it already had a built-in base timing, overriding the game's
+-- own tuned value outright and switching off the gradual adjuster for it for good. One lucky Perfect within the
+-- make-window is not necessarily dead-center, and locking onto it with nothing left to correct it afterward made
+-- shooting noticeably worse, not better - reverted back to only hard-locking shots that start with no known base
+-- timing at all, where there is nothing better to compare it against. The gradual adjuster + Learn speed scaling
+-- below still speeds up how fast a built-in shot's small ongoing nudge converges, this is just no longer a one-shot
+-- permanent override of the built-in number.
+if info and info.key and info.idx == 5 and not info.manual and not Shot.FINAL[info.key] and not JH.hardLocked[info.key] and info.lead then
 local a = Shot.auto and Shot.auto[info.key]
 if not a then
 a = { hold = info.lead, greens = {}, locked = false, dir = 1, mode = "peak", bin = S.PeakBin }
