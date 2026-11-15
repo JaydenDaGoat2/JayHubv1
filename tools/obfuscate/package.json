@@ -1,0 +1,10 @@
+{
+  "name": "jhub-obfuscate",
+  "version": "1.0.0",
+  "description": "String-encryption + minify pass used by tools/publish.sh before any push to the public loadstring branch.",
+  "private": true,
+  "dependencies": {
+    "luamin": "^1.0.4",
+    "luaparse": "^0.3.1"
+  }
+}
