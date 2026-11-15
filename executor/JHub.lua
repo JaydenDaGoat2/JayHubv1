@@ -11,7 +11,7 @@
     Tabs: Main, Shooting, Dribbling, Players, UI
     Tap the moving JH logo to open / close the menu.
 
-    JHUB_VERSION: v2.28
+    JHUB_VERSION: v2.29
     (this header is never obfuscated, so the auto-update check below can always read the version
     here even from the published build, where "local VERSION = ..." is hidden by the obfuscator -
     keep this line in sync with VERSION on every bump, or the auto-update check breaks again)
@@ -97,7 +97,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.28"
+local VERSION = "v2.29"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -12352,8 +12352,17 @@ do
 local Net = {}
 Net.URL = "https://jayhubv1-default-rtdb.firebaseio.com"
 Net.lead = {}
+-- not every executor exposes a global called "request" - some only give you http_request, or put it under
+-- syn/http instead, which used to mean the whole shared-timing/chat/roles network layer just silently did
+-- nothing on those executors even though the executor can make HTTP calls just fine. Fall back through the
+-- same names the rest of this script already falls back through for everything else network-related.
+local function httpRequest()
+return request or http_request or (syn and syn.request) or (http and http.request)
+end
 local function netGet(path)
-local ok, res = pcall(function() return request({ Url = Net.URL .. "/" .. path .. ".json", Method = "GET" }) end)
+local send = httpRequest()
+if not send then return nil end
+local ok, res = pcall(function() return send({ Url = Net.URL .. "/" .. path .. ".json", Method = "GET" }) end)
 if ok and res and res.Body then
 local okj, data = pcall(function() return HttpService:JSONDecode(res.Body) end)
 if okj then return data end
@@ -12361,14 +12370,18 @@ end
 return nil
 end
 local function netPost(path, tbl)
+local send = httpRequest()
+if not send then return end
 local okj, body = pcall(function() return HttpService:JSONEncode(tbl) end)
 if not okj then return end
-pcall(function() request({ Url = Net.URL .. "/" .. path .. ".json", Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = body }) end)
+pcall(function() send({ Url = Net.URL .. "/" .. path .. ".json", Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = body }) end)
 end
 local function netPut(path, tbl)
+local send = httpRequest()
+if not send then return end
 local okj, body = pcall(function() return HttpService:JSONEncode(tbl) end)
 if not okj then return end
-pcall(function() request({ Url = Net.URL .. "/" .. path .. ".json", Method = "PUT", Headers = { ["Content-Type"] = "application/json" }, Body = body }) end)
+pcall(function() send({ Url = Net.URL .. "/" .. path .. ".json", Method = "PUT", Headers = { ["Content-Type"] = "application/json" }, Body = body }) end)
 end
 local function sanitize(k) return (string.gsub(tostring(k), "[%.%#%$%[%]/]", "_")) end
 local myName = Players.LocalPlayer.Name
@@ -12476,8 +12489,9 @@ UI.label({ Text = "Send", TextSize = 13, Size = UDim2.fromScale(1, 1), TextColor
 UI.Note(chat, "Type !ai followed by a question to ask the chat's AI.")
 local function askAI(q, cb)
 task.spawn(function()
-local ok, res = pcall(function()
-return request({ Url = "https://text.pollinations.ai/" .. HttpService:UrlEncode(q) .. "?model=openai", Method = "GET" })
+local send = request or http_request or (syn and syn.request) or (http and http.request)
+local ok, res = send and pcall(function()
+return send({ Url = "https://text.pollinations.ai/" .. HttpService:UrlEncode(q) .. "?model=openai", Method = "GET" })
 end)
 local answer = (ok and res and res.Body and res.Body ~= "") and res.Body or "(the AI did not answer, try again)"
 cb(string.sub(answer, 1, 400))
@@ -12610,6 +12624,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.29 - Cross-executor fix: the shared timing network (chat, locked jumpshot timings, roles) and the !ai chat command only ever tried calling a function named exactly \"request\" to make their HTTP calls. Most executors expose that, but not all of them do under that exact name - on ones that don't, those three features were silently doing nothing with no error at all. They now fall back through http_request / syn.request / http.request the same way the rest of the script already does for everything else.",
 "v2.28 - Gather Step Glide was getting cancelled the instant you pressed shoot, which is almost always within a split second of a hop/euro/gather step - that's why it felt completely broken for exactly the moves people wanted it for. It no longer gets cancelled on a shot press (Dribble Glide still does). Dribble Glide now fires the moment you press a dribble button in whatever direction you're already dribbling, instead of waiting up to 0.1s to classify the move first - that wait is what made it feel like it started late. Both Dribble Glide and Gather Step Glide now keep following your live input direction the whole time they're active, instead of locking onto whichever direction you happened to be facing the instant they started. Shot Glide now fires while you're shooting by default instead of waiting until after you've already released the shot.",
 "v2.27 (TEST, not published) - Found why Auto Green felt worse than the old v1.34 version people remember as the best: Ultra Auto Calibrate (on by default) was force-enabling six experimental upgrades (AdaptPlus, SmartSteps, AutoAdaptAll, AllJumpers, LagSync, PrecFit) on every single load, silently undoing an earlier attempt to turn them back off and keeping everyone on a fancier, more reactive-to-noise version of the learner instead of the plain one Auto Green has always run. Ultra Auto Calibrate no longer touches any of those - it only does its own direct additions now (Learn speed control, instant Perfect-sharing, community seeding for brand-new shots), none of which change how the core learner reacts shot to shot. The actual core algorithm (lock in instantly on a real Perfect, small momentum-based nudge otherwise) is unchanged from how it has always worked. Anyone who wants the experimental stuff can still turn each one on individually under Auto Green MAX.",
 "v2.26 (TEST, not published) - Reverted v2.25's change that let a Perfect hard-lock a shot even when it already had a built-in base timing: one lucky Perfect is not necessarily dead-center, and locking onto it with nothing left afterward to correct it made shooting noticeably worse. Back to only hard-locking shots with no known base timing at all. The Learn speed slider now genuinely speeding up the built-in shots' ongoing small adjustment (also from v2.25) is kept, since that is not a one-shot permanent override.",
@@ -13426,7 +13441,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.28"
+local VERSION = "v2.29"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -25681,8 +25696,17 @@ do
 local Net = {}
 Net.URL = "https://jayhubv1-default-rtdb.firebaseio.com"
 Net.lead = {}
+-- not every executor exposes a global called "request" - some only give you http_request, or put it under
+-- syn/http instead, which used to mean the whole shared-timing/chat/roles network layer just silently did
+-- nothing on those executors even though the executor can make HTTP calls just fine. Fall back through the
+-- same names the rest of this script already falls back through for everything else network-related.
+local function httpRequest()
+return request or http_request or (syn and syn.request) or (http and http.request)
+end
 local function netGet(path)
-local ok, res = pcall(function() return request({ Url = Net.URL .. "/" .. path .. ".json", Method = "GET" }) end)
+local send = httpRequest()
+if not send then return nil end
+local ok, res = pcall(function() return send({ Url = Net.URL .. "/" .. path .. ".json", Method = "GET" }) end)
 if ok and res and res.Body then
 local okj, data = pcall(function() return HttpService:JSONDecode(res.Body) end)
 if okj then return data end
@@ -25690,14 +25714,18 @@ end
 return nil
 end
 local function netPost(path, tbl)
+local send = httpRequest()
+if not send then return end
 local okj, body = pcall(function() return HttpService:JSONEncode(tbl) end)
 if not okj then return end
-pcall(function() request({ Url = Net.URL .. "/" .. path .. ".json", Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = body }) end)
+pcall(function() send({ Url = Net.URL .. "/" .. path .. ".json", Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = body }) end)
 end
 local function netPut(path, tbl)
+local send = httpRequest()
+if not send then return end
 local okj, body = pcall(function() return HttpService:JSONEncode(tbl) end)
 if not okj then return end
-pcall(function() request({ Url = Net.URL .. "/" .. path .. ".json", Method = "PUT", Headers = { ["Content-Type"] = "application/json" }, Body = body }) end)
+pcall(function() send({ Url = Net.URL .. "/" .. path .. ".json", Method = "PUT", Headers = { ["Content-Type"] = "application/json" }, Body = body }) end)
 end
 local function sanitize(k) return (string.gsub(tostring(k), "[%.%#%$%[%]/]", "_")) end
 local myName = Players.LocalPlayer.Name
@@ -25805,8 +25833,9 @@ UI.label({ Text = "Send", TextSize = 13, Size = UDim2.fromScale(1, 1), TextColor
 UI.Note(chat, "Type !ai followed by a question to ask the chat's AI.")
 local function askAI(q, cb)
 task.spawn(function()
-local ok, res = pcall(function()
-return request({ Url = "https://text.pollinations.ai/" .. HttpService:UrlEncode(q) .. "?model=openai", Method = "GET" })
+local send = request or http_request or (syn and syn.request) or (http and http.request)
+local ok, res = send and pcall(function()
+return send({ Url = "https://text.pollinations.ai/" .. HttpService:UrlEncode(q) .. "?model=openai", Method = "GET" })
 end)
 local answer = (ok and res and res.Body and res.Body ~= "") and res.Body or "(the AI did not answer, try again)"
 cb(string.sub(answer, 1, 400))
@@ -25939,6 +25968,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.29 - Cross-executor fix: the shared timing network (chat, locked jumpshot timings, roles) and the !ai chat command only ever tried calling a function named exactly \"request\" to make their HTTP calls. Most executors expose that, but not all of them do under that exact name - on ones that don't, those three features were silently doing nothing with no error at all. They now fall back through http_request / syn.request / http.request the same way the rest of the script already does for everything else.",
 "v2.28 - Gather Step Glide was getting cancelled the instant you pressed shoot, which is almost always within a split second of a hop/euro/gather step - that's why it felt completely broken for exactly the moves people wanted it for. It no longer gets cancelled on a shot press (Dribble Glide still does). Dribble Glide now fires the moment you press a dribble button in whatever direction you're already dribbling, instead of waiting up to 0.1s to classify the move first - that wait is what made it feel like it started late. Both Dribble Glide and Gather Step Glide now keep following your live input direction the whole time they're active, instead of locking onto whichever direction you happened to be facing the instant they started. Shot Glide now fires while you're shooting by default instead of waiting until after you've already released the shot.",
 "v2.27 (TEST, not published) - Found why Auto Green felt worse than the old v1.34 version people remember as the best: Ultra Auto Calibrate (on by default) was force-enabling six experimental upgrades (AdaptPlus, SmartSteps, AutoAdaptAll, AllJumpers, LagSync, PrecFit) on every single load, silently undoing an earlier attempt to turn them back off and keeping everyone on a fancier, more reactive-to-noise version of the learner instead of the plain one Auto Green has always run. Ultra Auto Calibrate no longer touches any of those - it only does its own direct additions now (Learn speed control, instant Perfect-sharing, community seeding for brand-new shots), none of which change how the core learner reacts shot to shot. The actual core algorithm (lock in instantly on a real Perfect, small momentum-based nudge otherwise) is unchanged from how it has always worked. Anyone who wants the experimental stuff can still turn each one on individually under Auto Green MAX.",
 "v2.26 (TEST, not published) - Reverted v2.25's change that let a Perfect hard-lock a shot even when it already had a built-in base timing: one lucky Perfect is not necessarily dead-center, and locking onto it with nothing left afterward to correct it made shooting noticeably worse. Back to only hard-locking shots with no known base timing at all. The Learn speed slider now genuinely speeding up the built-in shots' ongoing small adjustment (also from v2.25) is kept, since that is not a one-shot permanent override.",
