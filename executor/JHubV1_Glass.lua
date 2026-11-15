@@ -59,7 +59,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.09"
+local VERSION = "v2.10"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -7002,9 +7002,18 @@ function Glide.start(kind, power, duration, dirOverride)
 	end
 	local function frame()
 		if finished then return "stop" end
+		-- turning the toggle for this kind off should stop an already-running glide right away,
+		-- instead of letting it finish out its full duration as if nothing changed
+		local kinfo = Glide.kinds[kind]
+		if kinfo and not S[kinfo[1]] then
+			finished = true
+			restoreAttr()
+			return "stop"
+		end
+		local c = char()
+		local locked = c and c:GetAttribute("CanMove") == false
 		if method == "Input" and token == Glide.token then
-			local c = char()
-			if c and c:GetAttribute("CanMove") == false and tick() - startedAt < 1.5 then
+			if locked and tick() - startedAt < 1.5 then
 				now = tick()
 				if Glide.input then
 					Glide.input.untilT = now + duration
@@ -7016,7 +7025,7 @@ function Glide.start(kind, power, duration, dirOverride)
 		end
 		local p = clamp((tick() - now) / duration, 0, 1)
 		local over = token ~= Glide.token or not r.Parent or not JH.Running
-		if method == "CFrame" and not over then
+		if method == "CFrame" and not over and not locked then
 			local want = power * duration * 0.8 * (2 * p - p * p)
 			local step = want - applied
 			if step > 0 and not Glide.blocked(r, dir, step) then
@@ -7035,6 +7044,9 @@ function Glide.start(kind, power, duration, dirOverride)
 			end
 			return "stop"
 		end
+		-- the game itself has taken away movement (e.g. no dribbles left, mid-gather, mid-shot): the glide
+		-- should not keep pushing you around while that is true, same as it already paused for Input
+		if locked and method ~= "Input" then return nil end
 		local factor = 1.6 * (1 - p)
 		if method == "GameVel" then
 		local gpm = Mover.playerModule()
@@ -7047,7 +7059,6 @@ function Glide.start(kind, power, duration, dirOverride)
 		end
 		if method == "Impulse" or method == "CFrame" then return nil end
 		if method == "AttrBoost" then
-			local c = char()
 			if c then
 				Glide.attrOn = true
 				c:SetAttribute("SpeedBoost", power * factor / math.max(Speed.gameWS, 1))
@@ -12396,6 +12407,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.10 - Fixed glides/boost feeling stuck on after turning them off: a glide that was already running kept pushing you for its full duration even after the toggle was switched off. Also fixed small unwanted movement while you have no dribbles left or are mid-shot/mid-gather: glides were only pausing for one of their push methods when the game takes away your movement, not all of them.",
 "v2.09 - Ultra Auto Calibrate turning on now also turns on the same faster/centered learning, smarter step sizing, and shared-across-every-jumper learning that Auto Green MAX uses, instead of gating only the plain/basic learner - it is meant to be the strongest version and now actually is, including on a fresh install where it defaults on",
 "v2.08 - fixed Auto Guard speed boost being a separate thing from the other speed boosts with no switch of its own, so it could add speed even with everything else off (new Guard speed boost toggle); found why loading the script twice gave two menus and heavy lag - the old copy's cleanup only existed once it finished loading, so a second load mid-startup could not find it and left the first copy fully running underneath - it now exists from the very first moment the script creates itself, so any second load can always stop the first one's loops immediately; the Owner code only needs to be entered once now, not for every single action; lowered the glide power/speed sliders so their lowest setting can actually reach near enough to nothing. If speed boost or guard speed still feels strong on low graphics, check the \"Low settings fix\" toggle on the Players tab - it deliberately adds up to 25% more boost on low graphics on purpose and can be turned off",
 "v2.07 - merged with the x86h7a branch's fixes: GlideShotSafe was gating Glide.fire and Speed.step behind a shoot-held check that could stick true, silently killing Shot Glide, Gather Step Glide, and every speed boost (walk/run/ball) together - forced off, and fixed Gather Step Glide being grouped with Dribble Glide in that gate's block list. Also added a server check-in before anything loads (Firebase control/enabled, control/banned) plus an Access control card in the Owner tab for a remote kill switch and block/unblock by name",
@@ -13084,7 +13096,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.09"
+local VERSION = "v2.10"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -20027,9 +20039,18 @@ function Glide.start(kind, power, duration, dirOverride)
 	end
 	local function frame()
 		if finished then return "stop" end
+		-- turning the toggle for this kind off should stop an already-running glide right away,
+		-- instead of letting it finish out its full duration as if nothing changed
+		local kinfo = Glide.kinds[kind]
+		if kinfo and not S[kinfo[1]] then
+			finished = true
+			restoreAttr()
+			return "stop"
+		end
+		local c = char()
+		local locked = c and c:GetAttribute("CanMove") == false
 		if method == "Input" and token == Glide.token then
-			local c = char()
-			if c and c:GetAttribute("CanMove") == false and tick() - startedAt < 1.5 then
+			if locked and tick() - startedAt < 1.5 then
 				now = tick()
 				if Glide.input then
 					Glide.input.untilT = now + duration
@@ -20041,7 +20062,7 @@ function Glide.start(kind, power, duration, dirOverride)
 		end
 		local p = clamp((tick() - now) / duration, 0, 1)
 		local over = token ~= Glide.token or not r.Parent or not JH.Running
-		if method == "CFrame" and not over then
+		if method == "CFrame" and not over and not locked then
 			local want = power * duration * 0.8 * (2 * p - p * p)
 			local step = want - applied
 			if step > 0 and not Glide.blocked(r, dir, step) then
@@ -20060,6 +20081,9 @@ function Glide.start(kind, power, duration, dirOverride)
 			end
 			return "stop"
 		end
+		-- the game itself has taken away movement (e.g. no dribbles left, mid-gather, mid-shot): the glide
+		-- should not keep pushing you around while that is true, same as it already paused for Input
+		if locked and method ~= "Input" then return nil end
 		local factor = 1.6 * (1 - p)
 		if method == "GameVel" then
 		local gpm = Mover.playerModule()
@@ -20072,7 +20096,6 @@ function Glide.start(kind, power, duration, dirOverride)
 		end
 		if method == "Impulse" or method == "CFrame" then return nil end
 		if method == "AttrBoost" then
-			local c = char()
 			if c then
 				Glide.attrOn = true
 				c:SetAttribute("SpeedBoost", power * factor / math.max(Speed.gameWS, 1))
@@ -25421,6 +25444,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.10 - Fixed glides/boost feeling stuck on after turning them off: a glide that was already running kept pushing you for its full duration even after the toggle was switched off. Also fixed small unwanted movement while you have no dribbles left or are mid-shot/mid-gather: glides were only pausing for one of their push methods when the game takes away your movement, not all of them.",
 "v2.09 - Ultra Auto Calibrate turning on now also turns on the same faster/centered learning, smarter step sizing, and shared-across-every-jumper learning that Auto Green MAX uses, instead of gating only the plain/basic learner - it is meant to be the strongest version and now actually is, including on a fresh install where it defaults on",
 "v2.08 - fixed Auto Guard speed boost being a separate thing from the other speed boosts with no switch of its own, so it could add speed even with everything else off (new Guard speed boost toggle); found why loading the script twice gave two menus and heavy lag - the old copy's cleanup only existed once it finished loading, so a second load mid-startup could not find it and left the first copy fully running underneath - it now exists from the very first moment the script creates itself, so any second load can always stop the first one's loops immediately; the Owner code only needs to be entered once now, not for every single action; lowered the glide power/speed sliders so their lowest setting can actually reach near enough to nothing. If speed boost or guard speed still feels strong on low graphics, check the \"Low settings fix\" toggle on the Players tab - it deliberately adds up to 25% more boost on low graphics on purpose and can be turned off",
 "v2.07 - merged with the x86h7a branch's fixes: GlideShotSafe was gating Glide.fire and Speed.step behind a shoot-held check that could stick true, silently killing Shot Glide, Gather Step Glide, and every speed boost (walk/run/ball) together - forced off, and fixed Gather Step Glide being grouped with Dribble Glide in that gate's block list. Also added a server check-in before anything loads (Firebase control/enabled, control/banned) plus an Access control card in the Owner tab for a remote kill switch and block/unblock by name",
