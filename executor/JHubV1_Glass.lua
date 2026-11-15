@@ -11,7 +11,7 @@
     Tabs: Main, Shooting, Dribbling, Players, UI
     Tap the moving JH logo to open / close the menu.
 
-    JHUB_VERSION: v2.18
+    JHUB_VERSION: v2.19
     (this header is never obfuscated, so the auto-update check below can always read the version
     here even from the published build, where "local VERSION = ..." is hidden by the obfuscator -
     keep this line in sync with VERSION on every bump, or the auto-update check breaks again)
@@ -81,7 +81,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.18"
+local VERSION = "v2.19"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -11545,6 +11545,22 @@ do
 			return
 		end
 		notify("Update", "A newer version (" .. tostring(ver) .. ") was found, updating now...", 4)
+		-- re-save the autoexec/queued copy to this NEW version right now, immediately, instead of waiting for the
+		-- new instance to do its own delayed resave after reloading - there should be no moment where disk is
+		-- still holding the old version once a newer one is known to exist
+		if S.AutoExec then
+			pcall(function()
+				local code = "(getgenv and getgenv() or _G).JHUB_AUTOEXEC = true\n" .. src
+				for _, f in ipairs(Net.AUTOEXEC_FOLDERS) do
+					pcall(function()
+						if type(isfolder) == "function" and isfolder(f) then writefile(f .. "/" .. Net.AUTOEXEC_FILE, code) end
+					end)
+				end
+				pcall(FS.write, FS.root .. "/" .. Net.AUTOEXEC_FILE, src)
+				local q = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
+				if type(q) == "function" then pcall(q, code) end
+			end)
+		end
 		pcall(JH.Unload)
 		task.defer(fn)
 	end
@@ -12465,6 +12481,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.19 - Stopped an old version ever sitting on disk once a newer one exists. The auto-update check now rewrites the saved autoexec file (and the queued-teleport copy) to the new version immediately the moment it finds one, instead of waiting for the new instance to resave it a couple seconds after reloading - and the old instance's own pending resave now checks it is still actually running first, so a reload triggered mid-wait can no longer have the dying old copy put its old version right back on disk a moment after the new one just saved the correct one.",
 "v2.18 - Found why it was reloading itself non-stop for some people: v2.15's auto-update check tried to read the version number out of the downloaded file by looking for \"local VERSION = ...\" in plain text, but the published file is obfuscated and that text is never actually readable in it - so the check could never tell what version it downloaded, treated every single check as \"found a newer version\" because it genuinely could not read any version at all, and reloaded into the exact same problem every few seconds, forever. Fixed two ways: an unreadable version number is no longer treated as newer (it just does nothing instead), and the version number now also lives in plain text in this file's very top header, which the obfuscator never touches, so the check can actually read it from the real published file going forward.",
 "v2.17 - Added a second, independent defense against more than one menu window showing at once: on top of the unload-then-claim logic at the top of the script, it now actively hunts for and destroys any OTHER JHubGlass menu window wherever it could have landed, repeatedly for a while after load - so even if several copies manage to start at once for whatever reason on a given setup (more than one autoexec folder/queued copy firing together, or an executor that keeps a script's window alive as its own overlay between runs instead of actually ending it), only one of them survives within a second or two, every time, instead of relying on a single check at the very start.",
 "v2.16 - Fixed glides stuttering/lagging whenever the game takes your movement away mid-glide (no dribbles left, mid-gather, mid-shot): the fix in v2.10 paused the push correctly but kept the glide's own clock running while paused, so the moment movement came back it tried to cover the whole distance it missed in a single frame - that single-frame catch-up was the lag. Also removed GlideShotSafe completely (toggle and setting both gone, not just defaulted off) - this is the exact flag that has silently killed every speed boost and glide outright more than once now, most recently from a shared/imported config quietly turning it back on; there is no switch left that can ever re-enable it.",
@@ -13142,7 +13159,12 @@ if not Shot.hooked then
 		notify("Tap shoot", "Your executor cannot hook the game's shoot signal, so tap to shoot cannot work here.", 8)
 	end)
 end
-if S.AutoExec then pcall(Net.queueTeleport) task.spawn(function() task.wait(2) pcall(Net.autoExec, true) end) end
+-- re-pins the saved autoexec copy to whatever is actually running right now, every load, so it never stays stuck on
+-- an old version on disk - the guard matters specifically when the auto-update check (further below) finds a newer
+-- version: it tears this exact instance down and loads the new one in its place, and without the guard this still-
+-- pending resave would otherwise wake up moments later and overwrite the disk copy with this now-dead old version
+-- right after the new one already saved the correct one, putting the stale version right back
+if S.AutoExec then pcall(Net.queueTeleport) task.spawn(function() task.wait(2) if JH.Running then pcall(Net.autoExec, true) end end) end
 task.spawn(function()
 	Ball.rescan()
 	log(string.format("Scan: %d ball part(s) found", Ball.count()))
@@ -13243,7 +13265,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.18"
+local VERSION = "v2.19"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -24707,6 +24729,22 @@ do
 			return
 		end
 		notify("Update", "A newer version (" .. tostring(ver) .. ") was found, updating now...", 4)
+		-- re-save the autoexec/queued copy to this NEW version right now, immediately, instead of waiting for the
+		-- new instance to do its own delayed resave after reloading - there should be no moment where disk is
+		-- still holding the old version once a newer one is known to exist
+		if S.AutoExec then
+			pcall(function()
+				local code = "(getgenv and getgenv() or _G).JHUB_AUTOEXEC = true\n" .. src
+				for _, f in ipairs(Net.AUTOEXEC_FOLDERS) do
+					pcall(function()
+						if type(isfolder) == "function" and isfolder(f) then writefile(f .. "/" .. Net.AUTOEXEC_FILE, code) end
+					end)
+				end
+				pcall(FS.write, FS.root .. "/" .. Net.AUTOEXEC_FILE, src)
+				local q = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
+				if type(q) == "function" then pcall(q, code) end
+			end)
+		end
 		pcall(JH.Unload)
 		task.defer(fn)
 	end
@@ -25627,6 +25665,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.19 - Stopped an old version ever sitting on disk once a newer one exists. The auto-update check now rewrites the saved autoexec file (and the queued-teleport copy) to the new version immediately the moment it finds one, instead of waiting for the new instance to resave it a couple seconds after reloading - and the old instance's own pending resave now checks it is still actually running first, so a reload triggered mid-wait can no longer have the dying old copy put its old version right back on disk a moment after the new one just saved the correct one.",
 "v2.18 - Found why it was reloading itself non-stop for some people: v2.15's auto-update check tried to read the version number out of the downloaded file by looking for \"local VERSION = ...\" in plain text, but the published file is obfuscated and that text is never actually readable in it - so the check could never tell what version it downloaded, treated every single check as \"found a newer version\" because it genuinely could not read any version at all, and reloaded into the exact same problem every few seconds, forever. Fixed two ways: an unreadable version number is no longer treated as newer (it just does nothing instead), and the version number now also lives in plain text in this file's very top header, which the obfuscator never touches, so the check can actually read it from the real published file going forward.",
 "v2.17 - Added a second, independent defense against more than one menu window showing at once: on top of the unload-then-claim logic at the top of the script, it now actively hunts for and destroys any OTHER JHubGlass menu window wherever it could have landed, repeatedly for a while after load - so even if several copies manage to start at once for whatever reason on a given setup (more than one autoexec folder/queued copy firing together, or an executor that keeps a script's window alive as its own overlay between runs instead of actually ending it), only one of them survives within a second or two, every time, instead of relying on a single check at the very start.",
 "v2.16 - Fixed glides stuttering/lagging whenever the game takes your movement away mid-glide (no dribbles left, mid-gather, mid-shot): the fix in v2.10 paused the push correctly but kept the glide's own clock running while paused, so the moment movement came back it tried to cover the whole distance it missed in a single frame - that single-frame catch-up was the lag. Also removed GlideShotSafe completely (toggle and setting both gone, not just defaulted off) - this is the exact flag that has silently killed every speed boost and glide outright more than once now, most recently from a shared/imported config quietly turning it back on; there is no switch left that can ever re-enable it.",
@@ -26304,7 +26343,12 @@ if not Shot.hooked then
 		notify("Tap shoot", "Your executor cannot hook the game's shoot signal, so tap to shoot cannot work here.", 8)
 	end)
 end
-if S.AutoExec then pcall(Net.queueTeleport) task.spawn(function() task.wait(2) pcall(Net.autoExec, true) end) end
+-- re-pins the saved autoexec copy to whatever is actually running right now, every load, so it never stays stuck on
+-- an old version on disk - the guard matters specifically when the auto-update check (further below) finds a newer
+-- version: it tears this exact instance down and loads the new one in its place, and without the guard this still-
+-- pending resave would otherwise wake up moments later and overwrite the disk copy with this now-dead old version
+-- right after the new one already saved the correct one, putting the stale version right back
+if S.AutoExec then pcall(Net.queueTeleport) task.spawn(function() task.wait(2) if JH.Running then pcall(Net.autoExec, true) end end) end
 task.spawn(function()
 	Ball.rescan()
 	log(string.format("Scan: %d ball part(s) found", Ball.count()))
