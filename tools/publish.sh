@@ -43,10 +43,16 @@ check 'local AUTH_URL ='
 check 'UI.Card(OP, "Access control")'
 check 'control/enabled'
 check 'control/banned'
-check 'kind ~= "gather"'
+check 'GlideShotSafe'
 if [ "$fail" = "1" ]; then
 	echo "REFUSED: the access-gate (or the glide/speed fix) is missing from $SRC." >&2
 	echo "Do not hand-build a public release from a file that fails this check." >&2
+	exit 1
+fi
+# GlideShotSafe itself must only appear in the explanatory comment about why it was removed - never as a
+# live toggle or setting again, since that flag is exactly what has repeatedly broken glides/speed boost
+if grep -qE 'UI\.Toggle\([^)]*"GlideShotSafe"|^\s*GlideShotSafe\s*=|S\.GlideShotSafe\s*=' "$SRC"; then
+	echo "REFUSED: GlideShotSafe is back as a live toggle/setting in $SRC - this flag has repeatedly broken glides and speed boost and must stay removed, not just defaulted off." >&2
 	exit 1
 fi
 echo "ok: access-gate and glide/speed-fix markers present"

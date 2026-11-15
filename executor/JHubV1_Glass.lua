@@ -76,7 +76,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.15"
+local VERSION = "v2.16"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -233,7 +233,7 @@ local S = {
 LagSync = false, LagK = 2, PrecFit = false, PeakBin = 0.014, AdaptPlus = false, GreenMax = false,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = false, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-FadeNudge = 0, MagnetDelay = 120, AutoAdaptAll = false, InstantGreen = false, GlideShotSafe = true, LabOn = true,FamLead = "", SmartSteps = false, ContestShow = false, GuardSpeed = 0, GuardSpeedOn = false, OwnerCodeOK = false, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false, OutlineTrans = 0, OutlineCustomR = 255, OutlineCustomG = 255, OutlineCustomB = 255, AutoUpdate = true,
+FadeNudge = 0, MagnetDelay = 120, AutoAdaptAll = false, InstantGreen = false, LabOn = true,FamLead = "", SmartSteps = false, ContestShow = false, GuardSpeed = 0, GuardSpeedOn = false, OwnerCodeOK = false, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false, OutlineTrans = 0, OutlineCustomR = 255, OutlineCustomG = 255, OutlineCustomB = 255, AutoUpdate = true,
 	AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 	AGOnlyBall = true,
 	BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
@@ -381,7 +381,6 @@ if S.SettingsVer < 29 then S.Codes = DEFAULTS.Codes end
 if S.SettingsVer < 31 then S.LagSync, S.PrecFit, S.AdaptPlus = false, false, false end
 if S.SettingsVer < 32 then S.LagSync, S.PrecFit, S.AdaptPlus, S.GreenMax, S.Sweep = true, true, true, true, false end
 S.Sweep = false -- sweep stays off at all times; it deliberately misses to map timing, never wanted in real play
-S.GlideShotSafe = false -- was blocking shot/gather glide and all speed boosts outright; forced off until fixed
 if S.SettingsVer < 33 then S.FirstShot = false end
 if S.SettingsVer < 34 then S.CardTrans = 0.4 end
 if S.SettingsVer < 35 then
@@ -7017,31 +7016,8 @@ function Glide.start(kind, power, duration, dirOverride)
 			restoreAttr()
 			return "stop"
 		end
-		local c = char()
-		local locked = c and c:GetAttribute("CanMove") == false
-		if method == "Input" and token == Glide.token then
-			if locked and tick() - startedAt < 1.5 then
-				now = tick()
-				if Glide.input then
-					Glide.input.untilT = now + duration
-					Glide.input.paused = true
-				end
-				return nil
-			end
-			if Glide.input then Glide.input.paused = false end
-		end
-		local p = clamp((tick() - now) / duration, 0, 1)
 		local over = token ~= Glide.token or not r.Parent or not JH.Running
-		if method == "CFrame" and not over and not locked then
-			local want = power * duration * 0.8 * (2 * p - p * p)
-			local step = want - applied
-			if step > 0 and not Glide.blocked(r, dir, step) then
-				r.CFrame = r.CFrame + dir * step
-				applied = want
-				Mover.sync(r)
-			end
-		end
-		if over or p >= 1 then
+		if over then
 			finished = true
 			restoreAttr()
 			if token == Glide.token then
@@ -7051,9 +7027,36 @@ function Glide.start(kind, power, duration, dirOverride)
 			end
 			return "stop"
 		end
-		-- the game itself has taken away movement (e.g. no dribbles left, mid-gather, mid-shot): the glide
-		-- should not keep pushing you around while that is true, same as it already paused for Input
-		if locked and method ~= "Input" then return nil end
+		local c = char()
+		local locked = c and c:GetAttribute("CanMove") == false
+		if locked then
+			-- the game itself has taken movement away (no dribbles left, mid-gather, mid-shot, etc): pause the glide
+			-- entirely, including its own clock, same as it already did for the Input method specifically - keeping
+			-- the clock running while paused was the bug: the moment movement came back, a CFrame glide tried to
+			-- cover the whole distance it missed while paused in a single frame, which is what showed up as lag
+			now = tick()
+			if Glide.input then Glide.input.untilT = now + duration Glide.input.paused = true end
+			return nil
+		end
+		if Glide.input then Glide.input.paused = false end
+		local p = clamp((tick() - now) / duration, 0, 1)
+		if method == "CFrame" then
+			local want = power * duration * 0.8 * (2 * p - p * p)
+			local step = want - applied
+			if step > 0 and not Glide.blocked(r, dir, step) then
+				r.CFrame = r.CFrame + dir * step
+				applied = want
+				Mover.sync(r)
+			end
+		end
+		if p >= 1 then
+			finished = true
+			restoreAttr()
+			task.delay(0.15, function()
+				if token == Glide.token then pcall(Glide.judge, kind, method, startPos, dir, total, why) end
+			end)
+			return "stop"
+		end
 		local factor = 1.6 * (1 - p)
 		if method == "GameVel" then
 		local gpm = Mover.playerModule()
@@ -8910,7 +8913,6 @@ do
 		UI.Toggle(c, "Instant green (works at low FPS and high ping)", "InstantGreen")
 		UI.Toggle(c, "Smart steps (faster learning, no bouncing)", "SmartSteps")
 		UI.Toggle(c, "Show live open/contested feedback while dribbling", "ContestShow")
-		UI.Toggle(c, "Keep glides away from my shot", "GlideShotSafe")
 		UI.Buttons(c, { { "Copy my locked timings", function() local t = Shot.exportTimings() if setclipboard then setclipboard(t) end notify("Timings", t == "" and "Nothing locked yet" or "Copied to clipboard", 3) end } })
 		UI.Input(c, "Import timings", "ImportTimes", nil, "paste copied timings, then rejoin")
 		UI.Toggle(c, "Lag sync (follow my ping and FPS)", "LagSync")
@@ -9925,45 +9927,12 @@ do
 		return hold, base, mode
 	end
 end
--- GLIDES STAY OUT OF THE SHOT: nothing pushes you while the shoot button is held, and the shot glide waits until the release has gone out
-do
-	local baseShoot = Shot.onShootCall
-	function Shot.onShootCall(args)
-		local d = args[1]
-		if S.GlideShotSafe and type(d) == "table" then
-			if d.Shoot == true then
-				Mover.shotDownT = tick()
-				pcall(Glide.cancel)
-			elseif d.Shoot == false then
-				Mover.shotUpT = tick()
-			end
-		end
-		return baseShoot(args)
-	end
-	local function holding()
-return (Mover.shotDownT or 0) > (Mover.shotUpT or 0)
-	end
-	local baseFire = Glide.fire
-	function Glide.fire(kind, why, dir)
-		if S.GlideShotSafe then
-			local now = tick()
-			local c = char()
-			local act = c and c:GetAttribute("Action")
-			if kind ~= "shot" and kind ~= "gather" and (holding() or now - (Mover.shotUpT or 0) < 0.35 or act == "Shooting") then return end
-			if kind == "shot" and now - (Mover.shotUpT or 0) < 0.12 then
-				task.delay(0.12, function() if JH.Running then pcall(baseFire, kind, why, dir) end end)
-				return
-			end
-		end
-		return baseFire(kind, why, dir)
-	end
-	-- the speed boost also waits while the shoot button is held
-	local baseStep = Speed.step
-	function Speed.step(dt)
-		if S.GlideShotSafe and holding() then return end
-		return baseStep(dt)
-	end
-end
+-- "GLIDES STAY OUT OF THE SHOT" used to live here: a S.GlideShotSafe flag that paused every glide and the whole speed
+-- boost while the shoot button was held. It was the exact bug that once made shot/gather glide and every speed boost
+-- stop working outright - forced off by default back then, but the toggle for it still existed and a shared/loaded
+-- config could still silently turn it back on, which is exactly why speed boost and glides kept randomly breaking
+-- again for no visible reason. Removed entirely instead of just defaulting it off, so there is no switch left that
+-- can ever turn this back on again.
 -- SHOT LAB: records every shot you take with everything around it, gives live feedback, lists the game's shot animations, and copies a report
 do
 	local Lab = { rows = {}, stats = {} }
@@ -10028,7 +9997,7 @@ do
 	end
 	function Lab.report()
 		local lines = { "== JHub Shot Lab report ==", "version " .. tostring(VERSION) .. " | place " .. tostring(game.PlaceId) .. " | " .. tostring(JH.execName) .. " | " .. os.date("%Y-%m-%d %H:%M:%S") }
-		local keep = { "LagSync", "InstantGreen", "AutoAdaptAll", "FadeNudge", "AdaptPlus", "PrecFit", "GreenMax", "AutoCal", "AutoCalibrate", "CalSpeed", "PeakBin", "GlideShotSafe", "ShotGlideWhen", "ShotGlideMethod", "Sweep" }
+		local keep = { "LagSync", "InstantGreen", "AutoAdaptAll", "FadeNudge", "AdaptPlus", "PrecFit", "GreenMax", "AutoCal", "AutoCalibrate", "CalSpeed", "PeakBin", "ShotGlideWhen", "ShotGlideMethod", "Sweep" }
 		local st = {}
 		for _, k in ipairs(keep) do st[#st + 1] = k .. "=" .. tostring(S[k]) end
 		lines[#lines + 1] = "settings: " .. table.concat(st, " ")
@@ -12442,6 +12411,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.16 - Fixed glides stuttering/lagging whenever the game takes your movement away mid-glide (no dribbles left, mid-gather, mid-shot): the fix in v2.10 paused the push correctly but kept the glide's own clock running while paused, so the moment movement came back it tried to cover the whole distance it missed in a single frame - that single-frame catch-up was the lag. Also removed GlideShotSafe completely (toggle and setting both gone, not just defaulted off) - this is the exact flag that has silently killed every speed boost and glide outright more than once now, most recently from a shared/imported config quietly turning it back on; there is no switch left that can ever re-enable it.",
 "v2.15 - Found why fixes never seemed to reach some devices: once Auto Execute is turned on, it saves a frozen copy of whatever version was running at that exact moment and replays that same frozen copy forever on every later join - nothing ever checked GitHub again after that, so every fix shipped after someone turned Auto Execute on never reached them, update button or not. Every load now checks GitHub a few seconds after opening (never delaying the menu) and silently updates itself if a newer version exists, auto-executed or not. Turn it off on the Updates card if you don't want that.",
 "v2.14 - Ultra Auto Calibrate now shares timing per shot FAMILY across the network too (every jumpshot together, every fade together, every step back together, etc), not just exact-shot locks - so a jumpshot literally nobody has ever taken yet still starts from everyone's combined experience with that whole style of shot instead of a blind guess, the moment it's ever played for the first time anywhere. An exact-shot lock, local or shared, always takes over the instant one exists.",
 "v2.13 - Fixed loading several copies of the menu at once on some setups. A second (or third, or seventh) copy starting at almost the same moment as the first used to pass right by the check that is supposed to close the previous copy, because that check ran before a wait that let every copy race ahead together, and only the very last one to finish actually took over the slot - so every other one it ran past stayed open as its own full, live menu. The slot is now claimed the instant the check runs, before anything that can cause that race, so only one copy ever stays open no matter how many start up together.",
@@ -13217,7 +13187,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.15"
+local VERSION = "v2.16"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -13374,7 +13344,7 @@ local S = {
 LagSync = false, LagK = 2, PrecFit = false, PeakBin = 0.014, AdaptPlus = false, GreenMax = false,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = false, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-FadeNudge = 0, MagnetDelay = 120, AutoAdaptAll = false, InstantGreen = false, GlideShotSafe = true, LabOn = true,FamLead = "", SmartSteps = false, ContestShow = false, GuardSpeed = 0, GuardSpeedOn = false, OwnerCodeOK = false, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false, OutlineTrans = 0, OutlineCustomR = 255, OutlineCustomG = 255, OutlineCustomB = 255, AutoUpdate = true,
+FadeNudge = 0, MagnetDelay = 120, AutoAdaptAll = false, InstantGreen = false, LabOn = true,FamLead = "", SmartSteps = false, ContestShow = false, GuardSpeed = 0, GuardSpeedOn = false, OwnerCodeOK = false, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false, OutlineTrans = 0, OutlineCustomR = 255, OutlineCustomG = 255, OutlineCustomB = 255, AutoUpdate = true,
 	AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 	AGOnlyBall = true,
 	BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
@@ -13522,7 +13492,6 @@ if S.SettingsVer < 29 then S.Codes = DEFAULTS.Codes end
 if S.SettingsVer < 31 then S.LagSync, S.PrecFit, S.AdaptPlus = false, false, false end
 if S.SettingsVer < 32 then S.LagSync, S.PrecFit, S.AdaptPlus, S.GreenMax, S.Sweep = true, true, true, true, false end
 S.Sweep = false -- sweep stays off at all times; it deliberately misses to map timing, never wanted in real play
-S.GlideShotSafe = false -- was blocking shot/gather glide and all speed boosts outright; forced off until fixed
 if S.SettingsVer < 33 then S.FirstShot = false end
 if S.SettingsVer < 34 then S.CardTrans = 0.4 end
 if S.SettingsVer < 35 then
@@ -20158,31 +20127,8 @@ function Glide.start(kind, power, duration, dirOverride)
 			restoreAttr()
 			return "stop"
 		end
-		local c = char()
-		local locked = c and c:GetAttribute("CanMove") == false
-		if method == "Input" and token == Glide.token then
-			if locked and tick() - startedAt < 1.5 then
-				now = tick()
-				if Glide.input then
-					Glide.input.untilT = now + duration
-					Glide.input.paused = true
-				end
-				return nil
-			end
-			if Glide.input then Glide.input.paused = false end
-		end
-		local p = clamp((tick() - now) / duration, 0, 1)
 		local over = token ~= Glide.token or not r.Parent or not JH.Running
-		if method == "CFrame" and not over and not locked then
-			local want = power * duration * 0.8 * (2 * p - p * p)
-			local step = want - applied
-			if step > 0 and not Glide.blocked(r, dir, step) then
-				r.CFrame = r.CFrame + dir * step
-				applied = want
-				Mover.sync(r)
-			end
-		end
-		if over or p >= 1 then
+		if over then
 			finished = true
 			restoreAttr()
 			if token == Glide.token then
@@ -20192,9 +20138,36 @@ function Glide.start(kind, power, duration, dirOverride)
 			end
 			return "stop"
 		end
-		-- the game itself has taken away movement (e.g. no dribbles left, mid-gather, mid-shot): the glide
-		-- should not keep pushing you around while that is true, same as it already paused for Input
-		if locked and method ~= "Input" then return nil end
+		local c = char()
+		local locked = c and c:GetAttribute("CanMove") == false
+		if locked then
+			-- the game itself has taken movement away (no dribbles left, mid-gather, mid-shot, etc): pause the glide
+			-- entirely, including its own clock, same as it already did for the Input method specifically - keeping
+			-- the clock running while paused was the bug: the moment movement came back, a CFrame glide tried to
+			-- cover the whole distance it missed while paused in a single frame, which is what showed up as lag
+			now = tick()
+			if Glide.input then Glide.input.untilT = now + duration Glide.input.paused = true end
+			return nil
+		end
+		if Glide.input then Glide.input.paused = false end
+		local p = clamp((tick() - now) / duration, 0, 1)
+		if method == "CFrame" then
+			local want = power * duration * 0.8 * (2 * p - p * p)
+			local step = want - applied
+			if step > 0 and not Glide.blocked(r, dir, step) then
+				r.CFrame = r.CFrame + dir * step
+				applied = want
+				Mover.sync(r)
+			end
+		end
+		if p >= 1 then
+			finished = true
+			restoreAttr()
+			task.delay(0.15, function()
+				if token == Glide.token then pcall(Glide.judge, kind, method, startPos, dir, total, why) end
+			end)
+			return "stop"
+		end
 		local factor = 1.6 * (1 - p)
 		if method == "GameVel" then
 		local gpm = Mover.playerModule()
@@ -22051,7 +22024,6 @@ do
 		UI.Toggle(c, "Instant green (works at low FPS and high ping)", "InstantGreen")
 		UI.Toggle(c, "Smart steps (faster learning, no bouncing)", "SmartSteps")
 		UI.Toggle(c, "Show live open/contested feedback while dribbling", "ContestShow")
-		UI.Toggle(c, "Keep glides away from my shot", "GlideShotSafe")
 		UI.Buttons(c, { { "Copy my locked timings", function() local t = Shot.exportTimings() if setclipboard then setclipboard(t) end notify("Timings", t == "" and "Nothing locked yet" or "Copied to clipboard", 3) end } })
 		UI.Input(c, "Import timings", "ImportTimes", nil, "paste copied timings, then rejoin")
 		UI.Toggle(c, "Lag sync (follow my ping and FPS)", "LagSync")
@@ -23066,45 +23038,12 @@ do
 		return hold, base, mode
 	end
 end
--- GLIDES STAY OUT OF THE SHOT: nothing pushes you while the shoot button is held, and the shot glide waits until the release has gone out
-do
-	local baseShoot = Shot.onShootCall
-	function Shot.onShootCall(args)
-		local d = args[1]
-		if S.GlideShotSafe and type(d) == "table" then
-			if d.Shoot == true then
-				Mover.shotDownT = tick()
-				pcall(Glide.cancel)
-			elseif d.Shoot == false then
-				Mover.shotUpT = tick()
-			end
-		end
-		return baseShoot(args)
-	end
-	local function holding()
-return (Mover.shotDownT or 0) > (Mover.shotUpT or 0)
-	end
-	local baseFire = Glide.fire
-	function Glide.fire(kind, why, dir)
-		if S.GlideShotSafe then
-			local now = tick()
-			local c = char()
-			local act = c and c:GetAttribute("Action")
-			if kind ~= "shot" and kind ~= "gather" and (holding() or now - (Mover.shotUpT or 0) < 0.35 or act == "Shooting") then return end
-			if kind == "shot" and now - (Mover.shotUpT or 0) < 0.12 then
-				task.delay(0.12, function() if JH.Running then pcall(baseFire, kind, why, dir) end end)
-				return
-			end
-		end
-		return baseFire(kind, why, dir)
-	end
-	-- the speed boost also waits while the shoot button is held
-	local baseStep = Speed.step
-	function Speed.step(dt)
-		if S.GlideShotSafe and holding() then return end
-		return baseStep(dt)
-	end
-end
+-- "GLIDES STAY OUT OF THE SHOT" used to live here: a S.GlideShotSafe flag that paused every glide and the whole speed
+-- boost while the shoot button was held. It was the exact bug that once made shot/gather glide and every speed boost
+-- stop working outright - forced off by default back then, but the toggle for it still existed and a shared/loaded
+-- config could still silently turn it back on, which is exactly why speed boost and glides kept randomly breaking
+-- again for no visible reason. Removed entirely instead of just defaulting it off, so there is no switch left that
+-- can ever turn this back on again.
 -- SHOT LAB: records every shot you take with everything around it, gives live feedback, lists the game's shot animations, and copies a report
 do
 	local Lab = { rows = {}, stats = {} }
@@ -23169,7 +23108,7 @@ do
 	end
 	function Lab.report()
 		local lines = { "== JHub Shot Lab report ==", "version " .. tostring(VERSION) .. " | place " .. tostring(game.PlaceId) .. " | " .. tostring(JH.execName) .. " | " .. os.date("%Y-%m-%d %H:%M:%S") }
-		local keep = { "LagSync", "InstantGreen", "AutoAdaptAll", "FadeNudge", "AdaptPlus", "PrecFit", "GreenMax", "AutoCal", "AutoCalibrate", "CalSpeed", "PeakBin", "GlideShotSafe", "ShotGlideWhen", "ShotGlideMethod", "Sweep" }
+		local keep = { "LagSync", "InstantGreen", "AutoAdaptAll", "FadeNudge", "AdaptPlus", "PrecFit", "GreenMax", "AutoCal", "AutoCalibrate", "CalSpeed", "PeakBin", "ShotGlideWhen", "ShotGlideMethod", "Sweep" }
 		local st = {}
 		for _, k in ipairs(keep) do st[#st + 1] = k .. "=" .. tostring(S[k]) end
 		lines[#lines + 1] = "settings: " .. table.concat(st, " ")
@@ -25583,6 +25522,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.16 - Fixed glides stuttering/lagging whenever the game takes your movement away mid-glide (no dribbles left, mid-gather, mid-shot): the fix in v2.10 paused the push correctly but kept the glide's own clock running while paused, so the moment movement came back it tried to cover the whole distance it missed in a single frame - that single-frame catch-up was the lag. Also removed GlideShotSafe completely (toggle and setting both gone, not just defaulted off) - this is the exact flag that has silently killed every speed boost and glide outright more than once now, most recently from a shared/imported config quietly turning it back on; there is no switch left that can ever re-enable it.",
 "v2.15 - Found why fixes never seemed to reach some devices: once Auto Execute is turned on, it saves a frozen copy of whatever version was running at that exact moment and replays that same frozen copy forever on every later join - nothing ever checked GitHub again after that, so every fix shipped after someone turned Auto Execute on never reached them, update button or not. Every load now checks GitHub a few seconds after opening (never delaying the menu) and silently updates itself if a newer version exists, auto-executed or not. Turn it off on the Updates card if you don't want that.",
 "v2.14 - Ultra Auto Calibrate now shares timing per shot FAMILY across the network too (every jumpshot together, every fade together, every step back together, etc), not just exact-shot locks - so a jumpshot literally nobody has ever taken yet still starts from everyone's combined experience with that whole style of shot instead of a blind guess, the moment it's ever played for the first time anywhere. An exact-shot lock, local or shared, always takes over the instant one exists.",
 "v2.13 - Fixed loading several copies of the menu at once on some setups. A second (or third, or seventh) copy starting at almost the same moment as the first used to pass right by the check that is supposed to close the previous copy, because that check ran before a wait that let every copy race ahead together, and only the very last one to finish actually took over the slot - so every other one it ran past stayed open as its own full, live menu. The slot is now claimed the instant the check runs, before anything that can cause that race, so only one copy ever stays open no matter how many start up together.",
