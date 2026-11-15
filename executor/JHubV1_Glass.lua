@@ -59,7 +59,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.08"
+local VERSION = "v2.09"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -336,6 +336,11 @@ if S.SettingsVer < 13 then
 	S.ShotTimes = table.concat(parts, " ")
 end
 S.AutoCal = S.AutoGreen ~= false
+-- Ultra Auto Calibrate is meant to be the strongest version of the learner: keep the upgrade flags
+-- it relies on in sync with it, including on a fresh install where it defaults on
+if S.AutoCalibrate then
+	for _, k in ipairs({ "AdaptPlus", "SmartSteps", "AutoAdaptAll", "AllJumpers", "LagSync", "PrecFit" }) do S[k] = true end
+end
 S.Learn = S.AutoCal
 if S.PerfectGreen == nil then S.PerfectGreen = false end
 if S.PeakLead == nil then S.PeakLead = 0.027 end
@@ -6436,8 +6441,15 @@ do
 	end
 
 	local cal = UI.Card(P, "Ultra Auto Calibrate")
-	UI.Toggle(cal, "Ultra Auto Calibrate", "AutoCalibrate")
+	UI.Toggle(cal, "Ultra Auto Calibrate", "AutoCalibrate", function(v)
+		-- this is meant to be the strongest version of the learner, not just the plain one - bring in the
+		-- same upgrades Auto Green MAX uses (faster/centered convergence, smarter step sizing, shared learning
+		-- across every shot and jumper) so turning this on actually does something real, not just gate the
+		-- basic learner on its own
+		for _, k in ipairs({ "AdaptPlus", "SmartSteps", "AutoAdaptAll", "AllJumpers", "LagSync", "PrecFit" }) do UI.set(k, v, false) end
+	end)
 	UI.Slider(cal, "Learn speed (10 = near instant)", "CalSpeed", 0.1, 10, 0.1, 1)
+	UI.Note(cal, "Turning this on also turns on the faster/centered learning, smarter step sizing, and shared learning across every jumper that Auto Green MAX uses - this is the strongest the learner gets.")
 	UI.Button(cal, "Forget learned animations", function()
 		Shot.autoReset()
 		notify("Auto Green", "Learned animations cleared", 2)
@@ -12384,6 +12396,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.09 - Ultra Auto Calibrate turning on now also turns on the same faster/centered learning, smarter step sizing, and shared-across-every-jumper learning that Auto Green MAX uses, instead of gating only the plain/basic learner - it is meant to be the strongest version and now actually is, including on a fresh install where it defaults on",
 "v2.08 - fixed Auto Guard speed boost being a separate thing from the other speed boosts with no switch of its own, so it could add speed even with everything else off (new Guard speed boost toggle); found why loading the script twice gave two menus and heavy lag - the old copy's cleanup only existed once it finished loading, so a second load mid-startup could not find it and left the first copy fully running underneath - it now exists from the very first moment the script creates itself, so any second load can always stop the first one's loops immediately; the Owner code only needs to be entered once now, not for every single action; lowered the glide power/speed sliders so their lowest setting can actually reach near enough to nothing. If speed boost or guard speed still feels strong on low graphics, check the \"Low settings fix\" toggle on the Players tab - it deliberately adds up to 25% more boost on low graphics on purpose and can be turned off",
 "v2.07 - merged with the x86h7a branch's fixes: GlideShotSafe was gating Glide.fire and Speed.step behind a shoot-held check that could stick true, silently killing Shot Glide, Gather Step Glide, and every speed boost (walk/run/ball) together - forced off, and fixed Gather Step Glide being grouped with Dribble Glide in that gate's block list. Also added a server check-in before anything loads (Firebase control/enabled, control/banned) plus an Access control card in the Owner tab for a remote kill switch and block/unblock by name",
 "v2.05 - shooting restored to the v1.36 behaviour, confirmed Perfect sharing, Green Sounds length check",
@@ -13071,7 +13084,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.08"
+local VERSION = "v2.09"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -13348,6 +13361,11 @@ if S.SettingsVer < 13 then
 	S.ShotTimes = table.concat(parts, " ")
 end
 S.AutoCal = S.AutoGreen ~= false
+-- Ultra Auto Calibrate is meant to be the strongest version of the learner: keep the upgrade flags
+-- it relies on in sync with it, including on a fresh install where it defaults on
+if S.AutoCalibrate then
+	for _, k in ipairs({ "AdaptPlus", "SmartSteps", "AutoAdaptAll", "AllJumpers", "LagSync", "PrecFit" }) do S[k] = true end
+end
 S.Learn = S.AutoCal
 if S.PerfectGreen == nil then S.PerfectGreen = false end
 if S.PeakLead == nil then S.PeakLead = 0.027 end
@@ -19448,8 +19466,15 @@ do
 	end
 
 	local cal = UI.Card(P, "Ultra Auto Calibrate")
-	UI.Toggle(cal, "Ultra Auto Calibrate", "AutoCalibrate")
+	UI.Toggle(cal, "Ultra Auto Calibrate", "AutoCalibrate", function(v)
+		-- this is meant to be the strongest version of the learner, not just the plain one - bring in the
+		-- same upgrades Auto Green MAX uses (faster/centered convergence, smarter step sizing, shared learning
+		-- across every shot and jumper) so turning this on actually does something real, not just gate the
+		-- basic learner on its own
+		for _, k in ipairs({ "AdaptPlus", "SmartSteps", "AutoAdaptAll", "AllJumpers", "LagSync", "PrecFit" }) do UI.set(k, v, false) end
+	end)
 	UI.Slider(cal, "Learn speed (10 = near instant)", "CalSpeed", 0.1, 10, 0.1, 1)
+	UI.Note(cal, "Turning this on also turns on the faster/centered learning, smarter step sizing, and shared learning across every jumper that Auto Green MAX uses - this is the strongest the learner gets.")
 	UI.Button(cal, "Forget learned animations", function()
 		Shot.autoReset()
 		notify("Auto Green", "Learned animations cleared", 2)
@@ -25396,6 +25421,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.09 - Ultra Auto Calibrate turning on now also turns on the same faster/centered learning, smarter step sizing, and shared-across-every-jumper learning that Auto Green MAX uses, instead of gating only the plain/basic learner - it is meant to be the strongest version and now actually is, including on a fresh install where it defaults on",
 "v2.08 - fixed Auto Guard speed boost being a separate thing from the other speed boosts with no switch of its own, so it could add speed even with everything else off (new Guard speed boost toggle); found why loading the script twice gave two menus and heavy lag - the old copy's cleanup only existed once it finished loading, so a second load mid-startup could not find it and left the first copy fully running underneath - it now exists from the very first moment the script creates itself, so any second load can always stop the first one's loops immediately; the Owner code only needs to be entered once now, not for every single action; lowered the glide power/speed sliders so their lowest setting can actually reach near enough to nothing. If speed boost or guard speed still feels strong on low graphics, check the \"Low settings fix\" toggle on the Players tab - it deliberately adds up to 25% more boost on low graphics on purpose and can be turned off",
 "v2.07 - merged with the x86h7a branch's fixes: GlideShotSafe was gating Glide.fire and Speed.step behind a shoot-held check that could stick true, silently killing Shot Glide, Gather Step Glide, and every speed boost (walk/run/ball) together - forced off, and fixed Gather Step Glide being grouped with Dribble Glide in that gate's block list. Also added a server check-in before anything loads (Firebase control/enabled, control/banned) plus an Access control card in the Owner tab for a remote kill switch and block/unblock by name",
 "v2.05 - shooting restored to the v1.36 behaviour, confirmed Perfect sharing, Green Sounds length check",
