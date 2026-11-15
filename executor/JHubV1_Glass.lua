@@ -52,7 +52,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.98"
+local VERSION = "v1.99"
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
 local function cam() return workspace.CurrentCamera end
@@ -145,7 +145,7 @@ ShotGlideMethod = "GameVel", ShotGlideWhen = "After release", NoStun = false, St
 LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false,
+FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false, OutlineTrans = 0, OutlineCustomR = 255, OutlineCustomG = 255, OutlineCustomB = 255,
 AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 AGOnlyBall = true,
 BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
@@ -320,7 +320,7 @@ local OUTLINE_COLORS = {
 White = Color3.new(1, 1, 1), Cyan = Color3.fromRGB(120, 235, 255), Pink = Color3.fromRGB(255, 150, 220),
 Gold = Color3.fromRGB(255, 225, 120), Lime = Color3.fromRGB(170, 255, 140),
 }
-local OUTLINE_NAMES = { "White", "Cyan", "Pink", "Gold", "Lime", "Rainbow" }
+local OUTLINE_NAMES = { "White", "Cyan", "Pink", "Gold", "Lime", "Rainbow", "Custom" }
 local TEXT_NAMES = { "White", "Ice", "Gold", "Mint" }
 local FONTS = {
 Gotham = { "Gotham", "GothamBold" }, Montserrat = { "Montserrat", "MontserratBold" },
@@ -338,7 +338,7 @@ Theme.Elem = Color3.fromHSV(h, S.Sat, math.max(S.Val - 0.3, 0.08))
 Theme.Stroke = Color3.fromHSV(h, 0.9, 0.18)
 Theme.Text = TEXT_COLORS[S.TextColor] or WHITE
 Theme.Sub = Theme.Text:Lerp(Theme.Glass, 0.28)
-Theme.Outline = OUTLINE_COLORS[S.OutlineColor] or WHITE
+Theme.Outline = S.OutlineColor == "Custom" and Color3.fromRGB(S.OutlineCustomR or 255, S.OutlineCustomG or 255, S.OutlineCustomB or 255) or (OUTLINE_COLORS[S.OutlineColor] or WHITE)
 Theme.AccentA = Color3.fromHSV(h, 0.2, 1)
 Theme.AccentB = Color3.fromHSV(((S.Hue - 28) % 360) / 360, 0.75, 1)
 if S.AccentMode ~= "Match hue" then
@@ -5365,7 +5365,7 @@ SheenGrad.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.84
 NumberSequenceKeypoint.new(1, 1) })
 MainStroke.Thickness = S.OutlineThick
 MainStroke.Color = Theme.Outline
-MainStroke.Transparency = 0
+MainStroke.Transparency = S.OutlineTrans or 0
 local clear = S.OutlineShine and 0.55 or 0
 StrokeGrad.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.5, clear),
 NumberSequenceKeypoint.new(1, 0) })
@@ -6066,7 +6066,20 @@ notify("Auto Green", "Learned animations cleared", 2)
 end)
 local at = UI.Card(P, "Auto Timing")
 UI.Toggle(at, "Auto Timing", "AutoTiming")
-UI.Slider(at, "Ping compensation", "PingComp", 0, 100, 5, 0, "%")
+local sgs = UI.Card(P, "Shot Green Stabilizer")
+local sgsStatus = UI.Stat(sgs, "Status")
+UI.Note(sgs, "Helps with high ping, 50ms and above. Does nothing for low ping. Always on, not an option to turn off.")
+task.spawn(function()
+while true do
+local p, c = JH.StabilizerPing or 0, JH.StabilizerComp or 0
+if p >= 50 then
+sgsStatus.Text = string.format("Active - %.0f ms ping, compensating %.0f%%", p, c)
+else
+sgsStatus.Text = string.format("Idle - %.0f ms ping, no compensation needed", p)
+end
+task.wait(1)
+end
+end)
 local rs = UI.Card(P, "Restore")
 UI.Button(rs, "Restore to default", function()
 UI.restore({ "AutoGreen", "ShotStyle", "HoldTime", "Nudge", "Learn", "PerfectGreen", "PerfectGreenPct", "AutoCalibrate", "CalSpeed", "AutoTiming", "PingComp", "ShotTimes",
@@ -6170,6 +6183,10 @@ local ol = UI.Card(P, "Outline")
 UI.Dropdown(ol, "Outline color", "OutlineColor", OUTLINE_NAMES, function() UI.applyTheme() end)
 UI.Slider(ol, "Outline thickness", "OutlineThick", 0, 6, 0.5, 1, nil, function() UI.applyWindow() end)
 UI.Toggle(ol, "Moving outline shine", "OutlineShine", function() UI.applyWindow() end)
+UI.Slider(ol, "Outline transparency (translucent/see-through)", "OutlineTrans", 0, 1, 0.05, 2, nil, function() UI.applyWindow() end)
+UI.Slider(ol, "Custom color - red (pick Custom above to use this)", "OutlineCustomR", 0, 255, 1, 0, nil, function() UI.applyTheme() end)
+UI.Slider(ol, "Custom color - green", "OutlineCustomG", 0, 255, 1, 0, nil, function() UI.applyTheme() end)
+UI.Slider(ol, "Custom color - blue", "OutlineCustomB", 0, 255, 1, 0, nil, function() UI.applyTheme() end)
 local tx = UI.Card(P, "Text")
 UI.Dropdown(tx, "Text color", "TextColor", TEXT_NAMES, function() UI.applyTheme() end)
 UI.Toggle(tx, "Dark text outline", "TextStroke", function() UI.applyTheme() end)
@@ -7953,7 +7970,7 @@ do
 local AG_CODE = "6022"
 local typed = ""
 local lock = UI.Card(GP, "Auto Guard (locked)")
-UI.Input(lock, "Code", { get = function() return typed end, set = function(v) typed = tostring(v or "") end }, nil, "enter the code")
+local codeBox = UI.Input(lock, "Code", { get = function() return typed end, set = function(v) typed = tostring(v or "") end }, nil, "enter the code")
 UI.Note(lock, "Auto Guard is locked. Enter the code to open it.")
 local contentFrames = {}
 JH.AGContentFrames = contentFrames
@@ -7973,6 +7990,8 @@ notify("Auto Guard", "Unlocked", 3)
 else
 notify("Auto Guard", "Wrong code", 3)
 end
+typed = ""
+if codeBox then codeBox.Text = "" end
 end, true)
 local g1 = UI.Card(GP, "Auto guard")
 g1.frame.Visible = false
@@ -7997,7 +8016,7 @@ local g2 = UI.Card(GP, "Auto block")
 g2.frame.Visible = false
 contentFrames[#contentFrames + 1] = g2.frame
 UI.Toggle(g2, "Auto block", "AB")
-UI.Slider(g2, "Block range", "ABRange", 4, 30, 1, 0, " studs")
+UI.Slider(g2, "Block range (higher = always attempts a jump even far away, lower = instant jump up close)", "ABRange", 4, 30, 1, 0, " studs")
 UI.Slider(g2, "Block timing (delay after the shot starts)", "ABDelay", 0, 0.5, 0.01, 2, "s")
 UI.Slider(g2, "Block chance", "ABChance", 0, 100, 5, 0, "%")
 UI.Keybind(g2, "Block / jump key", function() return S.ABKey end, function(v) S.ABKey = (v ~= "" and v) or "Space" end)
@@ -9783,7 +9802,7 @@ end
 local typed = ""
 local lock = UI.Card(LP, "Locked")
 lock.frame.Size = UDim2.new(0.5, -4, 0, 0)
-UI.Input(lock, "Code", { get = function() return typed end, set = function(v) typed = tostring(v or "") end }, nil, "enter the code")
+local codeBox = UI.Input(lock, "Code", { get = function() return typed end, set = function(v) typed = tostring(v or "") end }, nil, "enter the code")
 local function unlockLocked()
 for i, f in ipairs(tools) do
 f.Parent = LP.frame
@@ -9803,6 +9822,8 @@ notify("Locked tab", "Unlocked", 3)
 else
 notify("Locked tab", "Wrong code", 3)
 end
+typed = ""
+if codeBox then codeBox.Text = "" end
 end, true)
 UI.Note(lock, "Everything in this tab is locked. Enter the code to open it.")
 end
@@ -9816,7 +9837,7 @@ if mainPage then
 local OP = UI.Page("Owner", "O")
 local typed2 = ""
 local lock2 = UI.Card(OP, "Owner")
-UI.Input(lock2, "Code", { get = function() return typed2 end, set = function(v) typed2 = tostring(v or "") end }, nil, "enter the code")
+local lock2Box = UI.Input(lock2, "Code", { get = function() return typed2 end, set = function(v) typed2 = tostring(v or "") end }, nil, "enter the code")
 local rolesCard = UI.Card(OP, "Chat roles")
 rolesCard.frame.Visible = false
 local existing = JH.roles or {}
@@ -9838,7 +9859,7 @@ JH.roles = roles
 if JH.netPut then task.spawn(JH.netPut, "roles", roles) end
 end
 UI.Input(rolesCard, "Owners (comma separated - gold text, crown, #owner)", { get = function() return ownersList end, set = function(v) ownersList = tostring(v or "") end }, nil, "name1, name2")
-UI.Input(rolesCard, "Owner code (only needed to add/change an Owner)", { get = function() return ownerCode end, set = function(v) ownerCode = tostring(v or "") end }, nil, "required to touch the Owners list")
+local ownerCodeBox = UI.Input(rolesCard, "Owner code (only needed to add/change an Owner)", { get = function() return ownerCode end, set = function(v) ownerCode = tostring(v or "") end }, nil, "required to touch the Owners list")
 UI.Input(rolesCard, "Co-Owners (comma separated player names)", { get = function() return devsList end, set = function(v) devsList = tostring(v or "") end }, nil, "name1, name2")
 UI.Input(rolesCard, "Mods (comma separated player names)", { get = function() return modsList end, set = function(v) modsList = tostring(v or "") end }, nil, "name1, name2")
 UI.Button(rolesCard, "Add me as Owner", function()
@@ -9846,6 +9867,8 @@ if string.lower(string.gsub(ownerCode, "%s", "")) == "jay" then
 ownersList = addName(ownersList, Players.LocalPlayer.Name)
 pushRoles(ownersList)
 notify("Owner tab", "Added you as Owner and pushed to everyone.", 4)
+ownerCode = ""
+if ownerCodeBox then ownerCodeBox.Text = "" end
 else
 notify("Owner tab", "Wrong owner code.", 3)
 end
@@ -9859,6 +9882,47 @@ UI.Button(rolesCard, "Add me as Mod", function()
 modsList = addName(modsList, Players.LocalPlayer.Name)
 pushRoles(ownersList)
 notify("Owner tab", "Added you as Mod and pushed to everyone.", 4)
+end)
+local pickedName = ""
+local peopleList = new("ScrollingFrame", { Size = UDim2.new(1, 0, 0, 90), BackgroundTransparency = 1, ScrollBarThickness = 3,
+CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, LayoutOrder = nextOrder(rolesCard), Parent = rolesCard.frame })
+new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder, Parent = peopleList })
+local pickedLabel = UI.Stat(rolesCard, "Picked")
+task.spawn(function()
+while true do
+for _, c in ipairs(peopleList:GetChildren()) do if c:IsA("TextButton") then c:Destroy() end end
+for i, row in ipairs(JH.presenceData or {}) do
+local b = new("TextButton", { Text = row.name, Size = UDim2.new(1, 0, 0, 18), BackgroundTransparency = 1, TextSize = 12,
+TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = i, Parent = peopleList })
+UI.th(b, "TextColor3", "Text")
+b.Activated:Connect(function() pickedName = row.name pickedLabel.Text = row.name end)
+end
+task.wait(3)
+end
+end)
+UI.Button(rolesCard, "Add picked as Owner", function()
+if pickedName == "" then notify("Owner tab", "Click a name from the list first", 3) return end
+if string.lower(string.gsub(ownerCode, "%s", "")) == "jay" then
+ownersList = addName(ownersList, pickedName)
+pushRoles(ownersList)
+notify("Owner tab", "Added " .. pickedName .. " as Owner.", 4)
+ownerCode = ""
+if ownerCodeBox then ownerCodeBox.Text = "" end
+else
+notify("Owner tab", "Wrong owner code.", 3)
+end
+end)
+UI.Button(rolesCard, "Add picked as Co-Owner", function()
+if pickedName == "" then notify("Owner tab", "Click a name from the list first", 3) return end
+devsList = addName(devsList, pickedName)
+pushRoles(ownersList)
+notify("Owner tab", "Added " .. pickedName .. " as Co-Owner.", 4)
+end)
+UI.Button(rolesCard, "Add picked as Mod", function()
+if pickedName == "" then notify("Owner tab", "Click a name from the list first", 3) return end
+modsList = addName(modsList, pickedName)
+pushRoles(ownersList)
+notify("Owner tab", "Added " .. pickedName .. " as Mod.", 4)
 end)
 UI.Button(rolesCard, "Save and push to everyone", function()
 local cur = JH.roles or {}
@@ -9876,11 +9940,13 @@ end
 ownerCode = ""
 pushRoles(newOwners)
 notify("Owner tab", "Roles saved and pushed - everyone's JHub Chat will show the badges.", 4)
+ownerCode = ""
+if ownerCodeBox then ownerCodeBox.Text = "" end
 end, true)
 UI.Note(rolesCard, "Anyone named here gets a badge next to their name in JHub Chat for everyone - Owners get a gold crown and #owner, Co-Owners/Mods get their own tag. Multiple people can hold each role. Adding or changing an Owner needs the Owner code; Co-Owner/Mod only need the tab code. 'Add me as...' fills in your own player name for you.")
 local annCard = UI.Card(OP, "Announcement")
 local annText = ""
-UI.Input(annCard, "Message (pops up at the top of everyone's screen)", { get = function() return annText end, set = function(v) annText = tostring(v or "") end }, nil, "type an announcement")
+local annBox = UI.Input(annCard, "Message (pops up at the top of everyone's screen)", { get = function() return annText end, set = function(v) annText = tostring(v or "") end }, nil, "type an announcement")
 UI.Button(annCard, "Post to everyone", function()
 local roles = JH.roles or {}
 local me = Players.LocalPlayer.Name
@@ -9894,6 +9960,7 @@ if JH.netPut then
 task.spawn(JH.netPut, "announcement", { text = string.sub(annText, 1, 200), by = me, t = os.time() })
 end
 annText = ""
+if annBox then annBox.Text = "" end
 notify("Announcement", "Posted to everyone.", 3)
 end, true)
 UI.Note(annCard, "Only someone currently listed as Owner, Co-Owner or Mod above can actually post - the button checks your real name against those lists, not just whether you have the tab code.")
@@ -9913,6 +9980,8 @@ notify("Owner tab", "Unlocked", 3)
 else
 notify("Owner tab", "Wrong code", 3)
 end
+typed2 = ""
+if lock2Box then lock2Box.Text = "" end
 end, true)
 UI.Note(lock2, "Owner-only tab. Enter the code to manage chat crown/dev/mod badges.")
 end
@@ -10492,16 +10561,21 @@ end
 function Bot.blockStep(others, me)
 if not S.AB then return end
 local now = tick()
+-- Block range doubles as an aggressiveness dial: maxed out, it attempts a jump on every real shot even from way
+-- out (not going to block it, but that is the setting asked for); minimized, it only reacts to someone right next
+-- to you but does so almost instantly instead of waiting out the normal delay.
+local aggroFrac = clamp((S.ABRange - 4) / (30 - 4), 0, 1)
 for _, o in ipairs(others) do
 if not o.mate then
 local was = Bot.shotSeen[o.c]
 Bot.shotSeen[o.c] = o.shooting
 if o.shooting and not was and now - Bot.blockT > 0.9 then
 local dist = flat(o.pos - me).Magnitude
-if dist <= S.ABRange and math.random(100) <= S.ABChance then
+if (dist <= S.ABRange or aggroFrac >= 0.95) and math.random(100) <= S.ABChance then
 Bot.blockT = now
 local c = o.c
-task.delay(S.ABDelay * (0.85 + math.random() * 0.3), function()
+local delay = S.ABDelay * (0.3 + 0.7 * aggroFrac) * (0.85 + math.random() * 0.3)
+task.delay(delay, function()
 if not JH.Running then return end
 -- a pump fake turns the shot into a gather: only jump if he is really still shooting
 if S.ABRecheck ~= false and c:GetAttribute("Action") ~= "Shooting" then return end
@@ -11587,9 +11661,11 @@ local ok, data = pcall(JH.netGet, "announcement")
 if ok and type(data) == "table" and data.text and data.t ~= lastAnn then
 lastAnn = data.t
 local prefix, col = badgeFor(tostring(data.by or ""))
-col = col or Color3.fromRGB(255, 214, 60)
+col = col or Color3.fromRGB(150, 150, 160)
 bar.Text = string.format("%s%s: %s", prefix, tostring(data.by or "?"), tostring(data.text))
+bar.TextColor3 = Color3.new(1, 1, 1)
 stroke.Color = col
+stroke.Thickness = 1
 local tw = game:GetService("TweenService")
 tw:Create(bar, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Position = UDim2.new(0.5, 0, 0, 14) }):Play()
 task.delay(6, function()
@@ -11655,6 +11731,9 @@ task.spawn(function()
 while true do
 local data = netGet("chat")
 if type(data) == "table" then
+-- auto-scroll to the newest message when you were already at/near the bottom (or it's your own message), without
+-- fighting someone who scrolled up on purpose to read earlier messages
+local atBottom = chatList.CanvasPosition.Y >= chatList.AbsoluteCanvasSize.Y - chatList.AbsoluteWindowSize.Y - 20
 local keys = {}
 for k in pairs(data) do keys[#keys + 1] = k end
 table.sort(keys)
@@ -11671,13 +11750,18 @@ if color then lbl.TextColor3 = color end
 end
 end
 local newest = keys[#keys]
+local isMine = false
 if newest and newest ~= lastChatKey then
 local wasFirst = lastChatKey == nil
 lastChatKey = newest
 local m = data[newest]
-if not wasFirst and type(m) == "table" and tostring(m.name or "") ~= myName then
+isMine = type(m) == "table" and tostring(m.name or "") == myName
+if not wasFirst and type(m) == "table" and not isMine then
 notify("JHub Chat", string.format("%s: %s", tostring(m.name or "?"), tostring(m.text or "")), 4)
 end
+end
+if atBottom or isMine then
+task.defer(function() chatList.CanvasPosition = Vector2.new(0, math.max(0, chatList.AbsoluteCanvasSize.Y - chatList.AbsoluteWindowSize.Y)) end)
 end
 end
 task.wait(3)
@@ -11688,9 +11772,15 @@ end)
 -- that only ever grows) - anyone whose last heartbeat is recent counts as online, stale ones age out automatically
 local presence = UI.Card(mainPage, "Running JHub right now")
 local presenceCount = UI.Stat(presence, "Players online")
+local presenceList = new("ScrollingFrame", { Size = UDim2.new(1, 0, 0, 90), BackgroundTransparency = 1, ScrollBarThickness = 3,
+CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, LayoutOrder = nextOrder(presence), Parent = presence.frame })
+new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder, Parent = presenceList })
+JH.presenceData = {}
 task.spawn(function()
 while true do
-pcall(netPut, "presence/" .. sanitize(myName), { t = os.time() })
+local ok, ping = pcall(function() return LP:GetNetworkPing() end)
+local pingMs = (ok and ping and ping * 1000) or 0
+pcall(netPut, "presence/" .. sanitize(myName), { t = os.time(), ms = math.floor(pingMs), fps = math.floor(JH.FPS or 60) })
 task.wait(20)
 end
 end)
@@ -11699,10 +11789,21 @@ while true do
 local data = netGet("presence")
 if type(data) == "table" then
 local now, count = os.time(), 0
-for _, v in pairs(data) do
-if type(v) == "table" and type(v.t) == "number" and now - v.t < 60 then count = count + 1 end
+local rows = {}
+for name, v in pairs(data) do
+if type(v) == "table" and type(v.t) == "number" and now - v.t < 60 then
+count = count + 1
+rows[#rows + 1] = { name = name, ms = tonumber(v.ms) or 0, fps = tonumber(v.fps) or 0 }
 end
+end
+table.sort(rows, function(a, b) return a.name < b.name end)
+JH.presenceData = rows
 presenceCount.Text = tostring(math.max(count, 1))
+for _, c in ipairs(presenceList:GetChildren()) do if c:IsA("TextLabel") then c:Destroy() end end
+for i, row in ipairs(rows) do
+UI.label({ Text = string.format("%s  |  %d ms  |  %d fps", row.name, row.ms, row.fps), TextSize = 11,
+Size = UDim2.new(1, 0, 0, 14), TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = i, Parent = presenceList }, false, "Sub")
+end
 else
 presenceCount.Text = "1 (you)"
 end
@@ -11737,6 +11838,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.99 - big batch: autoexec now self-refreshes to the current version every load instead of freezing at whatever was on disk when it was first turned on; re-added the locked-jumpshot-promotion fix (a real Perfect shoots the exact same way every time, shared per animation ID); Shot Green Stabilizer is now visible on the Shooting tab with a live status line and genuinely does nothing under 50ms ping; added a live ping/FPS list for everyone running the script plus click-a-name-to-add in the Owner tab; announcement banner text is pure white with a thinner role-colored outline; fixed Code/Announcement text boxes not clearing after submit (the {get,set} Input pattern never refreshed the box); chat now auto-scrolls to the bottom on new messages unless you scrolled up on purpose; Auto Block's range slider now doubles as an aggressiveness dial (maxed = always attempts a jump even from far away, minimized = near-instant jump up close); added outline transparency and a custom RGB color option (Rainbow already existed). Declined: a curated Roblox sound-ID list (can't verify real IDs without fabricating them), using a real person's photo as the logo/background, and further blind changes to tap-to-shoot/Auto Guard's walk animation/Glide without new evidence",
 "v1.98 - re-added, on request, specific pieces from the reverted batch: Shot Stabilizer (hidden, auto ping/FPS comp), Settings tab (copy/upload/search configs), defense contest highlight, Owner tab Co-Owner (blue)/Mod (red) colors with the top-of-screen announcement system, the tap-to-shoot Action-wait pump-fake fix, and the meter late-bias. Still not re-added: Shot Time, the Discord icon swap, the locked-jumpshot-promotion fix, and the live-catch feature",
 "v1.97 - reverted everything from v1.92 through v1.96 except Ultra Auto Calibrate (the rename and the momentum-based faster convergence): Shot Time, Shot Stabilizer, Settings tab, defense contest highlight, announcements, Co-Owner/Mod colors, the Discord icon swap, the tap-to-shoot fix, the meter late-bias, the locked-jumpshot fix, and the live-catch feature (and its revert) are all gone. Back to v1.91's shooting/UI behavior, with Ultra Auto Calibrate on top",
 "v1.91 - Owner/Dev/Mod are now lists, not single names, so multiple people can hold each role; added 'Add me as...' buttons that fill in your own name instead of typing it; added a live 'Players online' count on the Main tab from real heartbeats, not just an ever-growing push counter",
@@ -11862,6 +11964,16 @@ saveSoon()
 end
 end
 JH.hardLocked = readHard()
+-- a hard-locked jumpshot used to only get a fixed SEED value while still running through the same live peak-fit bar
+-- extrapolation every shot - meaning its actual release still varied shot to shot with ping/fps/bar noise, so a real
+-- Perfect did not actually stop later early/late/slightly misses on that same shot like it was supposed to. Promoting
+-- the locked hold straight into Shot.FINAL routes it through the flat, non-extrapolated path the built-in confirmed
+-- shots already use - the same exact release every time, not just the same starting point for a live prediction.
+Shot.autoLoad()
+for k in pairs(JH.hardLocked) do
+local a = Shot.auto[k]
+if a and a.hold and not Shot.FINAL[k] then Shot.FINAL[k] = a.hold end
+end
 local prevLearnHL = Shot.autoLearn
 function Shot.autoLearn(info, res, strength)
 if info and info.key and JH.hardLocked[info.key] then return true end
@@ -11875,8 +11987,9 @@ end
 a.hold, a.locked, a.mode = info.lead, true, "peak"
 JH.hardLocked[info.key] = true
 addHard(info.key)
+Shot.FINAL[info.key] = a.hold
 task.spawn(netPut, "timing/" .. sanitize(info.key), { lead = a.hold, n = 9999, hard = true, by = myName, t = os.time() })
-notify("Timing locked", "Jumpshot " .. tostring(Shot.nameFor and Shot.nameFor(info.key) or info.key) .. " hit a real Perfect, its timing is locked forever and shared.", 5)
+notify("Timing locked", "Jumpshot " .. tostring(Shot.nameFor and Shot.nameFor(info.key) or info.key) .. " hit a real Perfect, its timing is locked forever and shared - it will shoot the exact same way every time now.", 5)
 end
 return r
 end
@@ -11890,6 +12003,7 @@ addHard(key)
 Shot.auto[key] = Shot.auto[key] or {}
 local a = Shot.auto[key]
 a.hold, a.locked, a.mode, a.greens, a.bin = net.lead, true, "peak", a.greens or {}, a.bin or S.PeakBin
+Shot.FINAL[key] = a.hold
 return a.hold
 end
 return prevSeedHL(key)
@@ -11900,6 +12014,7 @@ end
 -- RunService.Heartbeat (a physics-step signal, not tied to render framerate), so a choppy picture does not by itself
 -- slow down the actual release logic - this only adds compensation on top of that for real ping/frame-drop cases.
 S.PingComp = S.PingComp or 0
+JH.StabilizerPing, JH.StabilizerComp = 0, 0
 task.spawn(function()
 while true do
 local ok, ping = pcall(function() return LP:GetNetworkPing() end)
@@ -11910,9 +12025,10 @@ if pingMs >= 50 or fps < 30 then
 comp = clamp(pingMs / 2, 40, 100)
 if fps < 30 then comp = math.min(100, comp + (30 - fps) * 1.5) end
 else
-comp = clamp(pingMs / 3, 0, 35)
+comp = 0
 end
 S.PingComp = comp
+JH.StabilizerPing, JH.StabilizerComp = pingMs, comp
 task.wait(1)
 end
 end)
@@ -12053,7 +12169,7 @@ end
 end)
 pcall(Rec.hook)
 pcall(Shot.connectRemotes)
-if S.AutoExec then pcall(Net.queueTeleport) end
+if S.AutoExec then pcall(Net.queueTeleport) task.spawn(function() task.wait(2) pcall(Net.autoExec, true) end) end
 task.spawn(function()
 Ball.rescan()
 log(string.format("Scan: %d ball part(s) found", Ball.count()))
@@ -12135,7 +12251,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v1.98"
+local VERSION = "v1.99"
 
 local JH = { Connections = {}, Running = true, Logs = {}, Start = tick(), FPS = 60 }
 genv.JHubGlass = JH
@@ -12241,7 +12357,7 @@ local S = {
 	LagSync = true, LagK = 2, PrecFit = true, PeakBin = 0.014, AdaptPlus = true, GreenMax = true,
 	AGHuman = true, AGHumanAmt = 50, LogoIds = "", LookUser = "",
 	AllJumpers = true, GLead = 0, GLeadN = 0, ImportTimes = "", FirstShot = false, PFLead = 0, PFLeadN = 0, AccentTone = "Rainbow",
-	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false,
+	FadeNudge = 8, MagnetDelay = 120, AutoAdaptAll = true, InstantGreen = true, GlideShotSafe = true, LabOn = true, FamLead = "", SmartSteps = true, ContestShow = false, GuardSpeed = 0, UltraOn = false, GreenSoundId = "", GreenSoundVol = 0.6, CtrlSpyOn = false, GuardSpyOn = false, HardLock = "", GuardKey = "", RGuardOn = false, AGUnlocked = false, LockedUnlocked = false, OwnerUnlocked = false, OutlineTrans = 0, OutlineCustomR = 255, OutlineCustomG = 255, OutlineCustomB = 255,
 	AGMistakes = false, AGMistakeAmt = 15, ABRecheck = true, ASteal = false, ASRange = 5, ASChance = 60, ASReact = 0.15, ASKey = "", BindLib = "",
 	AGOnlyBall = true,
 	BindMove1 = "None", BindMove2 = "None", BindMove3 = "None", BindMove4 = "None", BindMove5 = "None", BindMove6 = "None",
@@ -12426,7 +12542,7 @@ local OUTLINE_COLORS = {
 	White = Color3.new(1, 1, 1), Cyan = Color3.fromRGB(120, 235, 255), Pink = Color3.fromRGB(255, 150, 220),
 	Gold = Color3.fromRGB(255, 225, 120), Lime = Color3.fromRGB(170, 255, 140),
 }
-local OUTLINE_NAMES = { "White", "Cyan", "Pink", "Gold", "Lime", "Rainbow" }
+local OUTLINE_NAMES = { "White", "Cyan", "Pink", "Gold", "Lime", "Rainbow", "Custom" }
 local TEXT_NAMES = { "White", "Ice", "Gold", "Mint" }
 local FONTS = {
 	Gotham = { "Gotham", "GothamBold" }, Montserrat = { "Montserrat", "MontserratBold" },
@@ -12444,7 +12560,7 @@ local function computeTheme()
 	Theme.Stroke = Color3.fromHSV(h, 0.9, 0.18)
 	Theme.Text = TEXT_COLORS[S.TextColor] or WHITE
 	Theme.Sub = Theme.Text:Lerp(Theme.Glass, 0.28)
-	Theme.Outline = OUTLINE_COLORS[S.OutlineColor] or WHITE
+	Theme.Outline = S.OutlineColor == "Custom" and Color3.fromRGB(S.OutlineCustomR or 255, S.OutlineCustomG or 255, S.OutlineCustomB or 255) or (OUTLINE_COLORS[S.OutlineColor] or WHITE)
 	Theme.AccentA = Color3.fromHSV(h, 0.2, 1)
 	Theme.AccentB = Color3.fromHSV(((S.Hue - 28) % 360) / 360, 0.75, 1)
 	if S.AccentMode ~= "Match hue" then
@@ -18575,6 +18691,10 @@ do
 	UI.Dropdown(ol, "Outline color", "OutlineColor", OUTLINE_NAMES, function() UI.applyTheme() end)
 	UI.Slider(ol, "Outline thickness", "OutlineThick", 0, 6, 0.5, 1, nil, function() UI.applyWindow() end)
 	UI.Toggle(ol, "Moving outline shine", "OutlineShine", function() UI.applyWindow() end)
+UI.Slider(ol, "Outline transparency (translucent/see-through)", "OutlineTrans", 0, 1, 0.05, 2, nil, function() UI.applyWindow() end)
+UI.Slider(ol, "Custom color - red (pick Custom above to use this)", "OutlineCustomR", 0, 255, 1, 0, nil, function() UI.applyTheme() end)
+UI.Slider(ol, "Custom color - green", "OutlineCustomG", 0, 255, 1, 0, nil, function() UI.applyTheme() end)
+UI.Slider(ol, "Custom color - blue", "OutlineCustomB", 0, 255, 1, 0, nil, function() UI.applyTheme() end)
 
 	local tx = UI.Card(P, "Text")
 	UI.Dropdown(tx, "Text color", "TextColor", TEXT_NAMES, function() UI.applyTheme() end)
@@ -20392,7 +20512,7 @@ do
 		local AG_CODE = "6022"
 		local typed = ""
 		local lock = UI.Card(GP, "Auto Guard (locked)")
-		UI.Input(lock, "Code", { get = function() return typed end, set = function(v) typed = tostring(v or "") end }, nil, "enter the code")
+		local codeBox = UI.Input(lock, "Code", { get = function() return typed end, set = function(v) typed = tostring(v or "") end }, nil, "enter the code")
 		UI.Note(lock, "Auto Guard is locked. Enter the code to open it.")
 		local contentFrames = {}
 JH.AGContentFrames = contentFrames
@@ -20412,6 +20532,8 @@ JH.AGContentFrames = contentFrames
 			else
 				notify("Auto Guard", "Wrong code", 3)
 			end
+			typed = ""
+			if codeBox then codeBox.Text = "" end
 		end, true)
 		local g1 = UI.Card(GP, "Auto guard")
 		g1.frame.Visible = false
@@ -20436,7 +20558,7 @@ JH.AGContentFrames = contentFrames
 		g2.frame.Visible = false
 		contentFrames[#contentFrames + 1] = g2.frame
 		UI.Toggle(g2, "Auto block", "AB")
-		UI.Slider(g2, "Block range", "ABRange", 4, 30, 1, 0, " studs")
+		UI.Slider(g2, "Block range (higher = always attempts a jump even far away, lower = instant jump up close)", "ABRange", 4, 30, 1, 0, " studs")
 		UI.Slider(g2, "Block timing (delay after the shot starts)", "ABDelay", 0, 0.5, 0.01, 2, "s")
 		UI.Slider(g2, "Block chance", "ABChance", 0, 100, 5, 0, "%")
 		UI.Keybind(g2, "Block / jump key", function() return S.ABKey end, function(v) S.ABKey = (v ~= "" and v) or "Space" end)
@@ -22223,7 +22345,7 @@ do
 		local typed = ""
 		local lock = UI.Card(LP, "Locked")
 		lock.frame.Size = UDim2.new(0.5, -4, 0, 0)
-		UI.Input(lock, "Code", { get = function() return typed end, set = function(v) typed = tostring(v or "") end }, nil, "enter the code")
+		local codeBox = UI.Input(lock, "Code", { get = function() return typed end, set = function(v) typed = tostring(v or "") end }, nil, "enter the code")
 		local function unlockLocked()
 			for i, f in ipairs(tools) do
 				f.Parent = LP.frame
@@ -22243,6 +22365,8 @@ do
 			else
 				notify("Locked tab", "Wrong code", 3)
 			end
+			typed = ""
+			if codeBox then codeBox.Text = "" end
 		end, true)
 		UI.Note(lock, "Everything in this tab is locked. Enter the code to open it.")
 	end
@@ -22256,7 +22380,7 @@ if mainPage then
 local OP = UI.Page("Owner", "O")
 local typed2 = ""
 local lock2 = UI.Card(OP, "Owner")
-UI.Input(lock2, "Code", { get = function() return typed2 end, set = function(v) typed2 = tostring(v or "") end }, nil, "enter the code")
+local lock2Box = UI.Input(lock2, "Code", { get = function() return typed2 end, set = function(v) typed2 = tostring(v or "") end }, nil, "enter the code")
 local rolesCard = UI.Card(OP, "Chat roles")
 rolesCard.frame.Visible = false
 local existing = JH.roles or {}
@@ -22278,7 +22402,7 @@ JH.roles = roles
 if JH.netPut then task.spawn(JH.netPut, "roles", roles) end
 end
 UI.Input(rolesCard, "Owners (comma separated - gold text, crown, #owner)", { get = function() return ownersList end, set = function(v) ownersList = tostring(v or "") end }, nil, "name1, name2")
-UI.Input(rolesCard, "Owner code (only needed to add/change an Owner)", { get = function() return ownerCode end, set = function(v) ownerCode = tostring(v or "") end }, nil, "required to touch the Owners list")
+local ownerCodeBox = UI.Input(rolesCard, "Owner code (only needed to add/change an Owner)", { get = function() return ownerCode end, set = function(v) ownerCode = tostring(v or "") end }, nil, "required to touch the Owners list")
 UI.Input(rolesCard, "Co-Owners (comma separated player names)", { get = function() return devsList end, set = function(v) devsList = tostring(v or "") end }, nil, "name1, name2")
 UI.Input(rolesCard, "Mods (comma separated player names)", { get = function() return modsList end, set = function(v) modsList = tostring(v or "") end }, nil, "name1, name2")
 UI.Button(rolesCard, "Add me as Owner", function()
@@ -22286,6 +22410,8 @@ if string.lower(string.gsub(ownerCode, "%s", "")) == "jay" then
 ownersList = addName(ownersList, Players.LocalPlayer.Name)
 pushRoles(ownersList)
 notify("Owner tab", "Added you as Owner and pushed to everyone.", 4)
+ownerCode = ""
+if ownerCodeBox then ownerCodeBox.Text = "" end
 else
 notify("Owner tab", "Wrong owner code.", 3)
 end
@@ -22299,6 +22425,47 @@ UI.Button(rolesCard, "Add me as Mod", function()
 modsList = addName(modsList, Players.LocalPlayer.Name)
 pushRoles(ownersList)
 notify("Owner tab", "Added you as Mod and pushed to everyone.", 4)
+end)
+local pickedName = ""
+local peopleList = new("ScrollingFrame", { Size = UDim2.new(1, 0, 0, 90), BackgroundTransparency = 1, ScrollBarThickness = 3,
+CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, LayoutOrder = nextOrder(rolesCard), Parent = rolesCard.frame })
+new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder, Parent = peopleList })
+local pickedLabel = UI.Stat(rolesCard, "Picked")
+task.spawn(function()
+while true do
+for _, c in ipairs(peopleList:GetChildren()) do if c:IsA("TextButton") then c:Destroy() end end
+for i, row in ipairs(JH.presenceData or {}) do
+local b = new("TextButton", { Text = row.name, Size = UDim2.new(1, 0, 0, 18), BackgroundTransparency = 1, TextSize = 12,
+TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = i, Parent = peopleList })
+UI.th(b, "TextColor3", "Text")
+b.Activated:Connect(function() pickedName = row.name pickedLabel.Text = row.name end)
+end
+task.wait(3)
+end
+end)
+UI.Button(rolesCard, "Add picked as Owner", function()
+if pickedName == "" then notify("Owner tab", "Click a name from the list first", 3) return end
+if string.lower(string.gsub(ownerCode, "%s", "")) == "jay" then
+ownersList = addName(ownersList, pickedName)
+pushRoles(ownersList)
+notify("Owner tab", "Added " .. pickedName .. " as Owner.", 4)
+ownerCode = ""
+if ownerCodeBox then ownerCodeBox.Text = "" end
+else
+notify("Owner tab", "Wrong owner code.", 3)
+end
+end)
+UI.Button(rolesCard, "Add picked as Co-Owner", function()
+if pickedName == "" then notify("Owner tab", "Click a name from the list first", 3) return end
+devsList = addName(devsList, pickedName)
+pushRoles(ownersList)
+notify("Owner tab", "Added " .. pickedName .. " as Co-Owner.", 4)
+end)
+UI.Button(rolesCard, "Add picked as Mod", function()
+if pickedName == "" then notify("Owner tab", "Click a name from the list first", 3) return end
+modsList = addName(modsList, pickedName)
+pushRoles(ownersList)
+notify("Owner tab", "Added " .. pickedName .. " as Mod.", 4)
 end)
 UI.Button(rolesCard, "Save and push to everyone", function()
 local cur = JH.roles or {}
@@ -22316,11 +22483,13 @@ end
 ownerCode = ""
 pushRoles(newOwners)
 notify("Owner tab", "Roles saved and pushed - everyone's JHub Chat will show the badges.", 4)
+ownerCode = ""
+if ownerCodeBox then ownerCodeBox.Text = "" end
 end, true)
 UI.Note(rolesCard, "Anyone named here gets a badge next to their name in JHub Chat for everyone - Owners get a gold crown and #owner, Co-Owners/Mods get their own tag. Multiple people can hold each role. Adding or changing an Owner needs the Owner code; Co-Owner/Mod only need the tab code. 'Add me as...' fills in your own player name for you.")
 local annCard = UI.Card(OP, "Announcement")
 local annText = ""
-UI.Input(annCard, "Message (pops up at the top of everyone's screen)", { get = function() return annText end, set = function(v) annText = tostring(v or "") end }, nil, "type an announcement")
+local annBox = UI.Input(annCard, "Message (pops up at the top of everyone's screen)", { get = function() return annText end, set = function(v) annText = tostring(v or "") end }, nil, "type an announcement")
 UI.Button(annCard, "Post to everyone", function()
 local roles = JH.roles or {}
 local me = Players.LocalPlayer.Name
@@ -22334,6 +22503,7 @@ if JH.netPut then
 task.spawn(JH.netPut, "announcement", { text = string.sub(annText, 1, 200), by = me, t = os.time() })
 end
 annText = ""
+if annBox then annBox.Text = "" end
 notify("Announcement", "Posted to everyone.", 3)
 end, true)
 UI.Note(annCard, "Only someone currently listed as Owner, Co-Owner or Mod above can actually post - the button checks your real name against those lists, not just whether you have the tab code.")
@@ -22353,6 +22523,8 @@ notify("Owner tab", "Unlocked", 3)
 else
 notify("Owner tab", "Wrong code", 3)
 end
+typed2 = ""
+if lock2Box then lock2Box.Text = "" end
 end, true)
 UI.Note(lock2, "Owner-only tab. Enter the code to manage chat crown/dev/mod badges.")
 end
@@ -22932,16 +23104,18 @@ do
 	function Bot.blockStep(others, me)
 		if not S.AB then return end
 		local now = tick()
+		local aggroFrac = clamp((S.ABRange - 4) / (30 - 4), 0, 1)
 		for _, o in ipairs(others) do
 			if not o.mate then
 				local was = Bot.shotSeen[o.c]
 				Bot.shotSeen[o.c] = o.shooting
 				if o.shooting and not was and now - Bot.blockT > 0.9 then
 					local dist = flat(o.pos - me).Magnitude
-					if dist <= S.ABRange and math.random(100) <= S.ABChance then
+					if (dist <= S.ABRange or aggroFrac >= 0.95) and math.random(100) <= S.ABChance then
 						Bot.blockT = now
 						local c = o.c
-						task.delay(S.ABDelay * (0.85 + math.random() * 0.3), function()
+						local delay = S.ABDelay * (0.3 + 0.7 * aggroFrac) * (0.85 + math.random() * 0.3)
+						task.delay(delay, function()
 							if not JH.Running then return end
 							-- a pump fake turns the shot into a gather: only jump if he is really still shooting
 							if S.ABRecheck ~= false and c:GetAttribute("Action") ~= "Shooting" then return end
@@ -24027,9 +24201,11 @@ local ok, data = pcall(JH.netGet, "announcement")
 if ok and type(data) == "table" and data.text and data.t ~= lastAnn then
 lastAnn = data.t
 local prefix, col = badgeFor(tostring(data.by or ""))
-col = col or Color3.fromRGB(255, 214, 60)
+col = col or Color3.fromRGB(150, 150, 160)
 bar.Text = string.format("%s%s: %s", prefix, tostring(data.by or "?"), tostring(data.text))
+bar.TextColor3 = Color3.new(1, 1, 1)
 stroke.Color = col
+stroke.Thickness = 1
 local tw = game:GetService("TweenService")
 tw:Create(bar, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Position = UDim2.new(0.5, 0, 0, 14) }):Play()
 task.delay(6, function()
@@ -24095,6 +24271,9 @@ task.spawn(function()
 while true do
 local data = netGet("chat")
 if type(data) == "table" then
+-- auto-scroll to the newest message when you were already at/near the bottom (or it's your own message), without
+-- fighting someone who scrolled up on purpose to read earlier messages
+local atBottom = chatList.CanvasPosition.Y >= chatList.AbsoluteCanvasSize.Y - chatList.AbsoluteWindowSize.Y - 20
 local keys = {}
 for k in pairs(data) do keys[#keys + 1] = k end
 table.sort(keys)
@@ -24111,13 +24290,18 @@ if color then lbl.TextColor3 = color end
 end
 end
 local newest = keys[#keys]
+local isMine = false
 if newest and newest ~= lastChatKey then
 local wasFirst = lastChatKey == nil
 lastChatKey = newest
 local m = data[newest]
-if not wasFirst and type(m) == "table" and tostring(m.name or "") ~= myName then
+isMine = type(m) == "table" and tostring(m.name or "") == myName
+if not wasFirst and type(m) == "table" and not isMine then
 notify("JHub Chat", string.format("%s: %s", tostring(m.name or "?"), tostring(m.text or "")), 4)
 end
+end
+if atBottom or isMine then
+task.defer(function() chatList.CanvasPosition = Vector2.new(0, math.max(0, chatList.AbsoluteCanvasSize.Y - chatList.AbsoluteWindowSize.Y)) end)
 end
 end
 task.wait(3)
@@ -24128,9 +24312,15 @@ end)
 -- that only ever grows) - anyone whose last heartbeat is recent counts as online, stale ones age out automatically
 local presence = UI.Card(mainPage, "Running JHub right now")
 local presenceCount = UI.Stat(presence, "Players online")
+local presenceList = new("ScrollingFrame", { Size = UDim2.new(1, 0, 0, 90), BackgroundTransparency = 1, ScrollBarThickness = 3,
+CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, LayoutOrder = nextOrder(presence), Parent = presence.frame })
+new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder, Parent = presenceList })
+JH.presenceData = {}
 task.spawn(function()
 while true do
-pcall(netPut, "presence/" .. sanitize(myName), { t = os.time() })
+local ok, ping = pcall(function() return LP:GetNetworkPing() end)
+local pingMs = (ok and ping and ping * 1000) or 0
+pcall(netPut, "presence/" .. sanitize(myName), { t = os.time(), ms = math.floor(pingMs), fps = math.floor(JH.FPS or 60) })
 task.wait(20)
 end
 end)
@@ -24139,10 +24329,21 @@ while true do
 local data = netGet("presence")
 if type(data) == "table" then
 local now, count = os.time(), 0
-for _, v in pairs(data) do
-if type(v) == "table" and type(v.t) == "number" and now - v.t < 60 then count = count + 1 end
+local rows = {}
+for name, v in pairs(data) do
+if type(v) == "table" and type(v.t) == "number" and now - v.t < 60 then
+count = count + 1
+rows[#rows + 1] = { name = name, ms = tonumber(v.ms) or 0, fps = tonumber(v.fps) or 0 }
 end
+end
+table.sort(rows, function(a, b) return a.name < b.name end)
+JH.presenceData = rows
 presenceCount.Text = tostring(math.max(count, 1))
+for _, c in ipairs(presenceList:GetChildren()) do if c:IsA("TextLabel") then c:Destroy() end end
+for i, row in ipairs(rows) do
+UI.label({ Text = string.format("%s  |  %d ms  |  %d fps", row.name, row.ms, row.fps), TextSize = 11,
+Size = UDim2.new(1, 0, 0, 14), TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = i, Parent = presenceList }, false, "Sub")
+end
 else
 presenceCount.Text = "1 (you)"
 end
@@ -24177,6 +24378,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v1.99 - big batch: autoexec now self-refreshes to the current version every load instead of freezing at whatever was on disk when it was first turned on; re-added the locked-jumpshot-promotion fix (a real Perfect shoots the exact same way every time, shared per animation ID); Shot Green Stabilizer is now visible on the Shooting tab with a live status line and genuinely does nothing under 50ms ping; added a live ping/FPS list for everyone running the script plus click-a-name-to-add in the Owner tab; announcement banner text is pure white with a thinner role-colored outline; fixed Code/Announcement text boxes not clearing after submit (the {get,set} Input pattern never refreshed the box); chat now auto-scrolls to the bottom on new messages unless you scrolled up on purpose; Auto Block's range slider now doubles as an aggressiveness dial (maxed = always attempts a jump even from far away, minimized = near-instant jump up close); added outline transparency and a custom RGB color option (Rainbow already existed). Declined: a curated Roblox sound-ID list (can't verify real IDs without fabricating them), using a real person's photo as the logo/background, and further blind changes to tap-to-shoot/Auto Guard's walk animation/Glide without new evidence",
 "v1.98 - re-added, on request, specific pieces from the reverted batch: Shot Stabilizer (hidden, auto ping/FPS comp), Settings tab (copy/upload/search configs), defense contest highlight, Owner tab Co-Owner (blue)/Mod (red) colors with the top-of-screen announcement system, the tap-to-shoot Action-wait pump-fake fix, and the meter late-bias. Still not re-added: Shot Time, the Discord icon swap, the locked-jumpshot-promotion fix, and the live-catch feature",
 "v1.97 - reverted everything from v1.92 through v1.96 except Ultra Auto Calibrate (the rename and the momentum-based faster convergence): Shot Time, Shot Stabilizer, Settings tab, defense contest highlight, announcements, Co-Owner/Mod colors, the Discord icon swap, the tap-to-shoot fix, the meter late-bias, the locked-jumpshot fix, and the live-catch feature (and its revert) are all gone. Back to v1.91's shooting/UI behavior, with Ultra Auto Calibrate on top",
 "v1.91 - Owner/Dev/Mod are now lists, not single names, so multiple people can hold each role; added 'Add me as...' buttons that fill in your own name instead of typing it; added a live 'Players online' count on the Main tab from real heartbeats, not just an ever-growing push counter",
@@ -24302,6 +24504,16 @@ saveSoon()
 end
 end
 JH.hardLocked = readHard()
+-- a hard-locked jumpshot used to only get a fixed SEED value while still running through the same live peak-fit bar
+-- extrapolation every shot - meaning its actual release still varied shot to shot with ping/fps/bar noise, so a real
+-- Perfect did not actually stop later early/late/slightly misses on that same shot like it was supposed to. Promoting
+-- the locked hold straight into Shot.FINAL routes it through the flat, non-extrapolated path the built-in confirmed
+-- shots already use - the same exact release every time, not just the same starting point for a live prediction.
+Shot.autoLoad()
+for k in pairs(JH.hardLocked) do
+local a = Shot.auto[k]
+if a and a.hold and not Shot.FINAL[k] then Shot.FINAL[k] = a.hold end
+end
 local prevLearnHL = Shot.autoLearn
 function Shot.autoLearn(info, res, strength)
 if info and info.key and JH.hardLocked[info.key] then return true end
@@ -24315,8 +24527,9 @@ end
 a.hold, a.locked, a.mode = info.lead, true, "peak"
 JH.hardLocked[info.key] = true
 addHard(info.key)
+Shot.FINAL[info.key] = a.hold
 task.spawn(netPut, "timing/" .. sanitize(info.key), { lead = a.hold, n = 9999, hard = true, by = myName, t = os.time() })
-notify("Timing locked", "Jumpshot " .. tostring(Shot.nameFor and Shot.nameFor(info.key) or info.key) .. " hit a real Perfect, its timing is locked forever and shared.", 5)
+notify("Timing locked", "Jumpshot " .. tostring(Shot.nameFor and Shot.nameFor(info.key) or info.key) .. " hit a real Perfect, its timing is locked forever and shared - it will shoot the exact same way every time now.", 5)
 end
 return r
 end
@@ -24330,6 +24543,7 @@ addHard(key)
 Shot.auto[key] = Shot.auto[key] or {}
 local a = Shot.auto[key]
 a.hold, a.locked, a.mode, a.greens, a.bin = net.lead, true, "peak", a.greens or {}, a.bin or S.PeakBin
+Shot.FINAL[key] = a.hold
 return a.hold
 end
 return prevSeedHL(key)
@@ -24340,6 +24554,7 @@ end
 -- RunService.Heartbeat (a physics-step signal, not tied to render framerate), so a choppy picture does not by itself
 -- slow down the actual release logic - this only adds compensation on top of that for real ping/frame-drop cases.
 S.PingComp = S.PingComp or 0
+JH.StabilizerPing, JH.StabilizerComp = 0, 0
 task.spawn(function()
 while true do
 local ok, ping = pcall(function() return LP:GetNetworkPing() end)
@@ -24350,9 +24565,10 @@ if pingMs >= 50 or fps < 30 then
 comp = clamp(pingMs / 2, 40, 100)
 if fps < 30 then comp = math.min(100, comp + (30 - fps) * 1.5) end
 else
-comp = clamp(pingMs / 3, 0, 35)
+comp = 0
 end
 S.PingComp = comp
+JH.StabilizerPing, JH.StabilizerComp = pingMs, comp
 task.wait(1)
 end
 end)
@@ -24501,7 +24717,7 @@ end)
 -- the game's own shoot signal, meter and result messages
 pcall(Rec.hook)
 pcall(Shot.connectRemotes)
-if S.AutoExec then pcall(Net.queueTeleport) end
+if S.AutoExec then pcall(Net.queueTeleport) task.spawn(function() task.wait(2) pcall(Net.autoExec, true) end) end
 task.spawn(function()
 	Ball.rescan()
 	log(string.format("Scan: %d ball part(s) found", Ball.count()))
