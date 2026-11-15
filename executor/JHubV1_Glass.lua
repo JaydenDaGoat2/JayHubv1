@@ -11,7 +11,7 @@
     Tabs: Main, Shooting, Dribbling, Players, UI
     Tap the moving JH logo to open / close the menu.
 
-    JHUB_VERSION: v2.19
+    JHUB_VERSION: v2.20
     (this header is never obfuscated, so the auto-update check below can always read the version
     here even from the published build, where "local VERSION = ..." is hidden by the obfuscator -
     keep this line in sync with VERSION on every bump, or the auto-update check breaks again)
@@ -81,7 +81,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.19"
+local VERSION = "v2.20"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -112,6 +112,37 @@ do
 			local uid, name = tostring(LP.UserId), LP.Name
 			if banned[uid] or banned[name] then
 				allowed, reason = false, "You have been blocked from using this script."
+			end
+		end
+		-- a copy older than this gets replaced instead of just refused: a frozen autoexec/queued-teleport save can
+		-- never pick up anything new on its own, no matter what ships later, because it is running whatever code
+		-- existed the moment it was saved - there is no way to reach back into a copy that old and make it check
+		-- anything it does not already know to check. Every copy from here on checks this on its own, every time,
+		-- so the oldest a stuck copy can ever get stuck at again is whatever version first shipped this check.
+		local minV = data.minVersion
+		if allowed and type(minV) == "string" then
+			local function num(v)
+				local maj, minr = string.match(tostring(v), "v?(%d+)%.?(%d*)")
+				return (tonumber(maj) or 0) * 1000 + (tonumber(minr) or 0)
+			end
+			if num(VERSION) < num(minV) then
+				local updated = false
+				pcall(function()
+					local shaBody = game:HttpGet("https://api.github.com/repos/jaydendagoat2/jayhubv1/commits/claude%2Fclaudechud-8cord-executor-wclom3")
+					local sha = type(shaBody) == "string" and string.match(shaBody, '"sha"%s*:%s*"(%x+)"')
+					local url = sha and ("https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/" .. sha .. "/executor/JHubV1_Glass.lua")
+						or "https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/claude/claudechud-8cord-executor-wclom3/executor/JHubV1_Glass.lua"
+					local src = game:HttpGet(url)
+					if type(src) == "string" and #src > 10000 then
+						local fn = loadstring(src)
+						if fn then
+							updated = true
+							task.defer(fn)
+						end
+					end
+				end)
+				if updated then return end
+				allowed, reason = false, "This copy is too old and could not reach GitHub to update itself. Rejoin once you're back online."
 			end
 		end
 	end)
@@ -12481,6 +12512,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.20 - Added a minimum-version floor from the owner (control/minVersion): any copy below it now tries to silently replace itself with the newest version the instant it checks in with the backend, before anything else loads, and only shows a blocked message if it genuinely cannot reach GitHub. This only protects copies running this version or newer going forward, since an older copy that is already frozen on disk or queued for a teleport is running code that was written before this check existed and has no way to know to look for it - there is no way to reach back into a copy that old from here.",
 "v2.19 - Stopped an old version ever sitting on disk once a newer one exists. The auto-update check now rewrites the saved autoexec file (and the queued-teleport copy) to the new version immediately the moment it finds one, instead of waiting for the new instance to resave it a couple seconds after reloading - and the old instance's own pending resave now checks it is still actually running first, so a reload triggered mid-wait can no longer have the dying old copy put its old version right back on disk a moment after the new one just saved the correct one.",
 "v2.18 - Found why it was reloading itself non-stop for some people: v2.15's auto-update check tried to read the version number out of the downloaded file by looking for \"local VERSION = ...\" in plain text, but the published file is obfuscated and that text is never actually readable in it - so the check could never tell what version it downloaded, treated every single check as \"found a newer version\" because it genuinely could not read any version at all, and reloaded into the exact same problem every few seconds, forever. Fixed two ways: an unreadable version number is no longer treated as newer (it just does nothing instead), and the version number now also lives in plain text in this file's very top header, which the obfuscator never touches, so the check can actually read it from the real published file going forward.",
 "v2.17 - Added a second, independent defense against more than one menu window showing at once: on top of the unload-then-claim logic at the top of the script, it now actively hunts for and destroys any OTHER JHubGlass menu window wherever it could have landed, repeatedly for a while after load - so even if several copies manage to start at once for whatever reason on a given setup (more than one autoexec folder/queued copy firing together, or an executor that keeps a script's window alive as its own overlay between runs instead of actually ending it), only one of them survives within a second or two, every time, instead of relying on a single check at the very start.",
@@ -13265,7 +13297,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.19"
+local VERSION = "v2.20"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -13296,6 +13328,37 @@ do
 			local uid, name = tostring(LP.UserId), LP.Name
 			if banned[uid] or banned[name] then
 				allowed, reason = false, "You have been blocked from using this script."
+			end
+		end
+		-- a copy older than this gets replaced instead of just refused: a frozen autoexec/queued-teleport save can
+		-- never pick up anything new on its own, no matter what ships later, because it is running whatever code
+		-- existed the moment it was saved - there is no way to reach back into a copy that old and make it check
+		-- anything it does not already know to check. Every copy from here on checks this on its own, every time,
+		-- so the oldest a stuck copy can ever get stuck at again is whatever version first shipped this check.
+		local minV = data.minVersion
+		if allowed and type(minV) == "string" then
+			local function num(v)
+				local maj, minr = string.match(tostring(v), "v?(%d+)%.?(%d*)")
+				return (tonumber(maj) or 0) * 1000 + (tonumber(minr) or 0)
+			end
+			if num(VERSION) < num(minV) then
+				local updated = false
+				pcall(function()
+					local shaBody = game:HttpGet("https://api.github.com/repos/jaydendagoat2/jayhubv1/commits/claude%2Fclaudechud-8cord-executor-wclom3")
+					local sha = type(shaBody) == "string" and string.match(shaBody, '"sha"%s*:%s*"(%x+)"')
+					local url = sha and ("https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/" .. sha .. "/executor/JHubV1_Glass.lua")
+						or "https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/claude/claudechud-8cord-executor-wclom3/executor/JHubV1_Glass.lua"
+					local src = game:HttpGet(url)
+					if type(src) == "string" and #src > 10000 then
+						local fn = loadstring(src)
+						if fn then
+							updated = true
+							task.defer(fn)
+						end
+					end
+				end)
+				if updated then return end
+				allowed, reason = false, "This copy is too old and could not reach GitHub to update itself. Rejoin once you're back online."
 			end
 		end
 	end)
@@ -25665,6 +25728,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.20 - Added a minimum-version floor from the owner (control/minVersion): any copy below it now tries to silently replace itself with the newest version the instant it checks in with the backend, before anything else loads, and only shows a blocked message if it genuinely cannot reach GitHub. This only protects copies running this version or newer going forward, since an older copy that is already frozen on disk or queued for a teleport is running code that was written before this check existed and has no way to know to look for it - there is no way to reach back into a copy that old from here.",
 "v2.19 - Stopped an old version ever sitting on disk once a newer one exists. The auto-update check now rewrites the saved autoexec file (and the queued-teleport copy) to the new version immediately the moment it finds one, instead of waiting for the new instance to resave it a couple seconds after reloading - and the old instance's own pending resave now checks it is still actually running first, so a reload triggered mid-wait can no longer have the dying old copy put its old version right back on disk a moment after the new one just saved the correct one.",
 "v2.18 - Found why it was reloading itself non-stop for some people: v2.15's auto-update check tried to read the version number out of the downloaded file by looking for \"local VERSION = ...\" in plain text, but the published file is obfuscated and that text is never actually readable in it - so the check could never tell what version it downloaded, treated every single check as \"found a newer version\" because it genuinely could not read any version at all, and reloaded into the exact same problem every few seconds, forever. Fixed two ways: an unreadable version number is no longer treated as newer (it just does nothing instead), and the version number now also lives in plain text in this file's very top header, which the obfuscator never touches, so the check can actually read it from the real published file going forward.",
 "v2.17 - Added a second, independent defense against more than one menu window showing at once: on top of the unload-then-claim logic at the top of the script, it now actively hunts for and destroys any OTHER JHubGlass menu window wherever it could have landed, repeatedly for a while after load - so even if several copies manage to start at once for whatever reason on a given setup (more than one autoexec folder/queued copy firing together, or an executor that keeps a script's window alive as its own overlay between runs instead of actually ending it), only one of them survives within a second or two, every time, instead of relying on a single check at the very start.",
