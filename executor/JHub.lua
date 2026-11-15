@@ -11,7 +11,7 @@
     Tabs: Main, Shooting, Dribbling, Players, UI
     Tap the moving JH logo to open / close the menu.
 
-    JHUB_VERSION: v2.22
+    JHUB_VERSION: v2.23
     (this header is never obfuscated, so the auto-update check below can always read the version
     here even from the published build, where "local VERSION = ..." is hidden by the obfuscator -
     keep this line in sync with VERSION on every bump, or the auto-update check breaks again)
@@ -38,6 +38,22 @@ for _, key in ipairs({ "JHubGlass", "JHubV1", "JayHubPB" }) do
 	end
 	genv[key] = nil
 end
+-- this script used to be saved under the name JHubV1_Glass.lua - clean up any old copy still sitting under that
+-- name on disk, every run, not just old-versus-new ones: an old copy under the old name would otherwise just keep
+-- firing on its own forever, alongside this one, no matter what this one does, since it is a completely separate
+-- file as far as the executor's own autoexec folder scanning is concerned
+pcall(function()
+	for _, folder in ipairs({ "autoexec", "Autoexec", "autoexecute", "Autoexecute" }) do
+		pcall(function()
+			local p = folder .. "/JHubV1_Glass.lua"
+			if type(isfile) == "function" and isfile(p) and type(delfile) == "function" then delfile(p) end
+		end)
+	end
+	pcall(function()
+		local p = "JHubGlass/JHubV1_Glass.lua"
+		if type(isfile) == "function" and isfile(p) and type(delfile) == "function" then delfile(p) end
+	end)
+end)
 -- claim the slot immediately, with nothing that can yield between the unload loop above and this -
 -- if the executor fires several copies of this script at once (e.g. more than one autoexec folder
 -- holding a copy), each copy's unload-then-claim now runs as one uninterrupted stretch with no gap
@@ -81,7 +97,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.22"
+local VERSION = "v2.23"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -146,8 +162,8 @@ do
 				pcall(function()
 					local shaBody = game:HttpGet("https://api.github.com/repos/jaydendagoat2/jayhubv1/commits/claude%2Fclaudechud-8cord-executor-wclom3")
 					local sha = type(shaBody) == "string" and string.match(shaBody, '"sha"%s*:%s*"(%x+)"')
-					local url = sha and ("https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/" .. sha .. "/executor/JHubV1_Glass.lua")
-						or "https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/claude/claudechud-8cord-executor-wclom3/executor/JHubV1_Glass.lua"
+					local url = sha and ("https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/" .. sha .. "/executor/JHub.lua")
+						or "https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/claude/claudechud-8cord-executor-wclom3/executor/JHub.lua"
 					local src = game:HttpGet(url)
 					if type(src) == "string" and #src > 10000 then
 						local fn = loadstring(src)
@@ -4813,7 +4829,7 @@ JH.RecLog = function(msg) Rec.add("jhub", msg) end
 ---------------------------------------------------------------------
 -- AUTO EXECUTE: starts JHub by itself after every join and server change
 ---------------------------------------------------------------------
-Net.AUTOEXEC_FILE = "JHubV1_Glass.lua"
+Net.AUTOEXEC_FILE = "JHub.lua"
 Net.AUTOEXEC_FOLDERS = { "autoexec", "Autoexec", "autoexecute", "Autoexecute" }
 function Net.scriptSource()
 	if type(JH_SOURCE) == "string" and #JH_SOURCE > 1000 then return JH_SOURCE end
@@ -11555,8 +11571,8 @@ do
 	end
 	local function fetchNewest()
 		local sha = latestSha()
-		local url = sha and ("https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" .. sha .. "/executor/JHubV1_Glass.lua")
-			or ("https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" .. BRANCH .. "/executor/JHubV1_Glass.lua?v=" .. tostring(os.time()))
+		local url = sha and ("https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" .. sha .. "/executor/JHub.lua")
+			or ("https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" .. BRANCH .. "/executor/JHub.lua?v=" .. tostring(os.time()))
 		local ok, src = pcall(http, url)
 		if not ok or type(src) ~= "string" or #src < 10000 then return nil end
 		-- the published build is obfuscated, so "local VERSION = ..." is never readable in it - the header comment
@@ -12535,6 +12551,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.23 - Renamed the script file itself, from JHubV1_Glass.lua to JHub.lua - same logo, same background, same tabs, same everything, just a clean filename/identity going forward instead of continuing to build on the one that kept getting stuck. It also now deletes any old JHubV1_Glass.lua it finds sitting in your autoexec folders or saved on disk the first time it runs, on top of the usual old-genv-key cleanup, so an old stuck copy under the old name gets cleared out instead of sitting there alongside this one.",
 "v2.22 - A copy that finds itself below the minimum-version floor now deletes its own saved autoexec copy (every folder name this script knows about, plus the plain saved file) on its way out, whether or not it manages to reach GitHub to update itself - not just block itself and leave the old file sitting there to fire again next join. Only affects a copy running this version or newer; see v2.20's note.",
 "v2.21 - Added a button for the owner to actually set the minimum-version floor v2.20 added (Owner tab, Access control card: \"Require this version from now on\") - it was only checked before, never actually settable in-game.",
 "v2.20 - Added a minimum-version floor from the owner (control/minVersion): any copy below it now tries to silently replace itself with the newest version the instant it checks in with the backend, before anything else loads, and only shows a blocked message if it genuinely cannot reach GitHub. This only protects copies running this version or newer going forward, since an older copy that is already frozen on disk or queued for a teleport is running code that was written before this check existed and has no way to know to look for it - there is no way to reach back into a copy that old from here.",
@@ -13279,6 +13296,22 @@ for _, key in ipairs({ "JHubGlass", "JHubV1", "JayHubPB" }) do
 	end
 	genv[key] = nil
 end
+-- this script used to be saved under the name JHubV1_Glass.lua - clean up any old copy still sitting under that
+-- name on disk, every run, not just old-versus-new ones: an old copy under the old name would otherwise just keep
+-- firing on its own forever, alongside this one, no matter what this one does, since it is a completely separate
+-- file as far as the executor's own autoexec folder scanning is concerned
+pcall(function()
+	for _, folder in ipairs({ "autoexec", "Autoexec", "autoexecute", "Autoexecute" }) do
+		pcall(function()
+			local p = folder .. "/JHubV1_Glass.lua"
+			if type(isfile) == "function" and isfile(p) and type(delfile) == "function" then delfile(p) end
+		end)
+	end
+	pcall(function()
+		local p = "JHubGlass/JHubV1_Glass.lua"
+		if type(isfile) == "function" and isfile(p) and type(delfile) == "function" then delfile(p) end
+	end)
+end)
 -- claim the slot immediately, with nothing that can yield between the unload loop above and this -
 -- if the executor fires several copies of this script at once (e.g. more than one autoexec folder
 -- holding a copy), each copy's unload-then-claim now runs as one uninterrupted stretch with no gap
@@ -13322,7 +13355,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.22"
+local VERSION = "v2.23"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -13387,8 +13420,8 @@ do
 				pcall(function()
 					local shaBody = game:HttpGet("https://api.github.com/repos/jaydendagoat2/jayhubv1/commits/claude%2Fclaudechud-8cord-executor-wclom3")
 					local sha = type(shaBody) == "string" and string.match(shaBody, '"sha"%s*:%s*"(%x+)"')
-					local url = sha and ("https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/" .. sha .. "/executor/JHubV1_Glass.lua")
-						or "https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/claude/claudechud-8cord-executor-wclom3/executor/JHubV1_Glass.lua"
+					local url = sha and ("https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/" .. sha .. "/executor/JHub.lua")
+						or "https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/claude/claudechud-8cord-executor-wclom3/executor/JHub.lua"
 					local src = game:HttpGet(url)
 					if type(src) == "string" and #src > 10000 then
 						local fn = loadstring(src)
@@ -18054,7 +18087,7 @@ JH.RecLog = function(msg) Rec.add("jhub", msg) end
 ---------------------------------------------------------------------
 -- AUTO EXECUTE: starts JHub by itself after every join and server change
 ---------------------------------------------------------------------
-Net.AUTOEXEC_FILE = "JHubV1_Glass.lua"
+Net.AUTOEXEC_FILE = "JHub.lua"
 Net.AUTOEXEC_FOLDERS = { "autoexec", "Autoexec", "autoexecute", "Autoexecute" }
 function Net.scriptSource()
 	if type(JH_SOURCE) == "string" and #JH_SOURCE > 1000 then return JH_SOURCE end
@@ -24796,8 +24829,8 @@ do
 	end
 	local function fetchNewest()
 		local sha = latestSha()
-		local url = sha and ("https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" .. sha .. "/executor/JHubV1_Glass.lua")
-			or ("https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" .. BRANCH .. "/executor/JHubV1_Glass.lua?v=" .. tostring(os.time()))
+		local url = sha and ("https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" .. sha .. "/executor/JHub.lua")
+			or ("https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" .. BRANCH .. "/executor/JHub.lua?v=" .. tostring(os.time()))
 		local ok, src = pcall(http, url)
 		if not ok or type(src) ~= "string" or #src < 10000 then return nil end
 		-- the published build is obfuscated, so "local VERSION = ..." is never readable in it - the header comment
@@ -25776,6 +25809,7 @@ end)
 -- UPDATE LOG
 local ulog = UI.Card(mainPage, "Update log")
 UI.Note(ulog, table.concat({
+"v2.23 - Renamed the script file itself, from JHubV1_Glass.lua to JHub.lua - same logo, same background, same tabs, same everything, just a clean filename/identity going forward instead of continuing to build on the one that kept getting stuck. It also now deletes any old JHubV1_Glass.lua it finds sitting in your autoexec folders or saved on disk the first time it runs, on top of the usual old-genv-key cleanup, so an old stuck copy under the old name gets cleared out instead of sitting there alongside this one.",
 "v2.22 - A copy that finds itself below the minimum-version floor now deletes its own saved autoexec copy (every folder name this script knows about, plus the plain saved file) on its way out, whether or not it manages to reach GitHub to update itself - not just block itself and leave the old file sitting there to fire again next join. Only affects a copy running this version or newer; see v2.20's note.",
 "v2.21 - Added a button for the owner to actually set the minimum-version floor v2.20 added (Owner tab, Access control card: \"Require this version from now on\") - it was only checked before, never actually settable in-game.",
 "v2.20 - Added a minimum-version floor from the owner (control/minVersion): any copy below it now tries to silently replace itself with the newest version the instant it checks in with the backend, before anything else loads, and only shows a blocked message if it genuinely cannot reach GitHub. This only protects copies running this version or newer going forward, since an older copy that is already frozen on disk or queued for a teleport is running code that was written before this check existed and has no way to know to look for it - there is no way to reach back into a copy that old from here.",

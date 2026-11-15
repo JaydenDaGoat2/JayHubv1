@@ -3,11 +3,11 @@
 # and refuses to produce output if either protection is missing or broken.
 #
 # Usage: tools/publish.sh [source_lua] [output_lua]
-#   source_lua defaults to executor/JHubV1_Glass.lua on the CURRENT branch (should be the
+#   source_lua defaults to executor/JHub.lua on the CURRENT branch (should be the
 #   dev branch, x86h7a, checked out) and output_lua defaults to /tmp/jhub_public_build.lua.
 #
 # This never touches git or pushes anything - it only builds and verifies a file. After it
-# succeeds, copy output_lua over executor/JHubV1_Glass.lua on the wclom3 branch and push that.
+# succeeds, copy output_lua over executor/JHub.lua on the wclom3 branch and push that.
 #
 # Every future version MUST go through this script before it reaches the public branch.
 # If this script refuses, that's it telling you the file is not actually protected - fix
@@ -16,7 +16,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-SRC="${1:-executor/JHubV1_Glass.lua}"
+SRC="${1:-executor/JHub.lua}"
 OUT="${2:-/tmp/jhub_public_build.lua}"
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"' EXIT
@@ -136,4 +136,4 @@ else
 fi
 
 echo "== built: $OUT =="
-echo "This is the file to copy over executor/JHubV1_Glass.lua on the wclom3 branch. Nothing was pushed."
+echo "This is the file to copy over executor/JHub.lua on the wclom3 branch. Nothing was pushed."
