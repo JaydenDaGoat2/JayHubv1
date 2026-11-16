@@ -22853,8 +22853,57 @@ pcall(function() dict("Basketballs", kids(RS.Assets.Models.Basketball)) end)
 return added
 end
 JH.unlockAll = unlockAll
+local function hookEquip()
+local inv
+for _, m in ipairs(getloadedmodules()) do
+local nm = m:GetFullName()
+if string.sub(nm, -17) == "TabMenu.Inventory" then inv = m end
+end
+if not inv then return false end
+local ok, mod = pcall(require, inv)
+if not ok or type(mod) ~= "table" then return false end
+local svc = mod.Services and mod.Services.InventoryService
+if not svc or svc.JHubHooked then return svc and true or false end
+local orig = svc.EquipItem
+if type(orig) ~= "function" then return false end
+svc.JHubHooked = true
+svc.EquipItem = function(self2, cat, name, extra)
+local r1, r2 = orig(self2, cat, name, extra)
+if r1 then return r1, r2 end
+local okc, app = pcall(function() return mod.Controllers.Characters:GetFromString(game:GetService("Players").LocalPlayer.Name).Appearance end)
+if not okc or not app then return r1, r2 end
+local white = { 255, 255, 255 }
+local changes
+if cat == "Mascots" then
+pcall(function() app.appearanceData.Mascot = name app:ApplyMascot(name) end)
+return { Mascot = name }
+elseif cat == "Shoes" then
+changes = { Shoes = { RightShoe = { name, white }, LeftShoe = { name, white } } }
+elseif cat == "Shirt" or cat == "Pants" or cat == "Jersey" then
+changes = {}
+changes[cat] = name
+elseif cat == "Banners" or cat == "Titles" or cat == "GreenEffects" or cat == "Vehicles" or cat == "Basketballs" then
+return r1, r2
+else
+changes = {}
+changes[cat] = { { name, white } }
+end
+local oku = pcall(function() app:UpdateAppearance(changes) end)
+if oku then return changes end
+return r1, r2
+end
+return true
+end
+task.spawn(function()
+while JH.Running do
+if S.UnlockKeep or JH.unlockedOnce then pcall(hookEquip) end
+task.wait(3)
+end
+end)
+JH.hookEquip = hookEquip
 UI.Button(uc, "Unlock everything now", function()
 local n = unlockAll()
+JH.unlockedOnce = true pcall(hookEquip)
 notify("Unlock All", n > 0 and (n .. " items unlocked. Reopen the Tab Menu to see them.") or "Everything already unlocked, or the game's data was not found.", 4)
 end, true)
 tog(uc, "Keep everything unlocked", "UnlockKeep", nil, false)
@@ -46917,8 +46966,59 @@ end
 				return added
 			end
 			JH.unlockAll = unlockAll
+			-- make the unlocked items actually wearable (visual, on your own screen): when the server refuses to equip something you do not own,
+			-- apply it to your character through the game's own appearance code instead
+			local function hookEquip()
+				local inv
+				for _, m in ipairs(getloadedmodules()) do
+					local nm = m:GetFullName()
+					if string.sub(nm, -17) == "TabMenu.Inventory" then inv = m end
+				end
+				if not inv then return false end
+				local ok, mod = pcall(require, inv)
+				if not ok or type(mod) ~= "table" then return false end
+				local svc = mod.Services and mod.Services.InventoryService
+				if not svc or svc.JHubHooked then return svc and true or false end
+				local orig = svc.EquipItem
+				if type(orig) ~= "function" then return false end
+				svc.JHubHooked = true
+				svc.EquipItem = function(self2, cat, name, extra)
+					local r1, r2 = orig(self2, cat, name, extra)
+					if r1 then return r1, r2 end
+					local okc, app = pcall(function() return mod.Controllers.Characters:GetFromString(game:GetService("Players").LocalPlayer.Name).Appearance end)
+					if not okc or not app then return r1, r2 end
+					local white = { 255, 255, 255 }
+					local changes
+					if cat == "Mascots" then
+						pcall(function() app.appearanceData.Mascot = name app:ApplyMascot(name) end)
+						return { Mascot = name }
+					elseif cat == "Shoes" then
+						changes = { Shoes = { RightShoe = { name, white }, LeftShoe = { name, white } } }
+					elseif cat == "Shirt" or cat == "Pants" or cat == "Jersey" then
+						changes = {}
+						changes[cat] = name
+					elseif cat == "Banners" or cat == "Titles" or cat == "GreenEffects" or cat == "Vehicles" or cat == "Basketballs" then
+						return r1, r2
+					else
+						changes = {}
+						changes[cat] = { { name, white } }
+					end
+					local oku = pcall(function() app:UpdateAppearance(changes) end)
+					if oku then return changes end
+					return r1, r2
+				end
+				return true
+			end
+			task.spawn(function()
+				while JH.Running do
+					if S.UnlockKeep or JH.unlockedOnce then pcall(hookEquip) end
+					task.wait(3)
+				end
+			end)
+			JH.hookEquip = hookEquip
 			UI.Button(uc, "Unlock everything now", function()
 				local n = unlockAll()
+				JH.unlockedOnce = true pcall(hookEquip)
 				notify("Unlock All", n > 0 and (n .. " items unlocked. Reopen the Tab Menu to see them.") or "Everything already unlocked, or the game's data was not found.", 4)
 			end, true)
 			tog(uc, "Keep everything unlocked", "UnlockKeep", nil, false)
