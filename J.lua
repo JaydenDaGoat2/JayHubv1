@@ -134,8 +134,8 @@ local updated = false
 pcall(function()
 local shaBody = game:HttpGet("https://api.github.com/repos/jaydendagoat2/jayhubv1/commits/claude%2Fclaudechud-8cord-executor-wclom3")
 local sha = type(shaBody) == "string" and string.match(shaBody, '"sha"%s*:%s*"(%x+)"')
-local url = sha and ("https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/" .. sha .. "/executor/JHub.lua")
-or "https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/claude/claudechud-8cord-executor-wclom3/executor/JHub.lua"
+local url = sha and ("https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/" .. sha .. "/J.lua")
+or "https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/claude/j/J.lua"
 local src = game:HttpGet(url)
 if type(src) == "string" and #src > 10000 then
 local fn = loadstring(src)
@@ -19775,7 +19775,7 @@ return prevG(me, others, forced)
 end
 end
 do
-local OWNER, REPO, BRANCH = "jaydendagoat2", "jayhubv1", "claude/claudechud-8cord-executor-wclom3"
+local OWNER, REPO, BRANCH = "jaydendagoat2", "jayhubv1", "claude/j"
 local function http(url) return game:HttpGet(url) end
 local function latestSha()
 local branch = string.gsub(BRANCH, "/", "%%2F")
@@ -19785,8 +19785,8 @@ return string.match(body, '"sha"%s*:%s*"(%x+)"')
 end
 local function fetchNewest()
 local sha = latestSha()
-local url = sha and ("https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" .. sha .. "/executor/JHub.lua")
-or ("https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" .. BRANCH .. "/executor/JHub.lua?v=" .. tostring(os.time()))
+local url = sha and ("https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" .. sha .. "/J.lua")
+or ("https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" .. BRANCH .. "/J.lua?v=" .. tostring(os.time()))
 local ok, src = pcall(http, url)
 if not ok or type(src) ~= "string" or #src < 10000 then return nil end
 local ver = string.match(src, "JHUB_VERSION:%s*(v[%d%.]+)") or string.match(src, 'local VERSION = "(v[%d%.]+)')
@@ -23544,8 +23544,8 @@ do
 				pcall(function()
 					local shaBody = game:HttpGet("https://api.github.com/repos/jaydendagoat2/jayhubv1/commits/claude%2Fclaudechud-8cord-executor-wclom3")
 					local sha = type(shaBody) == "string" and string.match(shaBody, '"sha"%s*:%s*"(%x+)"')
-					local url = sha and ("https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/" .. sha .. "/executor/JHub.lua")
-						or "https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/claude/claudechud-8cord-executor-wclom3/executor/JHub.lua"
+					local url = sha and ("https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/" .. sha .. "/J.lua")
+						or "https://raw.githubusercontent.com/jaydendagoat2/jayhubv1/claude/j/J.lua"
 					local src = game:HttpGet(url)
 					if type(src) == "string" and #src > 10000 then
 						local fn = loadstring(src)
@@ -43674,7 +43674,7 @@ do
 end
 -- UPDATE BUTTON: checks GitHub for the newest version and loads it
 do
-	local OWNER, REPO, BRANCH = "jaydendagoat2", "jayhubv1", "claude/claudechud-8cord-executor-wclom3"
+	local OWNER, REPO, BRANCH = "jaydendagoat2", "jayhubv1", "claude/j"
 	local function http(url) return game:HttpGet(url) end
 	local function latestSha()
 		local branch = string.gsub(BRANCH, "/", "%%2F")
@@ -43684,8 +43684,8 @@ do
 	end
 	local function fetchNewest()
 		local sha = latestSha()
-		local url = sha and ("https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" .. sha .. "/executor/JHub.lua")
-			or ("https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" .. BRANCH .. "/executor/JHub.lua?v=" .. tostring(os.time()))
+		local url = sha and ("https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" .. sha .. "/J.lua")
+			or ("https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" .. BRANCH .. "/J.lua?v=" .. tostring(os.time()))
 		local ok, src = pcall(http, url)
 		if not ok or type(src) ~= "string" or #src < 10000 then return nil end
 		-- the published build is obfuscated, so "local VERSION = ..." is never readable in it - the header comment
