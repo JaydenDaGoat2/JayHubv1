@@ -11,7 +11,7 @@
     Tabs: Main, Shooting, Dribbling, Players, UI
     Tap the moving JH logo to open / close the menu.
 
-    JHUB_VERSION: v2.36
+    JHUB_VERSION: v2.37
     (this header is never obfuscated, so the auto-update check below can always read the version
     here even from the published build, where "local VERSION = ..." is hidden by the obfuscator -
     keep this line in sync with VERSION on every bump, or the auto-update check breaks again)
@@ -81,7 +81,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.36"
+local VERSION = "v2.37"
 
 do
 local AUTH_URL = "https://jayhubv1-default-rtdb.firebaseio.com/control.json"
@@ -15287,7 +15287,7 @@ local codeBox = UI.Input(lock, "Code", { get = function() return typed end, set 
 UI.Note(lock, "Auto Guard is locked. Enter the code to open it.")
 local contentFrames = {}
 JH.AGContentFrames = contentFrames
-if S.AGUnlocked then
+if true then
 task.defer(function()
 lock.frame.Visible = false
 for _, f in ipairs(contentFrames) do f.Visible = true end
@@ -15319,6 +15319,8 @@ UI.Slider(g1, "Reaction time", "AGReact", 0, 0.5, 0.01, 2, "s")
 UI.Slider(g1, "Prediction (looks ahead)", "AGPredict", 0, 0.6, 0.02, 2, "s")
 UI.Slider(g1, "Guard range", "AGRange", 10, 120, 5, 0, " studs")
 UI.Toggle(g1, "Stay in front no matter what", "AGLock")
+if S.AGOnlyBallSet == nil then S.AGOnlyBallSet = true S.AGOnlyBall = false end
+UI.Toggle(g1, "Only guard the player with the ball", "AGOnlyBall")
 UI.Toggle(g1, "Only drive while I hold the real Guard button myself", "AGHoldToUse")
 UI.Toggle(g1, "Face the player I guard", "AGFace")
 UI.Toggle(g1, "Sprint to catch up", "AGSprint")
@@ -19858,7 +19860,7 @@ local TOUCH = Enum.UserInputType.Touch
 local MMOVE = Enum.UserInputType.MouseMovement
 local KEYBOARD = Enum.UserInputType.Keyboard
 local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-local VERSION = "v2.36"
+local VERSION = "v2.37"
 
 -- ACCESS CHECK: the script checks in with the backend before it does anything else. A copy of this file pulled
 -- off disk or cracked open by a deobfuscator is still just an inert shell without the server saying yes - this
@@ -35471,7 +35473,7 @@ do
 		UI.Note(lock, "Auto Guard is locked. Enter the code to open it.")
 		local contentFrames = {}
 JH.AGContentFrames = contentFrames
-		if S.AGUnlocked then
+		if true then
 			task.defer(function()
 				lock.frame.Visible = false
 				for _, f in ipairs(contentFrames) do f.Visible = true end
@@ -35503,6 +35505,8 @@ JH.AGContentFrames = contentFrames
 		UI.Slider(g1, "Prediction (looks ahead)", "AGPredict", 0, 0.6, 0.02, 2, "s")
 		UI.Slider(g1, "Guard range", "AGRange", 10, 120, 5, 0, " studs")
 		UI.Toggle(g1, "Stay in front no matter what", "AGLock")
+		if S.AGOnlyBallSet == nil then S.AGOnlyBallSet = true S.AGOnlyBall = false end
+		UI.Toggle(g1, "Only guard the player with the ball", "AGOnlyBall")
 		UI.Toggle(g1, "Only drive while I hold the real Guard button myself", "AGHoldToUse")
 		UI.Toggle(g1, "Face the player I guard", "AGFace")
 		UI.Toggle(g1, "Sprint to catch up", "AGSprint")
