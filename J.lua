@@ -16321,7 +16321,7 @@ Bot.aiT = tick()
 local l2, plc = {}, {}
 for _, p2 in ipairs(Players:GetPlayers()) do if p2.Character then plc[p2.Character] = true end end
 for _, h2 in ipairs(workspace:GetDescendants()) do
-if h2:IsA("Humanoid") then local m2 = h2.Parent if m2 and m2:IsA("Model") and not plc[m2] and m2.Name ~= "InvisCharacter" then l2[#l2 + 1] = m2 end end
+if h2:IsA("Humanoid") then local m2 = h2.Parent if m2 and m2:IsA("Model") and not plc[m2] and m2.Name ~= "InvisCharacter" and (m2.Parent == folder or m2:GetAttribute("Action") ~= nil) then l2[#l2 + 1] = m2 end end
 end
 Bot.aiList = l2
 end
@@ -19768,7 +19768,11 @@ local handler
 for _, o in ipairs(others) do
 if o.ball and not o.mate then handler = o end
 end
-if not handler then Bot.setGuardHold(false) return false end
+if handler then Bot.lastHandlerT = tick() end
+if not handler then
+if Bot.lastHandlerT and tick() - Bot.lastHandlerT < 4 then return prevG(me, others, "Closest") end
+Bot.setGuardHold(false) return false
+end
 forced = "Ball handler"
 end
 return prevG(me, others, forced)
@@ -40104,7 +40108,7 @@ do
 			local l2, plc = {}, {}
 			for _, p2 in ipairs(Players:GetPlayers()) do if p2.Character then plc[p2.Character] = true end end
 			for _, h2 in ipairs(workspace:GetDescendants()) do
-				if h2:IsA("Humanoid") then local m2 = h2.Parent if m2 and m2:IsA("Model") and not plc[m2] and m2.Name ~= "InvisCharacter" then l2[#l2 + 1] = m2 end end
+				if h2:IsA("Humanoid") then local m2 = h2.Parent if m2 and m2:IsA("Model") and not plc[m2] and m2.Name ~= "InvisCharacter" and (m2.Parent == folder or m2:GetAttribute("Action") ~= nil) then l2[#l2 + 1] = m2 end end
 			end
 			Bot.aiList = l2
 		end
@@ -43666,7 +43670,11 @@ do
 			for _, o in ipairs(others) do
 				if o.ball and not o.mate then handler = o end
 			end
-			if not handler then Bot.setGuardHold(false) return false end
+			if handler then Bot.lastHandlerT = tick() end
+			if not handler then
+				if Bot.lastHandlerT and tick() - Bot.lastHandlerT < 4 then return prevG(me, others, "Closest") end
+				Bot.setGuardHold(false) return false
+			end
 			forced = "Ball handler"
 		end
 		return prevG(me, others, forced)
