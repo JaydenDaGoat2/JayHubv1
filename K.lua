@@ -1,5 +1,14 @@
+--[[
+  Oklo shooting system, combined into one file (for JHub)
+  Modules inside: config, env, court, aero, hook, autogreen, autoshoot, drive, autodunk, contest, rimguard
+  Use:  local KS = <this file's return value>
+        local api = KS.start(function(text) print(text) end)   -- starts Auto Green
+        KS.Settings.AutoGreen = true                            -- settings table (see Config.DEFAULTS)
+        local AutoShoot = KS.import("autoshoot")                -- other modules via KS.import(name)
+--]]
+local KuluShoot = nil
 -- Kulu shooting system (Auto Green) bundled for JHub
-local KuluShoot = (function()
+KuluShoot = (function()
 local modules = {}
 local loaded = {}
 local function import(name)
@@ -10,83 +19,6 @@ local function import(name)
     local value = build(import)
     loaded[name] = value
     return value
-end
-modules["env"] = function(...)
-
-local Env = {}
-
-local httpService: any = game:GetService("HttpService")
-
-local function pick(value: any): any
-    return if type(value) == "function" then value else nil
-end
-
-local globals: any = nil
-if type(getgenv) == "function" then
-    local ok, env = pcall(getgenv)
-    if ok and type(env) == "table" then
-        globals = env
-    end
-end
-if type(globals) ~= "table" then
-    globals = if type(_G) == "table" then _G else {}
-end
-
-Env.G = globals
-Env.hookmetamethod = pick(hookmetamethod)
-Env.newcclosure = pick(newcclosure)
-Env.clonefunction = pick(clonefunction)
-Env.restorefunction = pick(restorefunction)
-Env.getnamecallmethod = pick(getnamecallmethod)
-Env.getrawmetatable = pick(getrawmetatable)
-Env.setreadonly = pick(setreadonly)
-Env.checkcaller = pick(checkcaller)
-Env.keypress = pick(keypress)
-Env.keyrelease = pick(keyrelease)
-Env.filtergc = pick(filtergc)
-Env.gethui = pick(gethui)
-Env.getgc = pick(getgc)
-Env.setidentity = pick(setthreadidentity) or pick(set_thread_identity) or pick(setidentity)
-Env.getidentity = pick(getthreadidentity) or pick(get_thread_identity) or pick(getidentity)
-
-local canRead = type(isfile) == "function" and type(readfile) == "function"
-local canWrite = type(writefile) == "function"
-
-function Env.get(name: string): any
-    return globals[name]
-end
-
-function Env.set(name: string, value: any)
-    globals[name] = value
-end
-
-local function readJson(path: string): any
-    if not isfile(path) then
-        return nil
-    end
-    return httpService:JSONDecode(readfile(path))
-end
-
-function Env.readJson(path: string): any
-    if not canRead then
-        return nil
-    end
-    local ok, value = pcall(readJson, path)
-    return if ok and type(value) == "table" then value else nil
-end
-
-local function writeJson(path: string, value: any)
-    writefile(path, httpService:JSONEncode(value))
-end
-
-function Env.writeJson(path: string, value: any): boolean
-    if not canWrite then
-        return false
-    end
-    return (pcall(writeJson, path, value))
-end
-
-return Env
 end
 modules["config"] = function(...)
 
@@ -279,232 +211,82 @@ Config.DEFAULTS = {
 
 return Config
 end
-modules["aero"] = function(...)
+modules["env"] = function(...)
 
-local import: (string) -> any = ...
-local Env: typeof(require("./env")) = import("env")
+local Env = {}
 
-local Aero = {}
+local httpService: any = game:GetService("HttpService")
 
-type Map = { [string]: any }
-
-local NAME = "__PBInputWrap"
-local VERSION = 1
-local WRAP = { "Shoot", "Sprint", "Steal", "Pass", "Dribble", "Jump", "Clutch", "HoldG" }
-local CANDIDATES = { "Meter", "Gui", "Player", "UserInput", "Replication", "Team" }
-local GC_CHUNK = 4000
-
-local players: any = game:GetService("Players")
-
-local function inputOf(services: any): any?
-    if type(services) ~= "table" then
-        return nil
-    end
-    local input = rawget(services, "InputService")
-    if type(input) ~= "table" then
-        return nil
-    end
-    local shoot = rawget(input, "Shoot")
-    if type(shoot) ~= "table" or type(rawget(shoot, "Fire")) ~= "function" then
-        return nil
-    end
-    return input
+local function pick(value: any): any
+    return if type(value) == "function" then value else nil
 end
 
-local function servicesOf(value: any): any?
-    return value.Services
+local globals: any = nil
+if type(getgenv) == "function" then
+    local ok, env = pcall(getgenv)
+    if ok and type(env) == "table" then
+        globals = env
+    end
+end
+if type(globals) ~= "table" then
+    globals = if type(_G) == "table" then _G else {}
 end
 
-local function load(module: any): (boolean, any)
-    local ok, value = pcall(require, module)
-    if ok and type(value) == "table" then
-        return ok, value
-    end
-    local set, get = Env.setidentity, Env.getidentity
-    if not set then
-        return ok, value
-    end
-    local before: any = nil
-    if get then
-        local read, level = pcall(get)
-        before = if read then level else nil
-    end
-    pcall(set, 2)
-    local again, result = pcall(require, module)
-    pcall(set, if type(before) == "number" then before else 8)
-    return again, result
+Env.G = globals
+Env.hookmetamethod = pick(hookmetamethod)
+Env.newcclosure = pick(newcclosure)
+Env.clonefunction = pick(clonefunction)
+Env.restorefunction = pick(restorefunction)
+Env.getnamecallmethod = pick(getnamecallmethod)
+Env.getrawmetatable = pick(getrawmetatable)
+Env.setreadonly = pick(setreadonly)
+Env.checkcaller = pick(checkcaller)
+Env.keypress = pick(keypress)
+Env.keyrelease = pick(keyrelease)
+Env.filtergc = pick(filtergc)
+Env.gethui = pick(gethui)
+Env.getgc = pick(getgc)
+Env.setidentity = pick(setthreadidentity) or pick(set_thread_identity) or pick(setidentity)
+Env.getidentity = pick(getthreadidentity) or pick(get_thread_identity) or pick(getidentity)
+
+local canRead = type(isfile) == "function" and type(readfile) == "function"
+local canWrite = type(writefile) == "function"
+
+function Env.get(name: string): any
+    return globals[name]
 end
 
-local function fromModule(module: any): any?
-    if typeof(module) ~= "Instance" or not module:IsA("ModuleScript") then
+function Env.set(name: string, value: any)
+    globals[name] = value
+end
+
+local function readJson(path: string): any
+    if not isfile(path) then
         return nil
     end
-    local ok, value = load(module)
-    if not ok or type(value) ~= "table" then
-        return nil
-    end
-    local got, services = pcall(servicesOf, value)
-    return if got then inputOf(services) else nil
+    return httpService:JSONDecode(readfile(path))
 end
 
-local function controllers(): { any }
-    local list = {}
-    local player = players.LocalPlayer
-    local scripts = if player then player:FindFirstChild("PlayerScripts") else nil
-    local root = if scripts then scripts:FindFirstChild("Aero") else nil
-    local folder = if root then root:FindFirstChild("Controllers") else nil
-    if folder then
-        for _, name in CANDIDATES do
-            local child = folder:FindFirstChild(name)
-            if child then
-                table.insert(list, child)
-            end
-        end
-    end
-    local modules = if root then root:FindFirstChild("Modules") else nil
-    local components = if modules then modules:FindFirstChild("Components") else nil
-    local input = if components then components:FindFirstChild("Input") else nil
-    if input then
-        for _, name in { "Keyboard", "Gamepad", "Mobile" } do
-            local child = input:FindFirstChild(name)
-            if child then
-                table.insert(list, child)
-            end
-        end
-    end
-    return list
-end
-
-local function fromGc(): any?
-    local filter = Env.filtergc
-    if filter then
-        local ok, found = pcall(filter, "table", { Keys = { "InputService", "GameplayService" } }, true)
-        if ok then
-            return inputOf(found)
-        end
+function Env.readJson(path: string): any
+    if not canRead then
         return nil
     end
-    local walk = Env.getgc
-    if not walk then
-        return nil
-    end
-    local ok, list = pcall(walk, true)
-    if not ok or type(list) ~= "table" then
-        return nil
-    end
-    for index, value in list do
-        if type(value) == "table" then
-            local found = inputOf(value)
-            if found then
-                return found
-            end
-        end
-        if index % GC_CHUNK == 0 then
-            task.wait()
-        end
-    end
-    return nil
+    local ok, value = pcall(readJson, path)
+    return if ok and type(value) == "table" then value else nil
 end
 
-function Aero.find(light: boolean?): any?
-    local existing = Env.get(NAME)
-    if type(existing) == "table" and existing.Version == VERSION and type(existing.Input) == "table" then
-        return existing.Input
-    end
-    for _, module in controllers() do
-        local input = fromModule(module)
-        if input then
-            return input
-        end
-    end
-    if light then
-        return nil
-    end
-    return fromGc()
+local function writeJson(path: string, value: any)
+    writefile(path, httpService:JSONEncode(value))
 end
 
-function Aero.install(handler: (string, ...any) -> boolean, light: boolean?): (Map?, string?)
-    local input = Aero.find(light)
-    if not input then
-        return nil, "unsupported"
-    end
-    local existing = Env.get(NAME)
-    local reuse = type(existing) == "table" and existing.Version == VERSION and existing.Input == input
-    if reuse then
-        for name, wrapper in existing.Wrappers do
-            local signal = rawget(input, name)
-            if type(signal) ~= "table" or rawget(signal, "Fire") ~= wrapper then
-                reuse = false
-            end
-        end
-    end
-    if type(existing) == "table" and not reuse then
-        existing.Off = true
-        existing.Handler = nil
-    end
-    local state: Map = if reuse then existing else { Version = VERSION, Input = input, Originals = {}, Wrappers = {} }
-    state.Handler = handler
-    state.Off = nil
-    for _, name in WRAP do
-        local signal = rawget(input, name)
-        local current = if type(signal) == "table" then rawget(signal, "Fire") else nil
-        if type(current) == "function" and current ~= state.Wrappers[name] then
-            local original = current
-            local function wrapper(self: any, ...: any): ...any
-                if not state.Off then
-                    local handle = state.Handler
-                    if handle then
-                        local ok, hold = pcall(handle, name, ...)
-                        if ok and hold == true then
-                            return
-                        end
-                    end
-                end
-                return original(self, ...)
-            end
-            state.Originals[name] = original
-            state.Wrappers[name] = wrapper
-            rawset(signal, "Fire", wrapper)
-        end
-    end
-    Env.set(NAME, state)
-    return state, nil
-end
-
-function Aero.intact(): boolean
-    local state = Env.get(NAME)
-    if type(state) ~= "table" or state.Off or type(state.Input) ~= "table" then
+function Env.writeJson(path: string, value: any): boolean
+    if not canWrite then
         return false
     end
-    local signal = rawget(state.Input, "Shoot")
-    return type(signal) == "table" and rawget(signal, "Fire") == state.Wrappers.Shoot
+    return (pcall(writeJson, path, value))
 end
 
-function Aero.remove()
-    local state = Env.get(NAME)
-    if type(state) ~= "table" or state.Version ~= VERSION then
-        return
-    end
-    state.Off = true
-    state.Handler = nil
-    local input = state.Input
-    local clean = true
-    for name, wrapper in state.Wrappers do
-        local signal = if type(input) == "table" then rawget(input, name) else nil
-        if type(signal) == "table" then
-            if rawget(signal, "Fire") == wrapper then
-                rawset(signal, "Fire", state.Originals[name])
-            else
-                clean = false
-            end
-        end
-    end
-    if clean then
-        Env.set(NAME, nil)
-    end
-end
-
-return Aero
+return Env
 end
 modules["court"] = function(...)
 
@@ -1584,6 +1366,233 @@ function Court.stop()
 end
 
 return Court
+end
+modules["aero"] = function(...)
+
+local import: (string) -> any = ...
+local Env: typeof(require("./env")) = import("env")
+
+local Aero = {}
+
+type Map = { [string]: any }
+
+local NAME = "__PBInputWrap"
+local VERSION = 1
+local WRAP = { "Shoot", "Sprint", "Steal", "Pass", "Dribble", "Jump", "Clutch", "HoldG" }
+local CANDIDATES = { "Meter", "Gui", "Player", "UserInput", "Replication", "Team" }
+local GC_CHUNK = 4000
+
+local players: any = game:GetService("Players")
+
+local function inputOf(services: any): any?
+    if type(services) ~= "table" then
+        return nil
+    end
+    local input = rawget(services, "InputService")
+    if type(input) ~= "table" then
+        return nil
+    end
+    local shoot = rawget(input, "Shoot")
+    if type(shoot) ~= "table" or type(rawget(shoot, "Fire")) ~= "function" then
+        return nil
+    end
+    return input
+end
+
+local function servicesOf(value: any): any?
+    return value.Services
+end
+
+local function load(module: any): (boolean, any)
+    local ok, value = pcall(require, module)
+    if ok and type(value) == "table" then
+        return ok, value
+    end
+    local set, get = Env.setidentity, Env.getidentity
+    if not set then
+        return ok, value
+    end
+    local before: any = nil
+    if get then
+        local read, level = pcall(get)
+        before = if read then level else nil
+    end
+    pcall(set, 2)
+    local again, result = pcall(require, module)
+    pcall(set, if type(before) == "number" then before else 8)
+    return again, result
+end
+
+local function fromModule(module: any): any?
+    if typeof(module) ~= "Instance" or not module:IsA("ModuleScript") then
+        return nil
+    end
+    local ok, value = load(module)
+    if not ok or type(value) ~= "table" then
+        return nil
+    end
+    local got, services = pcall(servicesOf, value)
+    return if got then inputOf(services) else nil
+end
+
+local function controllers(): { any }
+    local list = {}
+    local player = players.LocalPlayer
+    local scripts = if player then player:FindFirstChild("PlayerScripts") else nil
+    local root = if scripts then scripts:FindFirstChild("Aero") else nil
+    local folder = if root then root:FindFirstChild("Controllers") else nil
+    if folder then
+        for _, name in CANDIDATES do
+            local child = folder:FindFirstChild(name)
+            if child then
+                table.insert(list, child)
+            end
+        end
+    end
+    local modules = if root then root:FindFirstChild("Modules") else nil
+    local components = if modules then modules:FindFirstChild("Components") else nil
+    local input = if components then components:FindFirstChild("Input") else nil
+    if input then
+        for _, name in { "Keyboard", "Gamepad", "Mobile" } do
+            local child = input:FindFirstChild(name)
+            if child then
+                table.insert(list, child)
+            end
+        end
+    end
+    return list
+end
+
+local function fromGc(): any?
+    local filter = Env.filtergc
+    if filter then
+        local ok, found = pcall(filter, "table", { Keys = { "InputService", "GameplayService" } }, true)
+        if ok then
+            return inputOf(found)
+        end
+        return nil
+    end
+    local walk = Env.getgc
+    if not walk then
+        return nil
+    end
+    local ok, list = pcall(walk, true)
+    if not ok or type(list) ~= "table" then
+        return nil
+    end
+    for index, value in list do
+        if type(value) == "table" then
+            local found = inputOf(value)
+            if found then
+                return found
+            end
+        end
+        if index % GC_CHUNK == 0 then
+            task.wait()
+        end
+    end
+    return nil
+end
+
+function Aero.find(light: boolean?): any?
+    local existing = Env.get(NAME)
+    if type(existing) == "table" and existing.Version == VERSION and type(existing.Input) == "table" then
+        return existing.Input
+    end
+    for _, module in controllers() do
+        local input = fromModule(module)
+        if input then
+            return input
+        end
+    end
+    if light then
+        return nil
+    end
+    return fromGc()
+end
+
+function Aero.install(handler: (string, ...any) -> boolean, light: boolean?): (Map?, string?)
+    local input = Aero.find(light)
+    if not input then
+        return nil, "unsupported"
+    end
+    local existing = Env.get(NAME)
+    local reuse = type(existing) == "table" and existing.Version == VERSION and existing.Input == input
+    if reuse then
+        for name, wrapper in existing.Wrappers do
+            local signal = rawget(input, name)
+            if type(signal) ~= "table" or rawget(signal, "Fire") ~= wrapper then
+                reuse = false
+            end
+        end
+    end
+    if type(existing) == "table" and not reuse then
+        existing.Off = true
+        existing.Handler = nil
+    end
+    local state: Map = if reuse then existing else { Version = VERSION, Input = input, Originals = {}, Wrappers = {} }
+    state.Handler = handler
+    state.Off = nil
+    for _, name in WRAP do
+        local signal = rawget(input, name)
+        local current = if type(signal) == "table" then rawget(signal, "Fire") else nil
+        if type(current) == "function" and current ~= state.Wrappers[name] then
+            local original = current
+            local function wrapper(self: any, ...: any): ...any
+                if not state.Off then
+                    local handle = state.Handler
+                    if handle then
+                        local ok, hold = pcall(handle, name, ...)
+                        if ok and hold == true then
+                            return
+                        end
+                    end
+                end
+                return original(self, ...)
+            end
+            state.Originals[name] = original
+            state.Wrappers[name] = wrapper
+            rawset(signal, "Fire", wrapper)
+        end
+    end
+    Env.set(NAME, state)
+    return state, nil
+end
+
+function Aero.intact(): boolean
+    local state = Env.get(NAME)
+    if type(state) ~= "table" or state.Off or type(state.Input) ~= "table" then
+        return false
+    end
+    local signal = rawget(state.Input, "Shoot")
+    return type(signal) == "table" and rawget(signal, "Fire") == state.Wrappers.Shoot
+end
+
+function Aero.remove()
+    local state = Env.get(NAME)
+    if type(state) ~= "table" or state.Version ~= VERSION then
+        return
+    end
+    state.Off = true
+    state.Handler = nil
+    local input = state.Input
+    local clean = true
+    for name, wrapper in state.Wrappers do
+        local signal = if type(input) == "table" then rawget(input, name) else nil
+        if type(signal) == "table" then
+            if rawget(signal, "Fire") == wrapper then
+                rawset(signal, "Fire", state.Originals[name])
+            else
+                clean = false
+            end
+        end
+    end
+    if clean then
+        Env.set(NAME, nil)
+    end
+end
+
+return Aero
 end
 modules["hook"] = function(...)
 
@@ -2951,12 +2960,1004 @@ end
 
 return AutoGreen
 end
+modules["autoshoot"] = function(...)
+
+local import: (string) -> any = ...
+local Court: typeof(require("./court")) = import("court")
+
+local AutoShoot = {}
+AutoShoot.__index = AutoShoot
+
+local COOLDOWN = 1.6
+local RETRY = 0.25
+local LAYUP_RANGE = 13
+local JITTER = 0.15
+local SETTLE = 0.2
+
+local random = Random.new()
+
+function AutoShoot.new(read: (string) -> any, autoGreen: any): any
+    return setmetatable({ Read = read, AutoGreen = autoGreen, AutoDunk = nil :: any, Defense = nil :: any, Contest = nil :: any, Last = -math.huge, Since = nil :: number?, GroundAt = nil :: number?, Jitter = 0 }, AutoShoot)
+end
+
+local function target(root: any, range: number, attack: any?): (any?, number)
+    local near, closest = Court.rimDistance(root.Position)
+    if not near or not closest or (attack and closest ~= attack) then
+        return nil, math.huge
+    end
+    local rim, distance = Court.facingRim(root, 0.2, range)
+    if rim == closest then
+        return rim, distance
+    end
+    if near <= LAYUP_RANGE then
+        return closest, near
+    end
+    return nil, math.huge
+end
+
+local function grounded(mine: any, root: any): boolean
+    local humanoid = Court.humanoid(mine)
+    if humanoid and humanoid.FloorMaterial == Enum.Material.Air and math.abs(root.AssemblyLinearVelocity.Y) > 2 then
+        return false
+    end
+    return true
+end
+
+function AutoShoot.step(self: any, now: number)
+    local read = self.Read
+    if read("AutoShoot") ~= true or read("AutoGreen") ~= true then
+        self.Since = nil
+        return
+    end
+    local mine, root = Court.Mine, Court.Root
+    if not mine or not root or not Court.HasBall then
+        self.Since = nil
+        self.GroundAt = nil
+        return
+    end
+    if not self.Since then
+        self.Since = now
+        self.Jitter = random:NextNumber(-JITTER, JITTER)
+    end
+    if not grounded(mine, root) then
+        self.GroundAt = nil
+        return
+    end
+    if not self.GroundAt then
+        self.GroundAt = now
+    end
+    local hold = math.max(0, (read("ShootDelay") or 300) * (1 + self.Jitter))
+    if now - self.Last < COOLDOWN or now - self.Since < hold / 1000 or now - self.GroundAt < SETTLE then
+        return
+    end
+    local action = Court.Action
+    if (action ~= "" and action ~= "Dribbling" and action ~= nil) or not Court.free(mine) or Court.forced(mine) or Court.HandsOff then
+        return
+    end
+    local defense = self.Defense
+    local rim, distance = target(root, read("ShootRange") or 24, if defense then defense:attackRim() else nil)
+    if not rim then
+        return
+    end
+    local dunk = self.AutoDunk
+    if dunk and read("AutoDunk") == true and dunk:claims(distance) then
+        return
+    end
+    if distance < (read("MinShot") or 0) or distance > (read("ShootRange") or 24) then
+        return
+    end
+    if distance <= LAYUP_RANGE then
+        local ahead = Court.frontOf(rim, root.Position)
+        if ahead and ahead < -1 then
+            return
+        end
+    end
+    if Court.nearestFoe(root.Position) <= (read("OpenRange") or 6) then
+        return
+    end
+    local contest = self.Contest
+    if contest and contest:estimate(root) > (tonumber(read("MaxContest")) or 35) / 100 then
+        return
+    end
+    if self.AutoGreen:begin(false) then
+        self.Last = now
+    else
+        self.Last = now - COOLDOWN + RETRY
+    end
+end
+
+return AutoShoot
+end
+modules["drive"] = function(...)
+
+local import: (string) -> any = ...
+local Court: typeof(require("./court")) = import("court")
+
+local Drive = {}
+
+type Map = { [string]: any }
+
+local LIMIT = 27
+local TURN = 140
+local FRESH = 0.12
+
+local PROFILES: { [string]: Map } = {
+    Dunk = { Priority = 3, Accel = 38, Base = 6, Gain = 1.6, Stop = 2, Resume = 4 },
+    Guard = { Priority = 2, Accel = 75, Brake = 200, Base = 1.5, Gain = 5, Stop = 0.8, Resume = 1.6, Direct = true, Turn = math.rad(280) },
+    Magnet = { Priority = 1, Accel = 60, Base = 5, Gain = 3, Stop = 1, Resume = 1.5 },
+}
+
+local owner: string? = nil
+local goal = Vector3.zero
+local topSpeed = 0
+local useKey = false
+local forced = false
+local setAt = -math.huge
+local pace: number? = nil
+local moving = false
+local last: Vector3? = nil
+local lastAt = -math.huge
+local userAt = -math.huge
+local feed: Vector3? = nil
+local seenNative = 0
+local seenAt = -math.huge
+
+function Drive.set(name: string, target: Vector3, speed: number, key: boolean, force: boolean, match: Vector3?)
+    local now = os.clock()
+    local current = owner
+    if current and current ~= name and now - setAt < FRESH and PROFILES[current].Priority > PROFILES[name].Priority then
+        return
+    end
+    if current ~= name then
+        moving = false
+        pace = nil
+    end
+    owner = name
+    goal = target
+    topSpeed = speed
+    useKey = key
+    forced = force
+    feed = match
+    setAt = now
+end
+
+function Drive.clear(name: string)
+    if owner == name then
+        owner = nil
+    end
+end
+
+function Drive.moving(name: string): boolean
+    return owner == name and moving
+end
+
+function Drive.velocity(name: string): Vector3?
+    if owner == name and moving then
+        return last
+    end
+    return nil
+end
+
+function Drive.since(now: number): number
+    return now - lastAt
+end
+
+function Drive.active(): boolean
+    return owner ~= nil and moving
+end
+
+local function halt(mover: any, hands: boolean?)
+    local keyed = Court.Held or os.clock() - Court.KeysOff < FRESH
+    moving = false
+    pace = nil
+    Court.hold("Drive", false)
+    local written = last
+    if written and hands then
+        last = nil
+    elseif written then
+        last = nil
+        local steering = Court.Mine ~= nil and Court.steering(Court.Mine)
+        if mover and not steering and (mover.Velocity - written).Magnitude < 0.05 then
+            mover.Velocity = Vector3.zero
+        elseif mover and keyed and not (Court.Mine and Court.steering(Court.Mine)) then
+            if mover.Velocity.Magnitude > written.Magnitude + 1 then
+                mover.Velocity = written
+            end
+        end
+    end
+end
+
+function Drive.begin(now: number)
+    local _, mover = Court.proxy()
+    if not mover then
+        Court.UserMoving = false
+        return
+    end
+    if not Court.Keys and now - Court.KeysOff > 0.3 then
+        local incoming = mover.Velocity
+        local x, z = incoming.X, incoming.Z
+        local speed = math.sqrt(x * x + z * z)
+        if speed > 1 then
+            local written = last
+            local own = false
+            if written and now - lastAt <= FRESH then
+                local size = written.Magnitude
+                own = size > 0.5 and speed <= size * 1.25 + 0.5 and x * written.X + z * written.Z >= 0.8 * speed * size
+            end
+            if not own then
+                userAt = now
+            end
+        end
+    end
+    Court.UserMoving = now - userAt < 0.25
+end
+
+function Drive.finish(now: number, dt: number)
+    local part, mover = Court.proxy()
+    local name = owner
+    local live = name ~= nil and now - setAt < FRESH and part ~= nil and mover ~= nil
+    if live and not forced then
+        local mine = Court.Mine
+        live = mine ~= nil and not Court.steering(mine)
+    end
+    if Court.Forced or Court.HandsOff or (Court.Mine ~= nil and Court.handsOff(Court.Mine)) then
+        owner = nil
+        halt(mover, true)
+        return
+    end
+    if not live or not name or not part or not mover then
+        halt(mover)
+        return
+    end
+    local profile = PROFILES[name]
+    if profile.Direct then
+        local want = feed or Vector3.zero
+        local wx, wz = want.X, want.Z
+        local native: Vector3 = mover.Velocity
+        local nativeSpeed = math.sqrt(native.X * native.X + native.Z * native.Z)
+        if Court.Keys and nativeSpeed > 4 and (not last or (native - last).Magnitude > 0.05) then
+            seenNative, seenAt = nativeSpeed, now
+        end
+        local cap = math.min(topSpeed, LIMIT)
+        if Court.Keys and now - seenAt < 0.5 then
+            cap = math.min(cap, seenNative + 0.3)
+        end
+        local wantSize = math.sqrt(wx * wx + wz * wz)
+        if wantSize > cap then
+            wx, wz = wx / wantSize * cap, wz / wantSize * cap
+            wantSize = cap
+        end
+        local velocity = part.AssemblyLinearVelocity
+        local vx, vz = velocity.X, velocity.Z
+        local stepX, stepZ = wx - vx, wz - vz
+        local span = math.min(dt, 0.05)
+        local before = math.sqrt(vx * vx + vz * vz)
+        if before > 2 then
+            local ux, uz = vx / before, vz / before
+            local along = stepX * ux + stepZ * uz
+            local px, pz = stepX - ux * along, stepZ - uz * along
+            local side = math.sqrt(px * px + pz * pz)
+            local sideMost = before * profile.Turn * span
+            if side > sideMost then
+                px, pz = px / side * sideMost, pz / side * sideMost
+            end
+            stepX, stepZ = ux * along + px, uz * along + pz
+        end
+        local step = math.sqrt(stepX * stepX + stepZ * stepZ)
+        local most = (if wantSize < 0.05 and profile.Brake then profile.Brake else profile.Accel) * span
+        if step > most then
+            stepX, stepZ = stepX / step * most, stepZ / step * most
+        end
+        local nx, nz = vx + stepX, vz + stepZ
+        local after = math.sqrt(nx * nx + nz * nz)
+        if after > cap then
+            nx, nz = nx / after * cap, nz / after * cap
+            after = cap
+        end
+        local write = Vector3.new(nx, 0, nz)
+        if wantSize < 0.05 and after < 0.4 then
+            if not Court.Keys then
+                halt(mover)
+                return
+            end
+            write = Vector3.zero
+            after = 0
+        end
+        moving = true
+        pace = after
+        mover.Velocity = write
+        last = write
+        lastAt = now
+        Court.hold("Drive", false)
+        return
+    end
+    local position = part.Position
+    local dx, dz = goal.X - position.X, goal.Z - position.Z
+    local away = math.sqrt(dx * dx + dz * dz)
+    local match = feed
+    if match and profile.Follow then
+        local mx, mz = match.X, match.Z
+        local matchSpeed = math.sqrt(mx * mx + mz * mz)
+        if matchSpeed < 1 and away <= profile.Stop then
+            halt(mover)
+            return
+        end
+        local top = topSpeed
+        local native: Vector3 = mover.Velocity
+        local nativeSpeed = math.sqrt(native.X * native.X + native.Z * native.Z)
+        if useKey and Court.Held and nativeSpeed > 4 and (not last or (native - last).Magnitude > 0.05) then
+            seenNative, seenAt = nativeSpeed, now
+        end
+        local nativeCap = math.huge
+        if useKey and now - seenAt < 0.5 then
+            nativeCap = seenNative + 0.3
+            top = math.min(top, nativeCap)
+        end
+        local pull = profile.Follow * math.min(away, 6)
+        local wantX = mx + (if away > 0.05 then dx / away * pull else 0)
+        local wantZ = mz + (if away > 0.05 then dz / away * pull else 0)
+        local want = math.sqrt(wantX * wantX + wantZ * wantZ)
+        local cap = math.min(top, LIMIT)
+        if want > cap then
+            wantX, wantZ = wantX / want * cap, wantZ / want * cap
+        end
+        local velocity = part.AssemblyLinearVelocity
+        local stepX, stepZ = wantX - velocity.X, wantZ - velocity.Z
+        local step = math.sqrt(stepX * stepX + stepZ * stepZ)
+        local most = profile.Accel * math.min(dt, 0.05)
+        if step > most then
+            stepX, stepZ = stepX / step * most, stepZ / step * most
+        end
+        local write = Vector3.new(velocity.X + stepX, 0, velocity.Z + stepZ)
+        local size = write.Magnitude
+        if size > nativeCap then
+            write = write * (nativeCap / size)
+        end
+        moving = true
+        pace = write.Magnitude
+        mover.Velocity = write
+        last = write
+        lastAt = now
+        Court.hold("Drive", useKey)
+        return
+    end
+    if moving then
+        if away <= profile.Stop then
+            moving = false
+        end
+    elseif away > profile.Resume then
+        moving = true
+    end
+    if not moving then
+        halt(mover)
+        return
+    end
+    local velocity = part.AssemblyLinearVelocity
+    local current = math.sqrt(velocity.X * velocity.X + velocity.Z * velocity.Z)
+    local speed = math.max(pace or current, current)
+    local top = topSpeed
+    local native: Vector3 = mover.Velocity
+    local nativeSpeed = math.sqrt(native.X * native.X + native.Z * native.Z)
+    if useKey and Court.Held and nativeSpeed > 4 and (not last or (native - last).Magnitude > 0.05) then
+        top = math.min(top, nativeSpeed + 0.3)
+    end
+    speed = math.min(speed + profile.Accel * math.min(dt, 0.05), top)
+    pace = speed
+    local scale = math.min(speed, profile.Base + away * profile.Gain, LIMIT) / away
+    local write = Vector3.new(dx * scale, 0, dz * scale)
+    local before = part.AssemblyLinearVelocity
+    local change = Vector3.new(write.X - before.X, 0, write.Z - before.Z)
+    local most = TURN * math.min(dt, 0.05)
+    if change.Magnitude > most then
+        write = Vector3.new(before.X, 0, before.Z) + change.Unit * most
+    end
+    mover.Velocity = write
+    last = write
+    lastAt = now
+    if useKey then
+        Court.hold("Drive", true)
+    else
+        Court.hold("Drive", false)
+    end
+end
+
+function Drive.stop()
+    owner = nil
+    local _, mover = Court.proxy()
+    halt(mover)
+end
+
+return Drive
+end
+modules["autodunk"] = function(...)
+
+local import: (string) -> any = ...
+local Court: typeof(require("./court")) = import("court")
+local Config: typeof(require("./config")) = import("config")
+local Drive: typeof(require("./drive")) = import("drive")
+
+local AutoDunk = {}
+AutoDunk.__index = AutoDunk
+
+local COOLDOWN = 2
+local WINDOW_MIN = 4.6
+local WINDOW_MAX = 11
+local DRIVE_START = 20
+local DRIVE_SWITCH = 14
+local DRIVE_MIN = 6
+local DRIVE_MAX = 13
+local DRIVE_PACE = 15.5
+local STAND_AT = 8
+local RUN_SPEED = 16.8
+local FACING = 0.35
+local FRONT_CONE = 0.34
+local FRONT_AIM = 0.6
+
+local RELEASE_SPACE = { Shoot = false, Input = "E", UseSpace = true }
+local PRESS_SPACE = { Shoot = true, Input = "E", UseSpace = true }
+
+local flat = Court.flat
+
+function AutoDunk.new(read: (string) -> any, autoGreen: any, player: any): any
+    return setmetatable({
+        Read = read,
+        AutoGreen = autoGreen,
+        Player = player,
+        Last = -math.huge,
+        Run = false,
+        Holding = false,
+        Owned = false,
+        FiredAt = 0,
+        SeenAt = nil :: number?,
+        HoldGoal = nil :: Vector3?,
+        Defense = nil :: any,
+    }, AutoDunk)
+end
+
+function AutoDunk.idle(self: any)
+    self.Run = false
+    Court.hold("Dunk", false)
+    Drive.clear("Dunk")
+end
+
+function AutoDunk.finish(self: any, now: number, on: boolean)
+    local lost = not Court.HasBall and Court.Action ~= "Dunking" and now - self.FiredAt >= 0.2
+    if not self.SeenAt and (Court.Action == "Dunking" or now - self.FiredAt >= 1.2 or not on or lost) then
+        self.SeenAt = now
+    end
+    local seen: number? = self.SeenAt
+    if seen and now - seen >= 0.15 then
+        if not self.Owned then
+            local remote = Court.input("Shoot")
+            if remote then
+                Court.send(remote, RELEASE_SPACE)
+            end
+        end
+        self.Holding = false
+        self.Owned = false
+        self.HoldGoal = nil
+        self.SeenAt = nil
+    end
+end
+
+function AutoDunk.step(self: any, now: number)
+    local read = self.Read
+    local on = read("AutoDunk") == true
+    if self.Holding then
+        self:finish(now, on)
+    end
+    if not on then
+        self.Run = false
+    end
+    local move = on and read("DunkMove") == true
+    local goal: Vector3? = if self.Holding then self.HoldGoal else nil
+    local run = false
+    if self.Holding and (Court.Action == "Dunking" or Court.Action == "Shooting") then
+        goal = nil
+    end
+    if on and now - self.Last >= COOLDOWN and not self.Holding then
+        goal, run = self:plan(now, move)
+    elseif self.Holding and goal then
+        run = true
+    end
+    if move and goal then
+        Drive.set("Dunk", goal, RUN_SPEED, false, true)
+        Court.hold("Dunk", run)
+    else
+        Court.hold("Dunk", false)
+        Drive.clear("Dunk")
+    end
+end
+
+function AutoDunk.plan(self: any, now: number, move: boolean): (Vector3?, boolean)
+    local read = self.Read
+    local mine, root = Court.Mine, Court.Root
+    if not mine or not root or not Court.HasBall then
+        self.Run = false
+        return nil, false
+    end
+    local action = Court.Action
+    if (action ~= "" and action ~= "Dribbling" and action ~= "Pushing" and action ~= nil) or mine:GetAttribute("Stunned") == true or Court.Forced or Court.HandsOff then
+        return nil, false
+    end
+    local auto = move and not Court.steering(mine)
+    local rim, distance = Court.facingRim(root, FACING, read("DunkRange") or 30)
+    local defense = self.Defense
+    local attack = if defense then defense:attackRim() else nil
+    if attack and rim ~= attack then
+        rim = nil
+    end
+    if not rim and auto then
+        local near: number?, closest: any? = nil, attack
+        if closest then
+            near = flat(closest.Position - root.Position).Magnitude
+        else
+            near, closest = Court.rimDistance(root.Position)
+        end
+        if near and closest and near <= (read("DunkRange") or 30) then
+            rim, distance = closest, near
+        end
+    end
+    if not rim then
+        self.Run = false
+        return nil, false
+    end
+    if read("DunkOpenOnly") == true and Court.nearestFoe(root.Position) <= (read("OpenRange") or 6) then
+        return nil, false
+    end
+    local here: Vector3 = root.Position
+    local rimAt = Vector3.new(rim.Position.X, here.Y, rim.Position.Z)
+    local out = flat(here - rimAt)
+    local side = if distance > 0.1 then out / distance else -flat(root.CFrame.LookVector)
+    local front = Court.front(rim)
+    local cone = if front then side:Dot(front) else 1
+    local aim = side
+    if front and cone < FRONT_AIM then
+        local across = side - front * cone
+        local bent = if across.Magnitude > 0.05 then front * FRONT_AIM + across.Unit * math.sqrt(1 - FRONT_AIM * FRONT_AIM) else front
+        aim = bent.Unit
+    end
+    local inFront = cone >= FRONT_CONE
+    self.Player.WantSprint = now + 0.4
+    local part = Court.proxy()
+    local velocity = if part then part.AssemblyLinearVelocity else Vector3.zero
+    local planar = flat(velocity)
+    local pace = planar.Magnitude
+    local mode = read("DunkType") or Config.DUNK_BOTH
+    local driving = mode == Config.DUNK_DRIVING or (mode == Config.DUNK_BOTH and (distance >= DRIVE_SWITCH or self.Run == true or pace >= DRIVE_PACE - 3))
+    local goal: Vector3? = nil
+    if not driving then
+        self.Run = false
+        if distance < WINDOW_MIN or distance > WINDOW_MAX or not inFront then
+            return if auto then rimAt + aim * STAND_AT else nil, false
+        end
+        if pace >= 2 then
+            return nil, false
+        end
+    else
+        if not self.Run and auto then
+            if distance < DRIVE_START or not inFront then
+                return rimAt + aim * (DRIVE_START + 4), false
+            end
+            self.Run = true
+        end
+        goal = if auto then rimAt + aim * 2.5 else nil
+        local toward = if distance > 0.1 then -planar:Dot(side) else 0
+        if distance > DRIVE_MAX or distance < DRIVE_MIN or pace < DRIVE_PACE or toward < DRIVE_PACE * 0.8 or not inFront then
+            if distance < DRIVE_MIN or (self.Run and not inFront) then
+                self.Run = false
+            end
+            return goal, self.Run == true
+        end
+    end
+    if mine:GetAttribute("Sprinting") ~= true or action == "Dribbling" or mine:GetAttribute("CanMove") == false then
+        return goal, self.Run == true
+    end
+    self.Last = now
+    self.Holding = true
+    self.FiredAt = now
+    self.SeenAt = nil
+    self.HoldGoal = goal
+    self.Run = false
+    self.Owned = self.AutoGreen:begin(true)
+    if not self.Owned then
+        local shoot = Court.input("Shoot")
+        if shoot then
+            Court.send(shoot, PRESS_SPACE)
+        end
+    end
+    local jump = Court.input("Jump")
+    if jump then
+        Court.send(jump)
+    end
+    return goal, goal ~= nil
+end
+
+function AutoDunk.claims(self: any, distance: number): boolean
+    if self.Holding or self.Run then
+        return true
+    end
+    local read = self.Read
+    if distance > (read("DunkRange") or 30) then
+        return false
+    end
+    if read("DunkMove") == true then
+        return true
+    end
+    local root = Court.Root
+    local rim = if root then Court.facingRim(root, FACING, read("DunkRange") or 30) else nil
+    if not rim then
+        return false
+    end
+    local ahead, aside = Court.frontOf(rim, root.Position)
+    if ahead and ahead < FRONT_CONE * math.sqrt(ahead * ahead + aside * aside) then
+        return false
+    end
+    local mode = read("DunkType") or Config.DUNK_BOTH
+    local part = Court.proxy()
+    local velocity = if part then flat(part.AssemblyLinearVelocity) else Vector3.zero
+    local pace = velocity.Magnitude
+    local toRim = flat(rim.Position - root.Position)
+    if mode ~= Config.DUNK_STANDING and toRim.Magnitude > 0.1 and velocity:Dot(toRim.Unit) >= 8 then
+        return true
+    end
+    if mode ~= Config.DUNK_DRIVING and distance >= WINDOW_MIN and distance <= WINDOW_MAX and pace < 2 then
+        return true
+    end
+    return mode ~= Config.DUNK_STANDING and distance >= DRIVE_MIN and distance <= DRIVE_START and pace >= DRIVE_PACE - 3
+end
+
+function AutoDunk.shutdown(self: any)
+    if self.Holding and not self.Owned then
+        local remote = Court.input("Shoot")
+        if remote then
+            Court.send(remote, RELEASE_SPACE)
+        end
+    end
+    self.Holding = false
+    self.Owned = false
+    self.HoldGoal = nil
+    self:idle()
+end
+
+return AutoDunk
+end
+modules["contest"] = function(...)
+
+local import: (string) -> any = ...
+local Court: typeof(require("./court")) = import("court")
+local Env: typeof(require("./env")) = import("env")
+
+local Contest = {}
+Contest.__index = Contest
+
+local OPEN = Color3.fromRGB(70, 230, 110)
+local CLOSE = Color3.fromRGB(255, 200, 70)
+local TIGHT = Color3.fromRGB(255, 80, 80)
+local DARK = Color3.fromRGB(14, 16, 20)
+local EASE = 10
+local FADE = 6
+local FILL = 0.84
+local OUTLINE = 0.3
+local OPEN_BELOW = 0.35
+
+local function holder(): any?
+    local hui = Env.gethui
+    if hui then
+        local ok, folder = pcall(hui)
+        if ok and folder then
+            return folder
+        end
+    end
+    local ok, core = pcall(game.GetService, game, "CoreGui")
+    return if ok then core else nil
+end
+
+local function mix(from: Color3, to: Color3, share: number): Color3
+    return Color3.new(from.R + (to.R - from.R) * share, from.G + (to.G - from.G) * share, from.B + (to.B - from.B) * share)
+end
+
+function Contest.new(read: (string) -> any, autoGreen: any?): any
+    return setmetatable({ Read = read, AutoGreen = autoGreen, Light = nil :: any, Color = OPEN, Glow = 0, Value = 0, Gap = math.huge, Open = true }, Contest)
+end
+
+function Contest.measure(self: any, root: any): (number, number)
+    local range: number = self.Read("ContestRange") or 6
+    local here: Vector3 = root.Position
+    local _, rim = Court.rimDistance(here)
+    local toRim: Vector3? = nil
+    if rim then
+        local flat = Court.flat(rim.Position - here)
+        toRim = if flat.Magnitude > 0.5 then flat.Unit else nil
+    end
+    local worst, gap = 0, math.huge
+    local who, whoRoot = nil, nil
+    local roots, foe, chars = Court.Roots, Court.Foe, Court.Chars
+    for index = 1, Court.Count do
+        if foe[index] then
+            local offset = Court.flat(roots[index].Position - here)
+            local distance = offset.Magnitude
+            if distance < gap then
+                gap = distance
+            end
+            if distance < range * 1.5 + 2 then
+                local away = if distance > 0.1 then offset / distance else Vector3.zero
+                local theirRoot = roots[index]
+                local motion = Court.flat(theirRoot.AssemblyLinearVelocity)
+                local closing = math.clamp(-motion:Dot(away), -6, 12)
+                local effective = math.max(distance - closing * 0.15, 0)
+                local closeness = math.clamp((range * 1.5 - effective) / range, 0, 1)
+                local front = 0.6
+                if toRim and distance > 0.1 then
+                    front = 0.35 + 0.65 * math.clamp(away:Dot(toRim) * 0.5 + 0.5, 0, 1)
+                end
+                local look = Court.flat(theirRoot.CFrame.LookVector)
+                local facing = if look.Magnitude > 0.1 and distance > 0.1 then math.clamp(-look.Unit:Dot(away) * 0.5 + 0.5, 0, 1) else 0.5
+                local share = closeness * front * (0.6 + 0.4 * facing)
+                if share > worst then
+                    worst = share
+                    who, whoRoot = chars[index], theirRoot
+                end
+            end
+        end
+    end
+    self.Who, self.WhoRoot = who, whoRoot
+    return worst, gap
+end
+
+function Contest.estimate(self: any, root: any): number
+    local value, gap = self:measure(root)
+    self.Value, self.Gap = value, gap
+    return value
+end
+
+function Contest.clear(self: any)
+    local light = self.Light
+    if light then
+        self.Light = nil
+        pcall(light.Destroy, light)
+    end
+end
+
+function Contest.shade(self: any): Color3
+    if self.Open then
+        return OPEN
+    end
+    return if self.Value < 0.65 then CLOSE else TIGHT
+end
+
+function Contest.step(self: any, now: number, dt: number)
+    local read = self.Read
+    local mine, root = Court.Mine, Court.Root
+    local contestOn = read("OpenShot") == true
+    if not mine or not root or not contestOn then
+        if root and read("AutoShoot") == true then
+            self:estimate(root)
+        end
+        self.Shown = false
+        self.Glow = 0
+        self:clear()
+        return
+    end
+    local step = math.min(dt, 0.1)
+    local value, gap = self:measure(root)
+    self.Value, self.Gap = value, gap
+    if self.Open then
+        self.Open = value < OPEN_BELOW + 0.05
+    else
+        self.Open = value < OPEN_BELOW - 0.05
+    end
+    local ball = Court.HasBall
+    local showing = contestOn and (read("OpenShotBall") ~= true or ball)
+    self.Shown = showing
+    local goal: Color3? = nil
+    if showing and read("OpenShotGlow") == true then
+        goal = self:shade()
+    end
+    self.Goal = goal
+    if goal then
+        self.Color = mix(self.Color, goal, 1 - math.exp(-EASE * step))
+    end
+    local strength = if goal then 1 else 0
+    self.Glow += math.clamp(strength - self.Glow, -FADE * step, FADE * step)
+    if self.Glow <= 0.005 then
+        self:clear()
+        return
+    end
+    local light = self.Light
+    if (not light or light.Parent == nil or light.Adornee ~= mine) and now >= (self.RetryAt or 0) then
+        self:clear()
+        self.RetryAt = now + 2
+        local ok, made = pcall(function(): any
+            local item = Instance.new("Highlight")
+            item.Name = "OpenShot"
+            item.DepthMode = Enum.HighlightDepthMode.Occluded
+            item.FillTransparency = 1
+            item.OutlineTransparency = 1
+            item.Adornee = mine
+            item.Parent = holder() or mine
+            return item
+        end)
+        light = if ok then made else nil
+        self.Light = light
+    end
+    if light then
+        local strength = math.clamp((tonumber(self.Read("GlowStrength")) or 60) / 100, 0.05, 1)
+        local glow = self.Glow * strength
+        light.FillColor = self.Color
+        light.OutlineColor = self.Color
+        light.FillTransparency = 1 - (1 - FILL) * glow
+        light.OutlineTransparency = 1 - (1 - OUTLINE) * glow
+    end
+end
+
+local function percentOf(value: number): string
+    return math.floor(value * 100 + 0.5) .. "%"
+end
+
+local function wording(open: boolean, value: number): string
+    if open then
+        return "OPEN"
+    end
+    return if value < 0.65 then "CONTESTED" else "SMOTHERED"
+end
+
+local FOLLOW = 12
+local REACH = 4
+
+local function lift(self: any, key: string, want: number, dt: number): number
+    local alpha: number = self[key] or 0
+    alpha += math.clamp(want - alpha, -REACH * dt, REACH * dt)
+    self[key] = alpha
+    return alpha
+end
+
+function Contest.draw(self: any, canvas: any, chip: any)
+    local read = self.Read
+    local now = os.clock()
+    local dt = math.clamp(now - (self.DrawAt or now), 0, 0.1)
+    self.DrawAt = now
+    local root = Court.Root
+    local height = tonumber(read("ContestHeight")) or 4.2
+    local range = tonumber(read("ContestViewRange")) or 120
+    local opacity = math.clamp(tonumber(read("ContestOpacity")) or 0.85, 0.1, 1)
+    local labelOn = self.Shown and root ~= nil and canvas ~= nil and chip ~= nil and read("OpenShotNumber") == true
+    local point: Vector2? = nil
+    local want = 0
+    if labelOn then
+        local found, depth = canvas.project(root.Position + Vector3.new(0, height, 0))
+        if found and type(depth) == "number" and depth > 0 and depth <= range then
+            point, want = found, opacity
+        end
+    end
+    local alpha = lift(self, "LabelAlpha", want, dt)
+    local follow = 1 - math.exp(-FOLLOW * dt)
+    self.Eased = (self.Eased or self.Value) + (self.Value - (self.Eased or self.Value)) * follow
+    local custom: any = read("ContestLabelColor")
+    local goal = if read("ContestColorMode") == "Custom" and typeof(custom) == "Color3" then custom else self:shade()
+    self.Tone = if self.Tone then mix(self.Tone, goal, follow) else goal
+    local scale = math.clamp(tonumber(read("ContestTextSize")) or 13, 8, 30) / 13
+    local number = percentOf(self.Eased)
+    local tone: Color3 = self.Tone
+    if alpha > 0.01 and point and chip then
+        local who = self.Who
+        local runs = { { Text = number, Color = "Text" } }
+        if read("ContestWho") == true and who and not self.Open then
+            runs[2] = { Text = "by " .. tostring(who.Name), Color = "Sub" }
+        end
+        self.LastPoint = point
+        local shown = Vector2.new(point.X, point.Y - (1 - math.clamp(alpha / math.max(want, 0.1), 0, 1)) * 8)
+        if read("ContestStyle") == "Bar" then
+            chip("contest", shown, {}, alpha, scale, { Value = self.Eased, Color = tone, Only = true })
+        else
+            chip("contest", shown, { { { Text = wording(self.Open, self.Value), Color = tone } }, runs }, alpha, scale, nil)
+        end
+    end
+    local theirs = self.WhoRoot
+    local marking = labelOn and read("ContestFoeMark") == true and theirs ~= nil and not self.Open and theirs.Parent ~= nil
+    local markPoint: Vector2? = nil
+    local markWant = 0
+    if marking then
+        local found, depth = canvas.project(theirs.Position + Vector3.new(0, height, 0))
+        if found and type(depth) == "number" and depth > 0 and depth <= range then
+            markPoint, markWant = found, opacity
+        end
+    end
+    local markAlpha = lift(self, "MarkAlpha", markWant, dt)
+    if markAlpha > 0.01 and chip then
+        local at = markPoint or self.MarkPoint
+        if at then
+            self.MarkPoint = at
+            if read("ContestStyle") == "Bar" then
+                chip("mark", at, {}, markAlpha, scale * 0.8, { Value = self.Eased, Color = tone, Only = true })
+            else
+                chip("mark", at, { { { Text = number, Color = tone } } }, markAlpha, scale * 0.8, nil)
+            end
+        end
+    end
+end
+
+function Contest.shutdown(self: any)
+    self.Shown = false
+    self.Glow = 0
+    self:clear()
+end
+
+return Contest
+end
+modules["rimguard"] = function(...)
+
+local import: (string) -> any = ...
+local Court: typeof(require("./court")) = import("court")
+
+local RimGuard = {}
+RimGuard.__index = RimGuard
+
+local RANGE = 13
+local FRONT_MIN = 2.6
+local SLOPE = 0.4
+local BUSY: { [string]: boolean } = { Shooting = true, Gathering = true, Dunking = true, ContactLayup = true, ClutchLayup = true, Layup = true, Dribbling = true }
+
+function RimGuard.new(read: (string) -> any, autoGreen: any): any
+    return setmetatable({ Read = read, AutoGreen = autoGreen }, RimGuard)
+end
+
+function RimGuard.physics(self: any)
+    if self.Read("RimFront") ~= true then
+        return
+    end
+    local mine = Court.Mine
+    if not mine or not Court.HasBall then
+        return
+    end
+    local green = self.AutoGreen
+    if green.Press == nil or green.DunkPress == true or (green.Shot and green.Shot.Fired) then
+        return
+    end
+    local action = mine:GetAttribute("Action")
+    if (type(action) == "string" and BUSY[action]) or mine:GetAttribute("CanMove") ~= true or Court.handsOff(mine) then
+        return
+    end
+    local part, mover = Court.proxy()
+    if not part or not mover then
+        return
+    end
+    local position: Vector3 = part.Position
+    local distance, rim = Court.rimDistance(position)
+    if not distance or not rim or distance > RANGE then
+        return
+    end
+    local front = Court.front(rim)
+    if not front then
+        return
+    end
+    local offsetX, offsetZ = position.X - rim.Position.X, position.Z - rim.Position.Z
+    local ahead = offsetX * front.X + offsetZ * front.Z
+    if ahead <= 0 then
+        return
+    end
+    local sideX, sideZ = offsetX - front.X * ahead, offsetZ - front.Z * ahead
+    local need = math.max(FRONT_MIN, math.sqrt(sideX * sideX + sideZ * sideZ) * SLOPE)
+    local velocity: Vector3 = mover.Velocity
+    local closing = -(velocity.X * front.X + velocity.Z * front.Z)
+    local limit = math.max((ahead - need) * 6, 0)
+    if closing > limit then
+        if green.Tracing then green:trace(string.format("  RIMGUARD slows the run, ahead=%.1f closing=%.1f limit=%.1f", ahead, closing, limit)) end
+        mover.Velocity = velocity + front * (closing - limit)
+    end
+end
+
+return RimGuard
+end
+
 local Config = import("config")
 local Court = import("court")
 local Env = import("env")
 local AutoGreen = import("autogreen")
 
 local KS = {}
+KS.import = import
+KS.modules = { "config", "env", "court", "aero", "hook", "autogreen", "autoshoot", "drive", "autodunk", "contest", "rimguard" }
 KS.Settings = {}
 for k, v in pairs(Config.DEFAULTS) do KS.Settings[k] = v end
 
@@ -3015,6 +4016,5 @@ end
 
 return KS
 end)()
-local api = KuluShoot.start(function(t) print("[KuluShoot] " .. tostring(t)) end)
-KuluShoot.Settings.AutoGreen = true
-getgenv().KuluShootTest = api
+
+return KuluShoot
